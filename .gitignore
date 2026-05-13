@@ -112,6 +112,10 @@ out/
 scratch.*
 notes.local.*
 
+# Personal learning notes — never committed.
+# Claude Code should not write here unless explicitly told to.
+docs/learning/
+
 # ─── Lockfiles for tools we don't use ───
 # (kept commented in case we switch tooling later)
 # Cargo.lock
