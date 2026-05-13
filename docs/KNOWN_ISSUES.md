@@ -335,34 +335,29 @@ The four RLS helpers (`is_party_member`, `is_active_party_member`, `is_party_hos
 
 *Issues from "Open Issues" that have been fixed. Kept for reference.*
 
-### Example entry format (delete after the first real entry is logged):
+### #002 — [doc] Plan and commit message overstated RLS policy count as "10" when actual count is 9
 
-```markdown
-### #001 — [bug] <Short title>
-
-**Found:** YYYY-MM-DD during Phase <N> <QA | dev | review>
-**Resolved:** YYYY-MM-DD
-**Phase:** <N>
-**Status:** Resolved (commit <sha>)
+**Found:** 2026-05-13 during sub-task 2 verification (Phase 1)
+**Resolved:** 2026-05-13
+**Phase:** 1
+**Status:** Resolved (commit `462ffc3` — no code change required, documentation acknowledgement only)
 
 **Description:**
-<What was wrong, observed behavior>
+Sub-task 2's plan summary and the resulting feat commit (`462ffc3`) said "10 SELECT policies" in their natural-language summary text. A direct query against `pg_policies` after `supabase db reset` returned 9 rows. The discrepancy between the prose and the database state raised a "did we forget to create a tenth policy?" question.
 
 **Context:**
-<What was happening when we hit it; conditions that triggered it>
+The plan's per-table breakdown table correctly listed 9 distinct policies: 1 on `party_sessions`, 1 on `party_settings`, **2 on `party_players`**, 1 on `rounds`, 1 on `round_player_outcomes`, 1 on `admin_action_logs`, 1 on `timer_events`, 1 on `party_player_notification_settings` (1+1+2+1+1+1+1+1 = 9). The rollup sentence at the bottom of the plan summary added them up wrong, and the commit body inherited the same "10" wording.
 
 **Root cause:**
-<Why it was happening — the actual bug, not the symptom>
+Counting error in the plan summary and again in the commit body. Not a migration bug.
 
 **Resolution:**
-<What was changed to fix it>
+Re-ran `select tablename, policyname from pg_policies where schemaname = 'public' order by tablename, policyname;` and confirmed 9 rows: `party_players` appears exactly twice (the `§4.1` peer-view policy and the `§4.2` own-row policy), every other MVP table appears exactly once, and every policy name matches `docs/specs/rls-rules.md` §2-§9 verbatim. No code change required. The commit message text was left as-is — not worth a force-push to fix a documentation typo on an already-pushed commit. This entry exists so future readers don't try to "fix" the apparently-missing tenth policy.
 
 **Related files:**
-- `<path>`
-- `<path>`
-```
-
-(none yet)
+- Commit `462ffc3` (the affected commit)
+- `supabase/migrations/20260513142120_rls.sql`
+- `docs/specs/rls-rules.md` §2-§9 (the canonical 9-policy list)
 
 ---
 

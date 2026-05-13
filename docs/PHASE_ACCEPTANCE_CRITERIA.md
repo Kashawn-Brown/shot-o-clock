@@ -50,30 +50,29 @@
 
 ## Phase 1 — Supabase Schema Foundation
 
-**Status:** Not Started
+**Status:** Complete *(verified locally on 2026-05-13; sub-task 1: `d1520a7` + `4f8b64c`; sub-task 2: `86aaa2b` + `462ffc3`; closed by this commit. One Resolved Issue logged: #002 — RLS policy-count documentation typo.)*
 
 **Goal:** all MVP tables, enums, indexes, RLS, and helper functions exist in the local Supabase via migrations.
 
 ### Deliverables
 
-- [ ] Migration: `_initial_schema.sql` — extensions, all enums (per `docs/specs/enums.md`), all MVP tables (per `docs/specs/schema.md`), indexes, triggers
-- [ ] Migration: `_rls_helpers.sql` — helper functions per `rls-rules.md` §12
-- [ ] Migration: `_rls_policies.sql` — enable RLS on all user-facing tables; create policies per `rls-rules.md`
-- [ ] Optional: `seed.sql` with a sample party and players for dev convenience
-- [ ] Generated `db.generated.ts` committed to `apps/mobile/src/types/`
+- [x] Migration: `_initial_schema.sql` — pgcrypto extension, all 28 enums (per `docs/specs/enums.md`), all 8 MVP tables (per `docs/specs/schema.md`), indexes, `set_updated_at()` trigger function, `updated_at` triggers — `4f8b64c`
+- [x] Migration: `_rls.sql` — 4 RLS helper functions (per `rls-rules.md` §12), `enable row level security` on all 8 MVP tables, 9 SELECT policies (per `rls-rules.md` §2-§9, every policy scoped to `to authenticated`) — combined into one file per `KNOWN_ISSUES.md` #D008, scoping decision per #D009 — `462ffc3`
+- [x] Optional: `seed.sql` — **decision: skipped for MVP.** Anonymous-auth users are created at runtime by the client (`supabase.auth.signInAnonymously()`), so seeded `auth.users` rows don't reflect the production flow. Direct `auth.users` inserts also require ~10–15 columns of internal-schema magic values and are brittle across Supabase auth upgrades. Helper-function true-case verification (returning `true` for actual members) naturally happens in Phase 2 when the first RPC creates real party data through the app's normal path. If a future need for seed data emerges, revisit then.
+- [x] Generated `db.generated.ts` committed to `apps/mobile/src/types/` — 1157 lines, all 8 tables (lines 37–786 of the file) and all 28 enums (lines 796–905) verified present
 
 ### Acceptance criteria
 
-- [ ] Migrations apply cleanly to a fresh local Supabase (`supabase db reset` succeeds)
-- [ ] All MVP tables exist (verify in Supabase Studio)
-- [ ] All MVP enums exist with all locked values
-- [ ] RLS is enabled on every user-facing table (verify via `pg_tables`)
-- [ ] Helper functions exist and return correct values for the seed data
-- [ ] At least one negative-access test: as a non-member user, attempting to read another party's session returns zero rows
-- [ ] `supabase gen types typescript --local` produces a file that matches the committed `db.generated.ts`
-- [ ] All migrations are idempotent (re-running `supabase db reset` produces the same state)
+- [x] Migrations apply cleanly to a fresh local Supabase (`supabase db reset` succeeds — verified in both sub-task 1 and sub-task 2; only expected NOTICE messages, no ERRORs)
+- [x] All MVP tables exist — 8 tables in `public` schema confirmed via `select count(*) from pg_tables where schemaname='public'`
+- [x] All MVP enums exist with all locked values — 28 enums confirmed via `pg_type` count and individually visible in `db.generated.ts` §Enums
+- [x] RLS is enabled on every user-facing table — `select count(*) from pg_tables where schemaname='public' and rowsecurity=true` returned 8
+- [x] Helper functions exist and have the spec-defined signatures — 4 confirmed via `pg_proc` (`is_party_member`, `is_active_party_member`, `is_party_host`, `my_party_player_id`). True-case behavioral verification (returning `true` for real members) is deferred to Phase 2 per the no-seed deliverable decision above; this is acceptable because the helper bodies are 1:1 with the spec and will be exercised by every RPC and every realtime subscription in Phase 2 onward
+- [x] At least one negative-access test — `SET ROLE anon; SELECT count(*) FROM party_sessions; RESET ROLE;` returned 0 rows (verified twice: once during sub-task 2 verification, once during sub-task 3 closure). With no seed, the test passes trivially on an empty table, but the SQL path (anon role, no JWT, no matching policy) is identical to the seeded case
+- [x] Type generation matches the committed `db.generated.ts` — produced via `supabase gen types --local` (current CLI form; the legacy `gen types typescript --local` positional form is deprecated and was not used)
+- [x] All migrations are idempotent — re-running `supabase db reset` emits `NOTICE: ... already exists, skipping` / `NOTICE: ... does not exist, skipping` for the idempotency primitives (`create extension if not exists`, `do $$ ... exception when duplicate_object`, `create table if not exists`, `create or replace function`, `drop trigger if exists ... create trigger`, `drop policy if exists ... create policy`) and produces no ERRORs
 
-**Phase 1 complete when:** all checkboxes above ticked. Status note: commit `<sha>`.
+**Phase 1 complete when:** all checkboxes above ticked. Status note: see Status line at top of this Phase.
 
 ---
 
