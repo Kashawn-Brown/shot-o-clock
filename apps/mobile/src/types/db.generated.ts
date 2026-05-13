@@ -788,6 +788,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _rpc_error: { Args: { code: string; msg: string }; Returns: Json }
+      _rpc_success: { Args: { data?: Json }; Returns: Json }
+      get_party_state: { Args: { p_party_session_id: string }; Returns: Json }
+      get_round_outcomes: { Args: { p_round_id: string }; Returns: Json }
+      get_server_time: { Args: never; Returns: Json }
       is_active_party_member: { Args: { session_id: string }; Returns: boolean }
       is_party_host: { Args: { session_id: string }; Returns: boolean }
       is_party_member: { Args: { session_id: string }; Returns: boolean }
