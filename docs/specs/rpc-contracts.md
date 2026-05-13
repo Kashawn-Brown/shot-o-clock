@@ -566,19 +566,83 @@ Idempotent — if already ended, returns ok + existing `endedAt`.
 
 ## 13. Read-Only Helpers
 
-These are convenience views or functions for the client. They do NOT mutate state.
+These are convenience functions for the client. They do NOT mutate state.
+
+All three return the standard shape per §1.3. They use `SECURITY DEFINER` (per §1.1) and so bypass RLS; each function performs its own `auth.uid()` and membership checks in-function. See `docs/KNOWN_ISSUES.md` #D010 for the rationale behind extending §1.3 uniformly to the §13 read RPCs (the spec previously declared raw `timestamptz` / `setof` returns here, which has been corrected so every MVP RPC produces a single uniform shape for the TypeScript wrapper layer to consume).
 
 ### 13.1. `get_party_state(p_party_session_id uuid) returns jsonb`
 
-Returns a denormalized snapshot of the session, settings, current round, and player list. Used on initial screen load to avoid 4 separate queries. RLS still applies — non-members get `SESSION_NOT_FOUND`.
+Returns a denormalized snapshot of the session, settings, current round, and player roster. Used on initial screen load to avoid four separate queries.
 
-### 13.2. `get_server_time() returns timestamptz`
+**Caller requirements:** authenticated; an active or out member of the session.
 
-Returns `now()`. Used by clients to estimate clock skew. Callable by any authenticated user.
+**Data payload (on success):**
 
-### 13.3. `get_round_outcomes(p_round_id uuid) returns setof round_player_outcomes`
+```jsonc
+{
+  "session":       <party_sessions row, all columns>,
+  "settings":      <party_settings row, all columns>,
+  "current_round": <rounds row, all columns> | null,
+  "players":       [<party_players row, all columns>, ...]
+}
+```
 
-Returns all outcome rows for a given round. RLS filters to party members only.
+- `current_round` is `null` when the session is in `lobby` (no rounds row yet) or when no rounds row matches the session's `current_round_number`.
+- `players` always includes rows with `status IN ('active', 'out')`. It additionally includes `status = 'removed'` rows when **either** of these holds:
+  - the caller is the host of the session (hosts see moderation history), OR
+  - the row is the caller's own (a removed player must be able to render the "you were removed" state).
+
+  This mirrors the dual-policy RLS on `party_players` — see `rls-rules.md` §4.1 (members see non-removed peers; host sees all) and §4.2 (always read your own row).
+- `players` is ordered by `joined_at` so the host (who joined at session creation) appears first.
+
+**Errors:** `NOT_AUTHENTICATED`, `SESSION_NOT_FOUND`.
+
+`SESSION_NOT_FOUND` is returned for both "session does not exist" and "session exists but caller is not a member." This non-distinction is deliberate — leaking existence to non-members would let an attacker probe for active sessions. Do not "improve" error specificity here.
+
+**Idempotency:** read-only; safe to call repeatedly.
+
+### 13.2. `get_server_time() returns jsonb`
+
+Returns the server's current wall-clock time. Used by clients to estimate clock skew so countdown displays stay in sync with `phaseEndsAt` (see §1.6).
+
+**Caller requirements:** authenticated.
+
+**Data payload (on success):**
+
+```jsonc
+{
+  "server_time": "2026-05-13T20:14:32.123456+00:00"
+}
+```
+
+`server_time` is the ISO-format string Postgres emits when `now()` is serialized inside `jsonb_build_object` (timestamptz → text with timezone offset). Clients should parse it with `Date.parse()` or equivalent.
+
+**Errors:** `NOT_AUTHENTICATED`.
+
+**Idempotency:** read-only.
+
+### 13.3. `get_round_outcomes(p_round_id uuid) returns jsonb`
+
+Returns all outcome rows for a given round.
+
+**Caller requirements:** authenticated; an active or out member of the round's party session.
+
+**Data payload (on success):**
+
+```jsonc
+{
+  "outcomes": [<round_player_outcomes row, all columns>, ...]
+}
+```
+
+- `outcomes` is an array, never `null`. An empty array (`[]`) is the valid response for a round that has zero outcome rows yet — e.g. mid-shot-window before any player has tapped Done, or for a round still in countdown.
+- `outcomes` is ordered by `created_at`.
+
+**Errors:** `NOT_AUTHENTICATED`, `SESSION_NOT_FOUND`.
+
+`SESSION_NOT_FOUND` is returned for both "round does not exist" and "round exists but caller is not a member of its party." Same deliberate non-distinction as `get_party_state` — see §13.1.
+
+**Idempotency:** read-only.
 
 ---
 
