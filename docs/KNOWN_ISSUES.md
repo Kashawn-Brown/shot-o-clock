@@ -141,6 +141,37 @@ The template/SDK pairing the Expo team ships is the most predictable starting po
 
 ---
 
+### #D006 — [decision] Delete Expo template demo code in Phase 0 rather than reformat it
+
+**Date:** 2026-05-13
+**Phase:** 0
+**Decided by:** user (after Claude Code surfaced the failing `format:check` and proposed deletion vs reformat)
+
+**Question:**
+Sub-task 3 of Phase 0 installs Prettier and adds a `format:check` script. The check fails on 9 files inherited from the Expo `default` template (`app/(tabs)/*`, `components/*`, `hooks/*`, `scripts/reset-project.js`, `tsconfig.json`). These files are demo content the template ships to showcase Expo Router, theming, and haptics. None of them are required by the MVP route structure (`docs/REPO_STRUCTURE.md` §2.1). Reformatting them to satisfy `format:check` would burn commits on code Phase 3 already plans to replace.
+
+**Options considered:**
+- (a) Reformat in place — keeps the demo running, satisfies `format:check`, but treats throwaway scaffolding as if it were real code; produces a large `style:` diff on files that vanish in Phase 3.
+- (b) Delete demo code now, replace with a minimal placeholder screen — smaller working tree, makes the "real code only" boundary explicit, accelerates the cleanup #D004 anticipated for Phase 3, but `npx expo start` shows a stub instead of the template tour.
+- (c) Skip the format criterion until Phase 3 — defers the gate; `format:check` stays red on `main` for an indeterminate stretch.
+
+**Decision:** (b) — delete the template demo code now, ship a minimal `app/_layout.tsx` (plain `<Stack />`) and `app/index.tsx` placeholder screen.
+
+**Files deleted in the same commit:** all of `app/(tabs)/`, `app/modal.tsx`, `components/`, `constants/`, `hooks/`, `scripts/`, `apps/mobile/README.md`, and the four demo logos in `assets/images/` (`partial-react-logo.png`, `react-logo*.png`).
+
+**Runtime deps removed alongside:** `expo-haptics`, `expo-image`, `expo-symbols`, `expo-web-browser` — only the demo code referenced them, and Phase 3 has no anticipated use. `@react-navigation/native`, `@react-navigation/elements`, `@react-navigation/bottom-tabs` are kept because Phase 3 is likely to use them via `expo-router`'s header/tab integration.
+
+**Knock-on effect on #D004:** The template-fallback path aliases that #D004 added to `tsconfig.json` (`./components/*`, `./hooks/*`, `./constants/*`) become dead aliases the moment those directories are gone. They're removed in this same commit. This is the cleanup #D004 explicitly anticipated for Phase 3, happening one phase early as a natural side effect — #D004 stands, not superseded.
+
+**Why:**
+The Expo default template's example content has a single legitimate purpose: prove the bootstrap worked. Once we've confirmed that (and once we have a minimal `app/index.tsx` that does the same job), the demo code is dead weight. Deleting now keeps the source tree honest about what's real-MVP code versus what's scaffolding, and avoids a confusing review experience later where Phase 3 deletes "code" Phase 0 just spent commits reformatting.
+
+**Documented in:**
+- Commit (sub-task 3 follow-up of Phase 0)
+- Replacement files: `apps/mobile/app/_layout.tsx`, `apps/mobile/app/index.tsx`
+
+---
+
 ### #D005 — [decision] Prettier rule choices beyond CLAUDE.md §5.2
 
 **Date:** 2026-05-13
