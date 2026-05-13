@@ -60,8 +60,9 @@ Claude Code, on a new session:
 2. Read the relevant spec for the current task. If the task involves an RPC, that's `docs/specs/rpc-contracts.md`. If it's game logic, that's `docs/specs/game-rules.md`. Etc.
 3. Check git status: are there uncommitted changes from a previous session? Stale branches? Confirm clean state before starting.
 4. Confirm the current phase in `docs/PHASE_ACCEPTANCE_CRITERIA.md` so the work fits the larger build sequence.
+5. Skim `docs/KNOWN_ISSUES.md` for open issues and recent decisions that affect the current task. If a relevant open issue exists, surface it before starting.
 
-If any of these reveals something unexpected (stale code, untracked files, missing docs), surface it to the user before starting the task.
+If any of these reveals something unexpected (stale code, untracked files, missing docs, unresolved blocker issues), surface it to the user before starting the task.
 
 ### 4.2. During session
 
@@ -79,6 +80,8 @@ Before ending a session (or before the user closes the chat):
 3. If a sub-task was abandoned mid-flight, the last commit is tagged `wip:` and the user is told what the WIP state contains.
 4. Any open questions, blockers, or follow-up tasks are listed in chat so the user can carry them into the next session.
 5. If a doc was supposed to be updated as part of the task and wasn't, flag it explicitly.
+6. `docs/PHASE_ACCEPTANCE_CRITERIA.md` reflects the session's work — every criterion verified this session is ticked.
+7. `docs/KNOWN_ISSUES.md` is updated — any new issues encountered are logged, any decisions made are captured, any issues resolved are moved to the Resolved section.
 
 A clean session ends with the user able to walk away and resume cold tomorrow without needing this Claude Code session's memory.
 

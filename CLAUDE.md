@@ -257,15 +257,33 @@ The full prompt protocol lives in `docs/AI_BUILD_PROTOCOL.md`. Reference it when
 
 ## 8. Documentation Discipline
 
-The docs are part of the codebase. They are not afterthoughts.
+The docs are part of the codebase. They are not afterthoughts. Treat them with the same care as code.
+
+### 8.1. Spec-code sync
 
 - When you change behavior, update the relevant spec in the same commit.
 - When you add an RPC, document it in `docs/specs/rpc-contracts.md`.
 - When you change RLS, update `docs/specs/rls-rules.md`.
-- When you change schema, the migration file IS the doc — write clear comments in the migration SQL.
-- When you complete a phase, tick its checkbox in `docs/PHASE_ACCEPTANCE_CRITERIA.md`.
+- When you change schema, the migration file IS the doc — write clear comments in the migration SQL, and update `docs/specs/schema.md` if column shape changes.
 
-If a code change would invalidate the docs and you don't have time to update them, **stop the code change** and tell the user.
+### 8.2. Progress tracking — keep PHASE_ACCEPTANCE_CRITERIA.md current
+
+- Update `docs/PHASE_ACCEPTANCE_CRITERIA.md` **as you go, not at phase end**. Tick each criterion as it's verified.
+- Update the phase **Status** line when you start or finish a phase.
+- When a phase is complete, add the commit SHA in the status note.
+- If a criterion was ticked but later regresses, untick it immediately and address before re-declaring.
+
+### 8.3. Issue and decision tracking — maintain KNOWN_ISSUES.md
+
+- When you encounter a bug or unexpected behavior that can't be fixed in the current task, log it in `docs/KNOWN_ISSUES.md` under "Open Issues" using the entry format the file documents.
+- When you resolve an open issue, move it from "Open Issues" to "Resolved Issues" with the resolution and commit SHA.
+- When you make a decision during development that wasn't covered by the existing specs (an unanticipated fork in the road), log it under "Decisions Log" **before** implementing.
+- A decision log entry is required, not optional, if you would otherwise be making a judgment call the specs didn't cover. **Silent ad-hoc decisions accumulate into invisible technical debt** — this is one of the most important behaviors for an AI-led build.
+- If a decision rises to the level of "this should be in the locked specs," update the spec AND log the decision. The spec becomes the source of truth; the decision log entry preserves the audit trail.
+
+### 8.4. The blocking rule
+
+If a code change would invalidate the docs and you don't have time to update them, **stop the code change** and tell the user. Code that drifts from docs is worse than no code.
 
 ---
 
