@@ -38,11 +38,11 @@
 
 ### Acceptance criteria
 
-- [ ] `git status` shows clean working tree
+- [x] `git status` shows clean working tree
 - [ ] `npx expo start` (from `apps/mobile/`) launches a placeholder app on a real device
 - [ ] `supabase start` runs cleanly and prints URL + anon key
 - [ ] `README.md` setup steps work for a fresh checkout
-- [ ] No secrets committed
+- [x] No secrets committed
 
 **Phase 0 complete when:** all checkboxes above ticked. Status note: commit `<sha>`.
 
