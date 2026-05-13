@@ -141,6 +141,31 @@ The template/SDK pairing the Expo team ships is the most predictable starting po
 
 ---
 
+### #D005 — [decision] Prettier rule choices beyond CLAUDE.md §5.2
+
+**Date:** 2026-05-13
+**Phase:** 0
+**Decided by:** Claude Code
+
+**Question:**
+CLAUDE.md §5.2 locks four Prettier-controlled style choices (2-space indent, single quotes, trailing commas in multi-line, semicolons on) but is silent on `printWidth`, `arrowParens`, and `endOfLine`. Prettier requires concrete values for those, and silently inheriting Prettier defaults across OSes is risky on Windows.
+
+**Options considered:**
+- (a) Use Prettier defaults for the unspecified rules — `printWidth: 80`, `arrowParens: "always"`, `endOfLine: "lf"`. Simplest, but `printWidth: 80` is tight for modern React Native JSX and `endOfLine: "lf"` will make `format:check` flap on Windows checkouts where `core.autocrlf=true` rewrites LF→CRLF on disk.
+- (b) Pin the unspecified rules explicitly: `printWidth: 100`, `arrowParens: "always"`, `endOfLine: "auto"`. Slightly wider lines match the typical Expo/RN style, and `"auto"` makes the format check tolerant of CRLF on Windows working trees while still writing LF when Prettier rewrites a file.
+- (c) Pin width even wider (120) — common in some JS shops but pushes JSX past readable on a phone-sized editor pane.
+
+**Decision:** (b) — `printWidth: 100`, `arrowParens: "always"`, `endOfLine: "auto"`.
+
+**Why:**
+The four §5.2 rules cover the high-impact choices; (b) fills the remaining slots without re-litigating them. `endOfLine: "auto"` is the load-bearing choice — without it, anyone on Windows with default `core.autocrlf=true` would see `prettier --check` fail immediately on a fresh checkout. `printWidth: 100` is a small, conventional bump that keeps short JSX trees on one line. `arrowParens: "always"` is just making the Prettier v3 default explicit so the config doesn't silently flip if a future Prettier major changes the default.
+
+**Documented in:**
+- `apps/mobile/.prettierrc`
+- Commit (sub-task 3 of Phase 0)
+
+---
+
 ### #D004 — [decision] Path alias coexistence with Expo template directories
 
 **Date:** 2026-05-13
