@@ -31,7 +31,7 @@
 - [x] `README.md`, `.env.example`, `.gitignore`, `docs/REPO_STRUCTURE.md` committed
 - [x] Sliced planning docs committed under `docs/planning/`
 - [x] QA docs committed under `docs/` (this file, `MVP_DEFINITION_OF_DONE.md`, `MANUAL_QA_CHECKLIST.md`)
-- [ ] Expo app scaffolded under `apps/mobile/` (TypeScript, Expo Router)
+- [x] Expo app scaffolded under `apps/mobile/` (TypeScript, Expo Router)
 - [ ] Supabase folder initialized (`supabase init` run, `supabase/config.toml` committed)
 - [ ] Basic lint/format setup in `apps/mobile/` (ESLint + Prettier configs)
 - [ ] `.env` created locally (NOT committed) with local Supabase URL and anon key

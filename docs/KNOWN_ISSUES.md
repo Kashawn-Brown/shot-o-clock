@@ -69,34 +69,100 @@ See the examples below for the full shape. At minimum:
 
 *Decisions made during development that fill gaps in the specs.*
 
-### Example entry format (delete after the first real entry is logged):
+### #D001 — [decision] Package manager: npm
 
-```markdown
-### #D001 — [decision] <Short title>
-
-**Date:** YYYY-MM-DD
-**Phase:** <phase number, or "pre-development">
-**Decided by:** <Claude Code | user | both>
+**Date:** 2026-05-13
+**Phase:** 0
+**Decided by:** Claude Code (confirmed implicitly by CLAUDE.md conventions)
 
 **Question:**
-<What was the fork in the road? What did the specs not cover?>
+CLAUDE.md references `npm view` and `package-lock.json` (§6.1, §6.2) but never explicitly names a package manager. Locking the choice now avoids inconsistency across future commits.
 
 **Options considered:**
-- (a) <Option A summary>
-- (b) <Option B summary>
-- (c) <Option C summary, if any>
+- (a) npm — already implied by CLAUDE.md, ships with Node, no extra install
+- (b) pnpm — faster, better monorepo support, but adds a tool to the bootstrap path
+- (c) yarn — no compelling advantage over npm for this scale
 
-**Decision:** <Chosen option>
+**Decision:** (a) npm
 
 **Why:**
-<Short rationale — 1-3 sentences>
+CLAUDE.md already speaks npm. The repo has one mobile app and one Supabase project — there is no monorepo pressure that would justify pnpm. Sticking with the implied default keeps the bootstrap story trivial.
 
 **Documented in:**
-- `docs/specs/<file>.md` §<section>  (if the decision affected a spec)
-- Commit `<sha>`  (if implementation followed immediately)
-```
+- Commit (sub-task 1 of Phase 0)
 
-(none yet)
+---
+
+### #D002 — [decision] Expo template: `default` (Expo Router + tabs example)
+
+**Date:** 2026-05-13
+**Phase:** 0
+**Decided by:** Claude Code
+
+**Question:**
+`create-expo-app` offers several templates. Which one bootstraps `apps/mobile/` while honoring the locked stack (TypeScript + Expo Router, per CLAUDE.md §3 and §6.5)?
+
+**Options considered:**
+- (a) `default` — TypeScript + Expo Router pre-wired, ships with an example tabs app
+- (b) `blank-typescript` — minimal TS app with no router; would require manually installing/configuring `expo-router`
+- (c) `tabs` — similar to default; functionally equivalent here
+
+**Decision:** (a) `default`
+
+**Why:**
+Expo Router is locked (CLAUDE.md §6.5) and the `default` template wires it correctly out of the box, including `_layout.tsx`, typed routes, and metro config. Bootstrapping it by hand from `blank-typescript` would replicate work the template already does. The template's example tabs content is acceptable as the Phase 0 placeholder; the real route structure (per REPO_STRUCTURE.md §2.1) is created in Phase 3 and will replace it.
+
+**Documented in:**
+- Commit (sub-task 1 of Phase 0)
+
+---
+
+### #D003 — [decision] Stay on Expo SDK 54 (not 55)
+
+**Date:** 2026-05-13
+**Phase:** 0
+**Decided by:** user (after Claude Code surfaced the mismatch)
+
+**Question:**
+`expo@latest` dist-tag is SDK 55 (55.0.24), but `create-expo-app@latest` (also v55.0.24) bundles a template that pins `expo@~54.0.33`. CLAUDE.md §6 says stay current — do we accept SDK 54 or force-upgrade to SDK 55 immediately?
+
+**Options considered:**
+- (a) Stay on SDK 54 — what `create-expo-app` produced; Expo team's currently bundled template; peer deps guaranteed coherent
+- (b) Force-upgrade to SDK 55 now — closer to "latest", but untested template/SDK combination on a fresh scaffold
+
+**Decision:** (a) Stay on SDK 54
+
+**Why:**
+The template/SDK pairing the Expo team ships is the most predictable starting point. The mismatch is template lag, not a behavioral concern. We plan an explicit SDK 55 upgrade task once the template catches up, treated like any other dependency bump.
+
+**Documented in:**
+- Commit (sub-task 1 of Phase 0)
+- Follow-up: a future `chore: upgrade to Expo SDK 55` task once the bundled template catches up
+
+---
+
+### #D004 — [decision] Path alias coexistence with Expo template directories
+
+**Date:** 2026-05-13
+**Phase:** 0
+**Decided by:** Claude Code
+
+**Question:**
+REPO_STRUCTURE.md §2.6 specifies aliases pointing at `src/components/*`, `src/features/*`, etc. The Expo `default` template puts `components/`, `hooks/`, `constants/` at the `apps/mobile/` root (not under `src/`) and imports them via `@/components/...`, `@/hooks/...`, etc. TypeScript path resolution does not fall through between patterns, so a pure REPO_STRUCTURE.md alias would silently break the template's existing imports.
+
+**Options considered:**
+- (a) Add REPO_STRUCTURE.md aliases only — breaks template imports immediately; would require moving template dirs under `src/` now (scope expansion)
+- (b) Add REPO_STRUCTURE.md aliases plus template-fallback targets — both work; cleanup is natural when the template content is restructured in Phase 3
+- (c) Skip path aliases for now — defer to Phase 3, contradicting Phase 0's stated files-involved list
+
+**Decision:** (b) Add REPO_STRUCTURE.md aliases with template-fallback targets
+
+**Why:**
+Lets sub-task 1 finish without invalidating any existing template imports. The fallback targets (`components/*`, `hooks/*`, `constants/*`) disappear naturally in Phase 3 when those template files are restructured per REPO_STRUCTURE.md §2.1, so the temporary mapping is self-cleaning rather than persistent debt.
+
+**Documented in:**
+- Commit (sub-task 1 of Phase 0)
+- `apps/mobile/tsconfig.json` — paths section
 
 ---
 
