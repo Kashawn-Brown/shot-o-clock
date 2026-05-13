@@ -281,6 +281,32 @@ Lets sub-task 1 finish without invalidating any existing template imports. The f
 
 ---
 
+### #D008 — [decision] RLS migration split: combine helpers and policies in one file
+
+**Date:** 2026-05-13
+**Phase:** 1
+**Decided by:** user (after Claude Code flagged a 3-file vs 2-file discrepancy)
+
+**Question:**
+`docs/PHASE_ACCEPTANCE_CRITERIA.md` Phase 1 deliverables list three migration files (`_initial_schema.sql`, `_rls_helpers.sql`, `_rls_policies.sql`), but `docs/specs/schema.md` §14 describes the foundation as a single ordered migration that bundles schema + RLS together. The user's Phase 1 prompt asks for two files (`_initial_schema.sql` + `_rls.sql`, combining helpers and policies). Locking the file count now avoids inconsistency across the Phase 1 sub-tasks.
+
+**Options considered:**
+- (a) Three files (`_initial_schema.sql` + `_rls_helpers.sql` + `_rls_policies.sql`) — matches PHASE_ACCEPTANCE_CRITERIA Phase 1 as written; cleanly separates helper definitions from the policies that consume them; adds one more file and an arbitrary boundary in the middle of the RLS layer with no consumer in isolation.
+- (b) Two files (`_initial_schema.sql` + `_rls.sql`) — keeps schema separate from security (so RLS-only changes review independently); co-locates helpers with the policies that are their only callers; matches the spirit of schema.md §14 (RLS treated as one chunk) without collapsing into the schema migration.
+- (c) One file (everything in `_initial_schema.sql`) — matches schema.md §14 strictly; couples table creation with security policy, which makes future RLS-only diffs harder to review.
+
+**Decision:** (b) — two files: `_initial_schema.sql` (sub-task 1) and `_rls.sql` containing both helpers and policies (sub-task 2).
+
+**Why:**
+The four RLS helpers (`is_party_member`, `is_active_party_member`, `is_party_host`, `my_party_player_id`) are only ever called by RLS policies. Splitting them into their own migration creates a file with no logical consumer when read in isolation. Keeping schema and RLS in *separate* migrations does still pay off — RLS-only changes can be reviewed without scanning a 500-line schema diff — so we don't collapse to one file either. PHASE_ACCEPTANCE_CRITERIA.md Phase 1 deliverables will be updated in sub-task 3 to match the two-file shape.
+
+**Documented in:**
+- `supabase/migrations/<timestamp>_initial_schema.sql` (sub-task 1)
+- `supabase/migrations/<timestamp>_rls.sql` (sub-task 2)
+- `docs/PHASE_ACCEPTANCE_CRITERIA.md` Phase 1 deliverables (updated in sub-task 3)
+
+---
+
 ## Resolved Issues
 
 *Issues from "Open Issues" that have been fixed. Kept for reference.*
