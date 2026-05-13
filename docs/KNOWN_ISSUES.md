@@ -61,7 +61,38 @@ See the examples below for the full shape. At minimum:
 
 *Issues that are known but not yet resolved.*
 
-(none yet — first issue will land during development)
+### #001 — [bug] Metro reports "Asset not found: assets/icon.png" on first `npx expo start`
+
+**Found:** 2026-05-13 during Phase 0 QA (final local verification before phase closure)
+**Phase:** 0
+**Status:** Open (non-blocking — app bundles and runs, placeholder screen loads on device via Expo Go)
+
+**Description:**
+The first time `npx expo start` runs from `apps/mobile/`, Metro emits an "Asset not found: assets/icon.png" error before bundling completes. Bundling then succeeds and the app loads correctly on the user's device, so the error is non-blocking.
+
+**Context:**
+Discovered immediately after the template cleanup commit (`dfe5e05`) that deleted the four `react-logo*.png` demo assets and replaced `app/_layout.tsx`. Did not occur in any prior local run because the template's demo assets were present.
+
+**Suspected root cause (not yet verified):**
+The error path Metro reports is `assets/icon.png` (no `images/` segment) — but no in-repo config references that path. `app.json` correctly points at `./assets/images/icon.png` (verified via `grep` after the cleanup), and no source file (TSX, JS, JSON) references the unqualified `assets/icon.png`. Likely candidates:
+- Stale entry in the local `.expo/` cache from before the cleanup, still referencing a deleted asset by an internal default-path probe.
+- An Expo SDK 54 internal default that falls back to looking for `assets/icon.png` if a referenced icon fails to resolve, masking the real failure.
+- A web-build artifact (the template's `expo-router` web `output: "static"` config in `app.json` line 25) checking for a default web icon path.
+
+**Triage plan (for whoever picks this up):**
+1. From `apps/mobile/`, `rm -rf .expo/` and re-run `npx expo start`. If the error disappears, it was cache staleness — close as resolved.
+2. If the error persists, inspect Metro's `--verbose` output to find the call site requesting `assets/icon.png`.
+3. If it's Expo SDK 54 internals, consider adding a no-op `assets/icon.png` (copy of `assets/images/icon.png`) as a workaround, OR file an Expo issue with a minimal repro.
+
+**Why not fixed now:**
+Non-blocking; the app loads. Investigating the root cause is its own ~30-minute task, and Phase 1 (Supabase schema) is the next priority. Better to close out Phase 0 cleanly and address this in a dedicated `chore: investigate metro asset-not-found warning` task.
+
+**Related files:**
+- `apps/mobile/app.json` (icon and splash paths)
+- `apps/mobile/.expo/` (not committed; first place to clear)
+- Commit `dfe5e05` (when the issue first surfaced)
+
+---
 
 ---
 
@@ -138,6 +169,34 @@ The template/SDK pairing the Expo team ships is the most predictable starting po
 **Documented in:**
 - Commit (sub-task 1 of Phase 0)
 - Follow-up: a future `chore: upgrade to Expo SDK 55` task once the bundled template catches up
+
+---
+
+### #D007 — [decision] Keep `EXPO_PUBLIC_SUPABASE_ANON_KEY` despite Supabase CLI renaming to `sb_publishable_` / `sb_secret_`
+
+**Date:** 2026-05-13
+**Phase:** 0
+**Decided by:** user (after Claude Code surfaced the naming mismatch during Phase 0 closeout)
+
+**Question:**
+The Supabase CLI version used to scaffold this project (2.98.2) now emits the project's public API key as `sb_publishable_...` and the elevated key as `sb_secret_...` instead of the older `anon` / `service_role` labels. The function of the keys is unchanged (publishable = the same key clients use, protected by RLS; secret = the same elevated key for server-only use). But our `.env.example` declares the variable as `EXPO_PUBLIC_SUPABASE_ANON_KEY` — the legacy name. Renaming the env var now or sticking with the legacy name is a one-way door per env-file consumer.
+
+**Options considered:**
+- (a) Keep `EXPO_PUBLIC_SUPABASE_ANON_KEY` for the MVP — matches every `@supabase/supabase-js` example and tutorial that still says "anon key"; consistent with the long tail of community docs; one variable name across the team.
+- (b) Rename now to `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — matches the CLI's current label and the new Supabase docs going forward; clearer that this is the *public* key, not just "anonymous-user" key; requires updating `.env.example`, the env loader (`src/lib/env.ts` in Phase 3), and any docs referencing the variable.
+- (c) Support both names with a fallback in the env loader — flexibility cost; ambiguous which is canonical; defers the rename rather than deciding.
+
+**Decision:** (a) — keep `EXPO_PUBLIC_SUPABASE_ANON_KEY` for now, revisit during Phase 1 or 2.
+
+**Why:**
+Phase 0 has zero downstream consumers of this variable yet (no `src/lib/env.ts`, no Supabase client wired). Changing the name later when we wire the client (Phase 3) costs one search-and-replace; changing it now means we'd have to keep tracking whether community docs / `@supabase/supabase-js` examples have moved over. The "anon key" terminology is also what every existing tutorial uses to explain *what this key does* (it identifies anonymous sessions under RLS), which matches the MVP's anonymous-auth flow. Defer the rename until either: (1) the Supabase JS SDK itself starts emitting deprecation warnings on the old terminology, or (2) we hit confusion during Phase 1/2 RPC work because the CLI surface uses `publishable` everywhere.
+
+**Trigger to revisit:**
+If during Phase 1 or 2 we find ourselves writing comments like "the anon key, which Supabase now calls publishable" more than twice, just do the rename. Log the rename as a `#D###` superseding this one.
+
+**Documented in:**
+- `.env.example` (variable name unchanged)
+- Commit (Phase 0 closure)
 
 ---
 

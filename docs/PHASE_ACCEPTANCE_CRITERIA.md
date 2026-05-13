@@ -17,7 +17,7 @@
 
 ## Phase 0 — Repo Skeleton and Planning Docs
 
-**Status:** In Progress *(most prerequisites complete; mobile/Supabase scaffolding pending)*
+**Status:** Complete *(verified locally on 2026-05-13; build sub-tasks span 08dc65c..9c5bcc5, closed by this docs commit; one non-blocking issue logged as #001)*
 
 **Goal:** repo exists, planning docs and specs are committed, basic local environment runs.
 
@@ -34,17 +34,17 @@
 - [x] Expo app scaffolded under `apps/mobile/` (TypeScript, Expo Router)
 - [x] Supabase folder initialized (`supabase init` run, `supabase/config.toml` committed)
 - [x] Basic lint/format setup in `apps/mobile/` (ESLint + Prettier configs)
-- [ ] `.env` created locally (NOT committed) with local Supabase URL and anon key
+- [x] `.env` created locally (NOT committed) with local Supabase URL and anon key
 
 ### Acceptance criteria
 
 - [x] `git status` shows clean working tree
-- [ ] `npx expo start` (from `apps/mobile/`) launches a placeholder app on a real device
-- [ ] `supabase start` runs cleanly and prints URL + anon key
-- [ ] `README.md` setup steps work for a fresh checkout
+- [x] `npx expo start` (from `apps/mobile/`) launches a placeholder app on a real device
+- [x] `supabase start` runs cleanly and prints URL + anon key
+- [x] `README.md` setup steps work for a fresh checkout
 - [x] No secrets committed
 
-**Phase 0 complete when:** all checkboxes above ticked. Status note: commit `<sha>`.
+**Phase 0 complete when:** all checkboxes above ticked. Status note: commit `9c5bcc5` (closure ticks in this commit).
 
 ---
 
