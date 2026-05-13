@@ -281,6 +281,30 @@ Lets sub-task 1 finish without invalidating any existing template imports. The f
 
 ---
 
+### #D009 — [decision] Scope RLS policies to `TO authenticated` (deviates from rls-rules.md examples as originally written)
+
+**Date:** 2026-05-13
+**Phase:** 1
+**Decided by:** user (after Claude Code surfaced that rls-rules.md §2-§11 examples omit a TO clause)
+
+**Question:**
+The example SQL snippets in `docs/specs/rls-rules.md` §2 through §11 never include a `TO <role>` clause on any policy. Postgres defaults to `TO public`, which means all roles (`authenticated`, `anon`, `service_role`, `postgres`, etc.) are evaluated by the policy. In our case the helpers already deny unauthenticated callers via `auth.uid()` checks, and Supabase's `service_role` bypasses RLS regardless — so the functional behavior is identical whether we scope or not. But explicit scoping makes intent clear in the SQL. Lock the convention before writing the first RLS migration so every future policy follows it.
+
+**Options considered:**
+- (a) Match spec verbatim (no TO clause) — keeps the migration 1:1 with the spec; no doc updates needed; reader has to infer that PUBLIC is intentional rather than an oversight.
+- (b) Scope every SELECT policy to `TO authenticated` — clearer intent; aligns with modern Supabase patterns; requires updating both the migration AND the spec examples (otherwise the spec drifts away from the code, violating CLAUDE.md §8.1).
+
+**Decision:** (b) — scope all SELECT policies to `TO authenticated`. Update both the migration AND `docs/specs/rls-rules.md` to reflect the new convention in the same docs commit.
+
+**Why:**
+The user prefers explicit policy scoping (the SQL says exactly who the policy applies to instead of relying on Postgres's PUBLIC default). Per `CLAUDE.md` §8.1, the spec is the source of truth — if the migration uses `TO authenticated` but the spec doesn't, the spec rots immediately. Updating both keeps them in lockstep. Supabase Anonymous Auth users are still `authenticated` to Postgres, so this scope change does not exclude guest sessions — anonymous auth was the only path I worried might be excluded, and it isn't.
+
+**Documented in:**
+- `docs/specs/rls-rules.md` §1.5 (new) and §2-§11 (every example SQL policy updated)
+- `supabase/migrations/<timestamp>_rls.sql` (every CREATE POLICY, sub-task 2)
+
+---
+
 ### #D008 — [decision] RLS migration split: combine helpers and policies in one file
 
 **Date:** 2026-05-13

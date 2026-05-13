@@ -49,6 +49,10 @@ public.my_party_player_id(session_id uuid) returns uuid
 
 All helpers are `STABLE`, `SECURITY INVOKER`, and check `auth.uid()` against `party_players.user_id` (or `guest_identity_id` joined through to the user via the identity link).
 
+### 1.5. Policy role scoping
+
+Every SELECT policy below is scoped to `TO authenticated` for explicitness. Supabase Anonymous Auth users have an `auth.uid()` and are considered authenticated by Postgres, so the scoping does not exclude guests. Service role bypasses RLS regardless of scoping. See `KNOWN_ISSUES.md` #D009 for the rationale behind deviating from earlier drafts of this doc that omitted the `TO` clause.
+
 ---
 
 ## 2. `party_sessions`
@@ -73,6 +77,7 @@ A user can read a `party_sessions` row if any of the following holds:
 ```sql
 create policy "members can read their party session"
 on party_sessions for select
+to authenticated
 using (
   exists (
     select 1 from party_players pp
@@ -104,6 +109,7 @@ Per-party settings. Visible to party members. Read-only via RLS — host modific
 ```sql
 create policy "members can read party settings"
 on party_settings for select
+to authenticated
 using (
   public.is_party_member(party_settings.party_session_id)
 );
@@ -116,6 +122,7 @@ Actually — **locked: use `is_active_party_member`** for consistency with `part
 ```sql
 create policy "active members can read party settings"
 on party_settings for select
+to authenticated
 using (
   public.is_active_party_member(party_settings.party_session_id)
 );
@@ -141,6 +148,7 @@ A user can read a `party_players` row if:
 ```sql
 create policy "members see non-removed peers; host sees all"
 on party_players for select
+to authenticated
 using (
   public.is_active_party_member(party_players.party_session_id)
   and (
@@ -169,6 +177,7 @@ Add a second permissive policy:
 ```sql
 create policy "always read your own party_players row"
 on party_players for select
+to authenticated
 using (
   party_players.user_id = auth.uid()
 );
@@ -189,6 +198,7 @@ Per-round records. Visible to active and out party members.
 ```sql
 create policy "active members can read rounds"
 on rounds for select
+to authenticated
 using (
   public.is_active_party_member(rounds.party_session_id)
 );
@@ -213,6 +223,7 @@ For row-level: every active member of the party can read every outcome row in th
 ```sql
 create policy "active members can read all outcomes in their party"
 on round_player_outcomes for select
+to authenticated
 using (
   public.is_active_party_member(round_player_outcomes.party_session_id)
 );
@@ -237,6 +248,7 @@ Audit log of host actions. Visible to the host only. Other players don't need to
 ```sql
 create policy "only host reads admin action logs"
 on admin_action_logs for select
+to authenticated
 using (
   public.is_party_host(admin_action_logs.party_session_id)
 );
@@ -257,6 +269,7 @@ System and host transitions. Visible to all active party members (useful for cli
 ```sql
 create policy "active members can read timer events"
 on timer_events for select
+to authenticated
 using (
   public.is_active_party_member(timer_events.party_session_id)
 );
@@ -277,6 +290,7 @@ Per-player notification preferences. Each player reads only their own; host can 
 ```sql
 create policy "read your own notification settings"
 on party_player_notification_settings for select
+to authenticated
 using (
   party_player_notification_settings.party_player_id in (
     select id from party_players
@@ -303,6 +317,7 @@ Device records (for future push notification routing). Per-user visibility.
 ```sql
 create policy "read your own devices"
 on devices for select
+to authenticated
 using (
   devices.user_id = auth.uid()
 );
@@ -323,6 +338,7 @@ Per-user global notification preferences. Visible only to that user.
 ```sql
 create policy "read your own notification preferences"
 on user_notification_preferences for select
+to authenticated
 using (
   user_notification_preferences.user_id = auth.uid()
 );
