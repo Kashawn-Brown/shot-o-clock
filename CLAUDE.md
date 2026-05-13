@@ -152,6 +152,19 @@ Use functional components with hooks. Class components are forbidden. Within a c
 
 Extract to named constants. `const DEFAULT_SHOT_WINDOW_SECONDS = 30` in a shared constants file is always better than `30` inline. Enum-like strings (phase names, status values) must come from a typed source — never typed as a raw string literal at the call site.
 
+### 5.9. CI readiness — write code that will pass CI before CI exists
+
+CI/CD is a planned addition. Initial pipeline: `install → lint → typecheck → build → test → push`. Later additions will include pre-prod checks against a Supabase preview branch and staged deploys. The pipeline is not wired up yet, but write every change as if it were:
+
+- Code must lint clean (`npm run lint`) and typecheck clean (`tsc --noEmit`) before commit.
+- New behavior gets at least a minimal test where reasonable — unit tests for pure logic, integration tests for RPCs. Do not skip tests with "I'll add them later."
+- Build determinism: no relative paths assuming a specific working directory, no hardcoded absolute paths, no reliance on developer-machine-only tooling.
+- Secrets only via env vars, never inline. CI will fail loudly if a secret is hardcoded.
+- Migrations must be idempotent against a fresh database. CI will run them from scratch on every build.
+- Avoid platform-specific shell commands in npm scripts. Use cross-platform tools (`rimraf` instead of `rm -rf`, `cross-env` if env vars are needed inline).
+
+When CI is wired up, no existing code should need to change to satisfy it. If you are about to introduce something CI would later fail on, stop and ask.
+
 ---
 
 ## 6. Dependency Management — Stay Current
