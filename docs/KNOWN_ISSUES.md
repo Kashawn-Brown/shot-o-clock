@@ -331,6 +331,63 @@ The four RLS helpers (`is_party_member`, `is_active_party_member`, `is_party_hos
 
 ---
 
+### #D010 — [decision] Phase 2 RPC infrastructure conventions
+
+**Date:** 2026-05-13
+**Phase:** 2
+**Decided by:** user (after Claude Code surfaced five spec/scope questions during Batch A planning)
+
+**Question:**
+Batch A of Phase 2 establishes the infrastructure pattern every subsequent RPC will copy. Five conventions need to be locked in one place before any code lands, because changing any of them later would mean revisiting every committed RPC:
+
+1. How are `SECURITY DEFINER` functions hardened against `search_path` attacks?
+2. SECURITY DEFINER bypasses RLS — what's the in-function policy for read RPCs that need to enforce party-member access themselves?
+3. Internal SQL helpers (`_rpc_error`, `_rpc_success`) are auto-exposed by PostgREST as RPC endpoints — how do we prevent that?
+4. `rpc-contracts.md` §1.3 mandates the standard `{ok, error_code, error_msg, data}` shape for all RPCs, but §13.2 and §13.3 specify raw `timestamptz` and `setof round_player_outcomes` returns instead. Which is canonical?
+5. The Batch A typed wrappers can't compile without `src/lib/supabase.ts`, which `PHASE_ACCEPTANCE_CRITERIA.md` Phase 3 owns. Where does the supabase client come from?
+
+**Options considered:**
+
+(1) search_path pinning:
+- (a) `SET search_path = public, pg_temp` on every SECURITY DEFINER function — the Postgres-recommended hardening against schema-shadowing attacks where a malicious caller creates objects in their own schema and tricks a definer-rights function into resolving to them.
+- (b) Rely on the default search_path — works in practice but leaves a documented privilege-escalation class open.
+
+(2) SECURITY DEFINER + reads:
+- (a) Every SECURITY DEFINER read RPC calls `auth.uid()` + an in-function membership check (e.g. `is_active_party_member`) before returning data — explicit, mirrors the write-path pattern, no implicit reliance on RLS for definer-rights functions.
+- (b) Use SECURITY INVOKER for read RPCs so RLS applies automatically — simpler, but inconsistent with `rpc-contracts.md` §1.1's locked "every MVP RPC uses SECURITY DEFINER" rule.
+
+(3) Helper exposure:
+- (a) Helpers in `public` with explicit `REVOKE EXECUTE FROM public, anon, authenticated` — callable by SECURITY DEFINER RPCs (which run as `postgres`) but not reachable via the PostgREST `/rpc/_rpc_error` URL.
+- (b) Helpers in a separate `internal` schema — clean isolation but adds a schema PostgREST doesn't introspect by default; more wiring than (a).
+
+(4) §13 return-shape contradiction:
+- (a) Amend §13.2 and §13.3 to use the standard shape, with `data` containing `{server_time}` and `{outcomes: [...]}` respectively — one TypeScript wrapper signature, one error pipeline, every RPC uniform.
+- (b) Treat §13 reads as exceptions — needs two distinct rpcClient code paths and two TS wrapper patterns.
+
+(5) Supabase client:
+- (a) Pull `@supabase/supabase-js` install + minimal `src/lib/supabase.ts` into Phase 2 Batch A1, marked "Phase 3 deliverable pulled forward by dependency" so Phase 3 doesn't re-create.
+- (b) Defer typed wrappers + rpcClient to Phase 3 — breaks Batch A's "wrappers compile clean" acceptance criterion.
+- (c) Inject a supabase-like client so types are pure until Phase 3 — abstraction the codebase has no other use for.
+
+**Decision:**
+- (1) — (a) Every SECURITY DEFINER function pins `SET search_path = public, pg_temp`.
+- (2) — (a) Every SECURITY DEFINER read RPC performs its own `auth.uid()` + membership check before reading. Results that bypass these checks are a bug, not a feature.
+- (3) — (a) Internal helpers live in `public` with explicit `REVOKE EXECUTE` from `public, anon, authenticated`. Migration includes an inline comment.
+- (4) — (a) Amend `rpc-contracts.md` §13.2 and §13.3 to the standard shape. Amendment ships in the same docs commit as the A2 migration (the commit that introduces the read RPCs themselves) so spec and code land together per `CLAUDE.md` §8.1.
+- (5) — (a) `@supabase/supabase-js` install + minimal `src/lib/supabase.ts` land in Batch A1. When Phase 3 starts, `PHASE_ACCEPTANCE_CRITERIA.md` Phase 3 deliverables for `supabase.ts` will be marked already-satisfied; Phase 3's typed `env.ts` loader replaces A1's inline env validation.
+
+**Why:**
+These are the conventions every Phase 2 RPC will copy from Batch A. Locking them in one decision means: search-path hardening is uniform; SECURITY DEFINER read paths are explicit about their own checks rather than silently relying on RLS that doesn't apply to definer-rights functions; internal helpers can't be hit from the client; the TS wrapper layer handles one shape, not two; and the supabase client is created once rather than rebuilt in Phase 3. The §13 spec amendment is the right call because the alternative (two return-shape variants) propagates through `RpcResult<T>`, the error pipeline, and every screen that calls these reads — far more invasive than fixing a five-line spec inconsistency.
+
+**Documented in:**
+- `supabase/migrations/<timestamp>_rpc_infrastructure.sql` (search_path on helpers; revoke statements with inline comment) — Batch A1
+- `apps/mobile/src/lib/supabase.ts` + `apps/mobile/package.json` (Phase 3 deliverable pulled forward) — Batch A1
+- `apps/mobile/src/lib/rpcClient.ts`, `apps/mobile/src/types/api.ts`, `apps/mobile/src/lib/errors.ts` — Batch A1
+- `docs/specs/rpc-contracts.md` §13.2 and §13.3 (amended) — Batch A2 docs commit
+- All subsequent Phase 2 RPC migrations (search_path + auth.uid() pattern repeated)
+
+---
+
 ## Resolved Issues
 
 *Issues from "Open Issues" that have been fixed. Kept for reference.*
