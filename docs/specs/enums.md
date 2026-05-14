@@ -399,11 +399,12 @@ create type timer_event_type as enum (
   'time_added',
   'phase_skipped',
   'round_completed',
+  'round_cancelled',
   'next_round_started'
 );
 ```
 
-MVP-used: all except `referee_window_started`.
+MVP-used: all except `referee_window_started`. `round_cancelled` was added in Phase 2 Batch B2 so `end_party` can emit a semantically accurate event when killing an in-flight round (distinct from `round_completed`, which signals a finalized round). See `docs/KNOWN_ISSUES.md` #D012 (g).
 
 ---
 

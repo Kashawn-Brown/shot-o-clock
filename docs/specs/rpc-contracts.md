@@ -211,15 +211,29 @@ leave_party(p_party_session_id uuid) returns jsonb
 
 ### 4.4. Effects
 
-1. Update caller's `party_players` row: `status = removed`, `leftAt = now()`, `removedReason = 'self_left_lobby'`.
+1. Update caller's `party_players` row: `status = removed`, `leftAt = now()`, `removedAt = now()`, `removedReason = 'self_left_lobby'`. (Both `leftAt` and `removedAt` are required — the schema's `removed_fields_consistent` CHECK constraint mandates `removed_at NOT NULL` whenever `status = 'removed'`. See `docs/KNOWN_ISSUES.md` #D012 (a).)
 
 ### 4.5. Returns
 
-Standard ok/error shape. Errors: `NOT_IN_PARTY`, `HOST_CANNOT_LEAVE`, `ILLEGAL_TRANSITION`.
+On success:
+
+```json
+{
+  "ok": true,
+  "data": {}
+}
+```
+
+The `data` field is an empty object on success — the call carries no payload beyond the ok flag. See `docs/KNOWN_ISSUES.md` #D012 (b).
+
+Errors: `NOT_IN_PARTY`, `HOST_CANNOT_LEAVE`, `ILLEGAL_TRANSITION`, `PLAYER_REMOVED` (per §4.6's distinction between self-left and host-removed; see #D013).
 
 ### 4.6. Idempotency
 
-Idempotent — second call returns ok if already removed-via-leave.
+Idempotent for the self-left case only. Distinguish on `removed_reason`:
+
+- Existing row has `status = 'removed'` AND `removed_reason = 'self_left_lobby'`: return `{ ok: true, data: {} }` (idempotent re-leave).
+- Existing row has `status = 'removed'` AND `removed_reason != 'self_left_lobby'` (i.e. caller was kicked by the host via `host_remove_player`): return `PLAYER_REMOVED`. The two cases produce different player-facing UX downstream — see `docs/KNOWN_ISSUES.md` #D013.
 
 ---
 
@@ -547,9 +561,11 @@ end_party(p_party_session_id uuid) returns jsonb
 
 ### 12.4. Effects
 
-1. Update session: `status = ended`, `currentPhase = ended`, `endedAt = now()`.
-2. Insert `admin_action_logs` row with `actionType = end_party`.
-3. Insert `timer_events` row with `eventType = round_completed` if there's an in-flight round, marking it `status = cancelled`.
+1. Update session: `status = ended`, `currentPhase = ended`, `endedAt = now()`, `phaseEndsAt = null`. `pausedAt` and `pausedRemainingSeconds` are **not** cleared — they're left as historical record (see `docs/KNOWN_ISSUES.md` #D012 (d), (e)). `currentRoundNumber` is also left as-is.
+2. Determine the in-flight round, if any: the `rounds` row matching `current_round_number` whose `status NOT IN ('completed', 'cancelled')`. Null if the session is in lobby (no rounds yet) or already in `round_complete` (current round is `completed`).
+3. If an in-flight round exists, update it: `status = cancelled`.
+4. If an in-flight round exists, insert a `timer_events` row: `eventType = round_cancelled`, `triggeredBy = 'host'`, `triggered_by_player_id = host's party_player_id`, `round_id` and `round_number` populated. `round_cancelled` is a semantically accurate event type added in Phase 2 Batch B2 — see `enums.md` §3.16 and `docs/KNOWN_ISSUES.md` #D012 (g).
+5. Insert an `admin_action_logs` row: `actionType = end_party`, `actor_player_id = host's party_player_id`, `actor_permission_role = 'host'`. `previous_value` and `new_value` default to null. `round_id` and `round_number` mirror the in-flight round if step 3 fired, else both null (see #D012 (f)).
 
 ### 12.5. Returns
 

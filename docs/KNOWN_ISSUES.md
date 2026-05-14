@@ -477,6 +477,56 @@ B1 implements `create_party` and `join_party`. Five spec-silence items needed lo
 
 ---
 
+### #D012 — [decision] Phase 2 Batch B2 conventions (leave_party + end_party)
+
+**Date:** 2026-05-14
+**Phase:** 2 (Batch B2)
+**Decided by:** user (resolved during B1 planning round; logged at B2 start, with (g) added during B2 planning)
+
+**Question:**
+B2 implements `leave_party` and `end_party`. Seven small spec-silence items needed locking:
+
+(a) `leave_party` effects: schema's `removed_fields_consistent` CHECK requires `removed_at NOT NULL` when `status = 'removed'`, but §4.4 only mentioned `left_at`. Do we set both?
+(b) `leave_party` success payload: §4.5 said "standard ok/error shape" but didn't define the `data` field.
+(c) `end_party` timer_events row: §12.4 didn't specify `triggered_by`.
+(d) `end_party` pause-related columns: do we clear `paused_at` / `paused_remaining_seconds` on end?
+(e) `end_party` `phase_ends_at`: spec was silent on whether to null it.
+(f) `end_party` admin_action_logs row: spec was silent on `previous_value` / `new_value` / `round_id` / `round_number`.
+(g) `end_party` timer_events `event_type`: spec said `round_completed`, but the round was cancelled, not completed — misleading audit trail.
+
+**Decisions:**
+
+(a) Set both `removed_at = now()` AND `left_at = now()` on `leave_party`. The schema CHECK mandates `removed_at`; `left_at` is the semantic "when did the player leave" field per §4.4's literal wording. **§4.4 amended.**
+
+(b) `data = {}` on `leave_party` success (empty jsonb object). Matches the standard envelope contract (`data` is always present, never `null` on success). **§4.5 amended.**
+
+(c) `triggered_by = 'host'` on the timer_events row inserted by `end_party`. The host called end_party; the event was host-triggered. **§12.4 amended.**
+
+(d) Leave `paused_at` and `paused_remaining_seconds` set as historical record. Don't touch them on end. They're informational once `status = 'ended'`; clearing them loses audit trail. **§12.4 amended.**
+
+(e) Set `phase_ends_at = null` on end. Matches state-machine §3.5 ("phase_ends_at = null in lobby, round_complete, and ended"). **§12.4 amended.**
+
+(f) `previous_value = null`, `new_value = null` on the `admin_action_logs` entry for `end_party`. `round_id` and `round_number` are populated when an in-flight round was cancelled (matching the timer_events row's targets); both are null otherwise (e.g. end from lobby). **§12.4 amended.**
+
+(g) Add a new `round_cancelled` value to the `timer_event_type` enum. `end_party` emits `round_cancelled` instead of `round_completed` for the in-flight-round case. Audit-trail accuracy: a cancelled round and a completed round are semantically different events; overloading `round_completed` would propagate that ambiguity through every consumer reading `timer_events.event_type` forever. Pre-positions vocabulary for any future round-killing RPCs. Options considered:
+- (i) Add `round_cancelled` to the enum (schema migration + `enums.md` amendment) — chosen.
+- (ii) Keep `round_completed` as an overload — zero schema change, permanently muddy audit trail.
+
+**Decision:** (i). One ALTER TYPE statement in its own migration (PG 12+ allows `ALTER TYPE ... ADD VALUE` in a transaction as long as the value isn't used in the same transaction — the subsequent B2 RPC migration is a separate transaction). **§12.4 amended to reference `round_cancelled`; `enums.md` §3.16 amended to add the value.**
+
+**Why:**
+Six of seven (a, b, c, d, e, f) are spec gap-fills derived from existing constraints (schema CHECK; state-machine §3.5; the "host triggered this" semantics; the standard envelope contract). (g) is a schema vocabulary addition driven by audit-trail accuracy. None of these are architectural choices — they're tightening the spec where it was silent or vague. `#D013` (front-loaded during B1 planning) covers the orthogonal `leave_party` PLAYER_REMOVED-vs-idempotent-ok decision and is referenced from §4.6.
+
+**Documented in:**
+- `supabase/migrations/<timestamp>_add_round_cancelled_to_timer_event_type.sql` (B2 schema migration; ALTER TYPE statement)
+- `supabase/migrations/<timestamp>_rpc_party_exit.sql` (B2 RPC migration; uses `round_cancelled`)
+- `docs/specs/rpc-contracts.md` §4.4, §4.5, §12.4 (amended in B2 docs commit, lands BEFORE the B2 migration commit per `CLAUDE.md` §8.1)
+- `docs/specs/rpc-contracts.md` §4.6 (amended for #D013, same docs commit)
+- `docs/specs/enums.md` §3.16 (timer_event_type enum extended with `round_cancelled`, same docs commit)
+- `apps/mobile/src/features/party/api/leaveParty.ts`, `apps/mobile/src/features/party/api/endParty.ts`
+
+---
+
 ### #D013 — [decision] `leave_party` for previously-kicked callers returns PLAYER_REMOVED
 
 **Date:** 2026-05-14
