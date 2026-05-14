@@ -86,8 +86,8 @@
 
 One migration per RPC group (or one per RPC, whichever is cleaner). RPCs to implement:
 
-- [ ] `create_party`
-- [ ] `join_party` (including reconnect path)
+- [x] `create_party` — B1 migration + wrapper, commit `151c90f`. Happy-path / `ALREADY_HOSTING` validation deferred to Phase 3+ per #003.
+- [x] `join_party` (including reconnect path) — B1 migration + wrapper, commit `151c90f`. Happy-path / reconnect / `PARTY_NOT_JOINABLE` / `PARTY_LOCKED` / `PLAYER_REMOVED` validation deferred to Phase 3+ per #003.
 - [ ] `leave_party`
 - [ ] `start_game`
 - [ ] `mark_done`
