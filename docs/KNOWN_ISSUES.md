@@ -96,9 +96,9 @@ Non-blocking; the app loads. Investigating the root cause is its own ~30-minute 
 
 ### #003 — [verification] Verify Phase 2 RPC happy paths and member-state branches with real party data in Phase 3+
 
-**Found:** 2026-05-13 during Phase 2 Batch A2 verification; extended 2026-05-14 to cover Batch B1 deferrals
+**Found:** 2026-05-13 during Phase 2 Batch A2 verification; extended 2026-05-14 to cover Batch B1 deferrals; extended 2026-05-14 to cover Batch B2 deferrals
 **Phase:** 2 (deferred from)
-**Status:** Open (non-blocking — auth gates, `INVALID_PARAM`, `JOIN_CODE_NOT_FOUND`, and `SESSION_NOT_FOUND` collapse already verified via fake JWT + fake UUIDs across A2 and B1)
+**Status:** Open (non-blocking — auth gates, `INVALID_PARAM`, `JOIN_CODE_NOT_FOUND`, `NOT_IN_PARTY` and `SESSION_NOT_FOUND` collapse already verified via fake JWT + fake UUIDs across A2, B1, and B2)
 
 **Why deferred:**
 Happy paths and member-state-dependent branches require a real `auth.users` row referenced by `party_players.user_id`. Direct seeding of `auth.users` is brittle (same rationale as Phase 1 declining `seed.sql`). Same principle as `KNOWN_ISSUES.md` #D010 (5) — defer to where the real auth flow naturally produces the prerequisites.
@@ -119,13 +119,26 @@ Batch B1 (§2 / §3 write RPCs):
 - `join_party` `PLAYER_REMOVED`: caller with `status='removed'` is rejected.
 - `join_party` reconnect path (§3.6): caller with existing `active`/`out` row returns `{is_reconnect: true}`, `last_seen_at` and `rejoined_at` are refreshed, `display_name` is preserved.
 
+Batch B2 (§4 / §12 write RPCs):
+- `leave_party` happy path: lobby caller's row updated to `status='removed'`, `left_at=now()`, `removed_at=now()`, `removed_reason='self_left_lobby'`; success payload `{}`.
+- `leave_party` `HOST_CANNOT_LEAVE`: host caller is rejected; must use `end_party`.
+- `leave_party` `ILLEGAL_TRANSITION`: caller in a started game (phase != 'lobby') is rejected; must use `mark_self_out`.
+- `leave_party` `PLAYER_REMOVED` (kicked): caller previously removed by host (`removed_reason != 'self_left_lobby'`) returns `PLAYER_REMOVED` per #D013.
+- `leave_party` idempotent self-left: caller previously removed with `removed_reason='self_left_lobby'` returns ok with `data={}`.
+- `end_party` happy path from lobby (no in-flight round): session `status='ended'`, `phase_ends_at=null`, `ended_at=now()`; `admin_action_logs` row inserted with `action_type='end_party'`; no `timer_events` row; no `rounds` row updated.
+- `end_party` happy path from active/paused (in-flight round): all of the above PLUS in-flight round's `status='cancelled'` AND a `timer_events` row inserted with `event_type='round_cancelled'`, `triggered_by='host'`. Verify `paused_at` and `paused_remaining_seconds` are preserved per #D012 (d).
+- `end_party` `NOT_HOST`: regular player caller is rejected.
+- `end_party` idempotent already-ended: second call returns ok with the original `ended_at` (not a fresh timestamp).
+
 **When to close:**
-Earliest natural opportunity is Phase 6 — host can remove a player, so all four roster-visibility conditions exist together. Phase 3 / 5 can close the basic happy-path checks (create_party, join_party new-join, get_party_state) if convenient there. B1's reconnect path is naturally exercised in Phase 4 (Anonymous Auth + reconnect-to-in-progress-party requirement).
+Earliest natural opportunity is Phase 6 — host can remove a player, so all four roster-visibility conditions exist together. Phase 3 / 5 can close the basic happy-path checks (create_party, join_party new-join, get_party_state) if convenient there. B1's reconnect path is naturally exercised in Phase 4 (Anonymous Auth + reconnect-to-in-progress-party requirement). B2's `end_party` in-flight-round branch needs Phase 7+ (server-authoritative timer running, rounds existing); B2's `leave_party` happy path can close in Phase 6 alongside the host-remove flow.
 
 **Related files:**
-- `docs/specs/rpc-contracts.md` §2, §3, §13.1, §13.3
+- `docs/specs/rpc-contracts.md` §2, §3, §4, §12, §13.1, §13.3
 - `supabase/migrations/20260513150100_rpc_reads.sql`
 - `supabase/migrations/20260514100000_rpc_party_entry.sql`
+- `supabase/migrations/20260514110000_add_round_cancelled_to_timer_event_type.sql`
+- `supabase/migrations/20260514110100_rpc_party_exit.sql`
 
 ---
 

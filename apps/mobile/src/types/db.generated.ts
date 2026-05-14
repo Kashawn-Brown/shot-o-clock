@@ -802,6 +802,7 @@ export type Database = {
         }
         Returns: Json
       }
+      end_party: { Args: { p_party_session_id: string }; Returns: Json }
       get_party_state: { Args: { p_party_session_id: string }; Returns: Json }
       get_round_outcomes: { Args: { p_round_id: string }; Returns: Json }
       get_server_time: { Args: never; Returns: Json }
@@ -812,6 +813,7 @@ export type Database = {
         Args: { p_display_name: string; p_join_code: string }
         Returns: Json
       }
+      leave_party: { Args: { p_party_session_id: string }; Returns: Json }
       my_party_player_id: { Args: { session_id: string }; Returns: string }
     }
     Enums: {
@@ -921,6 +923,7 @@ export type Database = {
         | "time_added"
         | "phase_skipped"
         | "round_completed"
+        | "round_cancelled"
         | "next_round_started"
       triggered_by: "system" | "host" | "admin"
     }
@@ -1169,6 +1172,7 @@ export const Constants = {
         "time_added",
         "phase_skipped",
         "round_completed",
+        "round_cancelled",
         "next_round_started",
       ],
       triggered_by: ["system", "host", "admin"],
