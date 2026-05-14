@@ -78,7 +78,7 @@
 
 ## Phase 2 — Core RPC Functions
 
-**Status:** Not Started
+**Status:** In Progress — Batch A complete on 2026-05-13 (commits `c0beca0`, `690797a`, `4cffa80`, `5e806be`, and the A3 wrapper commit). Batches B (party lifecycle), C (game flow), D (player actions), E (host controls) — 17 write RPCs total — pending.
 
 **Goal:** every MVP RPC from `docs/specs/rpc-contracts.md` exists, is callable, and respects its preconditions.
 
@@ -103,11 +103,11 @@ One migration per RPC group (or one per RPC, whichever is cleaner). RPCs to impl
 - [ ] `host_mark_player_out`
 - [ ] `host_remove_player`
 - [ ] `end_party`
-- [ ] `get_party_state` (read-only helper)
-- [ ] `get_server_time` (read-only helper)
-- [ ] `get_round_outcomes` (read-only helper)
+- [x] `get_party_state` (read-only helper) — A2 migration `5e806be` + A3 wrapper
+- [x] `get_server_time` (read-only helper) — A2 migration `5e806be` + A3 wrapper
+- [x] `get_round_outcomes` (read-only helper) — A2 migration `5e806be` + A3 wrapper
 - [ ] Typed client wrappers in `apps/mobile/src/features/<feature>/api/` for each
-- [ ] Error code constants in `apps/mobile/src/types/api.ts` matching `rpc-contracts.md` §15
+- [x] Error code constants in `apps/mobile/src/types/api.ts` matching `rpc-contracts.md` §15 — all 22 codes from §15 + `UNEXPECTED_ERROR` client-side code, landed in A1 (`690797a`)
 
 ### Acceptance criteria
 
