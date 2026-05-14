@@ -4,7 +4,7 @@ A mobile-first drinking-game app for legal-drinking-age groups. The host creates
 
 This project is intentionally AI-led — most code is written by Claude Code under supervision rather than by hand. The planning and architecture are locked in `docs/`; the build follows phased, reviewable chunks.
 
-> **Status:** pre-development. Specs are complete; first migrations not yet written.
+> **Status:** currently mid-MVP build — Phase 1 (schema + RLS) complete, Phase 2 (RPC layer) underway with party lifecycle paths shipped (`create_party`, `join_party`, `leave_party`, `end_party`, and the three read helpers from `rpc-contracts.md` §13). Game flow, player actions, and host controls still to come.
 
 ---
 
