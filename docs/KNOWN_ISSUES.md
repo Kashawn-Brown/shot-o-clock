@@ -411,6 +411,85 @@ These are the conventions every Phase 2 RPC will copy from Batch A. Locking them
 
 ---
 
+### #D011 — [decision] Phase 2 Batch B1 conventions (create_party + join_party)
+
+**Date:** 2026-05-14
+**Phase:** 2 (Batch B1)
+**Decided by:** user (after Claude Code surfaced five spec/scope flags during B1 planning)
+
+**Question:**
+B1 implements `create_party` and `join_party`. Five spec-silence items needed locking before the migration could be written:
+
+1. Join code generation method (`rpc-contracts.md` §2.5 specifies alphabet and retry count but not the algorithm).
+2. Scope of the `ALREADY_HOSTING` check (§2.2 says "active or lobby" — does this include `paused`?).
+3. Whether `phase_started_at` is set on `create_party` (state-machine §3.1 says yes; rpc-contracts.md §2.4 is silent).
+4. Mismatch between schema's column-level `unique(join_code)` (across all statuses) and §2.5's "uniqueness across `{lobby, active, paused}`."
+5. Whether §3.6 reconnect short-circuits §3.4 preconditions.
+
+**Options considered / decisions:**
+
+(1) **Join code generation:**
+- (a) plpgsql loop, `floor(random() * 32) + 1` to index a constant 32-char alphabet array; retry on collision via `EXCEPTION WHEN unique_violation` up to 5 times.
+- (b) `gen_random_bytes()` + base32-like encoding — overkill for the 32^6 ≈ 1B address space and MVP threat model.
+
+**Decision:** (a). No spec amendment needed (§2.5 prescribes the alphabet and retry count, both of which (a) satisfies).
+
+(2) **`ALREADY_HOSTING` scope:**
+- (a) Literal §2.2: `status in ('lobby', 'active')`.
+- (b) Include `paused`: `status in ('lobby', 'active', 'paused')`.
+
+**Decision:** (b). A paused party is mid-game with a host; that host opening a second party while paused would be surprising. §2.2 amended in the same docs commit as the B1 migration.
+
+(3) **`phase_started_at` on `create_party`:**
+- (a) Leave null until `start_game` sets it.
+- (b) Set to `now()` at create — matches state-machine §3.1's "phaseStartedAt = party creation time" for the lobby phase.
+
+**Decision:** (b). Implementation detail; no rpc-contracts.md amendment needed — state-machine spec already prescribes it.
+
+(4) **Join code uniqueness mismatch:**
+- (a) Loosen schema to a partial unique on `status in ('lobby', 'active', 'paused')` so ended/expired/cancelled codes can be reused.
+- (b) Tighten §2.5 wording to match the schema's stricter column-level `unique(join_code)` — codes are permanently consumed once a session has used them.
+
+**Decision:** (b). Schema is stricter and safer; 32^6 ≈ 1B address space is plenty even with permanent consumption. §2.5 amended.
+
+(5) **§3.4 vs §3.6 ordering:**
+- (a) §3.4 preconditions apply universally — would mean post-lobby reconnect is impossible (broken).
+- (b) Reconnect (§3.6) is checked first: if the caller has an existing party_players row in this session with `status ∈ {active, out}`, only the §3.6 branch runs; §3.4 status/lock preconditions are bypassed. New-join path (no existing row) applies the full §3.4 preconditions.
+
+**Decision:** (b). Already implicit in §3.6's existence, but §3.4 is amended to state the ordering explicitly so future readers don't have to infer it.
+
+**Documented in:**
+- `supabase/migrations/<timestamp>_rpc_party_entry.sql` (B1 migration; (1), (2), (3) realized in SQL with inline comments referencing this entry)
+- `docs/specs/rpc-contracts.md` §2.2, §2.5, §3.4 (amended in the B1 docs commit, lands BEFORE the B1 migration commit per `CLAUDE.md` §8.1)
+- `apps/mobile/src/features/party/api/createParty.ts`, `apps/mobile/src/features/party/api/joinParty.ts`
+
+---
+
+### #D013 — [decision] `leave_party` for previously-kicked callers returns PLAYER_REMOVED
+
+**Date:** 2026-05-14
+**Phase:** 2 (Batch B2; front-loaded during B1 planning)
+**Decided by:** user (after Claude Code flagged §4.6 idempotency ambiguity in the Batch B planning round)
+
+**Question:**
+§4.6 says `leave_party` is idempotent — "second call returns ok if already removed-via-leave." But what's the right behavior when the caller's existing `party_players` row has `status = 'removed'` with `removed_reason != 'self_left_lobby'` (i.e. the caller was kicked by the host before trying to leave)?
+
+**Options considered:**
+- (a) Return idempotent ok uniformly — treat any `status = 'removed'` as "you're not in this party, done." Simpler logic; but a kicked player calling leave_party would never see PLAYER_REMOVED, and the UI couldn't distinguish "you left voluntarily" from "you were kicked" without re-reading `removed_reason` explicitly.
+- (b) Return PLAYER_REMOVED when `status = 'removed'` AND `removed_reason != 'self_left_lobby'`. Idempotent ok is only returned when `removed_reason = 'self_left_lobby'` (caller really did call leave_party before). Different UX downstream: "you were kicked" vs "you left."
+
+**Decision:** (b).
+
+**Why:**
+The two cases produce different player-facing UX downstream (summary screen messaging, rejoin attempts, etc.). Collapsing them at the RPC layer would force every screen that calls leave_party to re-derive "was this player kicked?" from `removed_reason` — defeating the point of having a typed error code surface. Better to distinguish at the API boundary, mirroring `join_party`'s PLAYER_REMOVED return for the same situation.
+
+**Documented in:**
+- `supabase/migrations/<timestamp>_rpc_party_exit.sql` (B2 migration)
+- `docs/specs/rpc-contracts.md` §4.6 (amended in B2 docs commit to clarify the distinction)
+- `apps/mobile/src/features/party/api/leaveParty.ts` (B2 wrapper)
+
+---
+
 ## Resolved Issues
 
 *Issues from "Open Issues" that have been fixed. Kept for reference.*

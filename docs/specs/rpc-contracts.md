@@ -70,7 +70,7 @@ create_party(
 ### 2.2. Caller requirements
 
 - Caller is authenticated via Supabase Anonymous Auth (or full auth) — `auth.uid()` is not null.
-- Caller does not already host an `active` or `lobby` party. (Optional MVP guard; can be relaxed later. **Locked: enforce for MVP.**)
+- Caller does not already host an open party — defined as a party whose `status` is one of `lobby`, `active`, or `paused`. A `paused` party is mid-game with a host, so opening a second party while paused is also blocked. (Optional MVP guard; can be relaxed later. **Locked: enforce for MVP.** See `docs/KNOWN_ISSUES.md` #D011 for the rationale behind including `paused`.)
 
 ### 2.3. Parameter validation
 
@@ -92,8 +92,9 @@ Any violation returns `error_code = INVALID_PARAM` with `error_msg` naming the o
 
 ### 2.5. Join code generation
 
-- 6 uppercase alphanumeric characters, excluding visually ambiguous chars (`0`, `O`, `I`, `1`).
-- Uniqueness checked against existing `party_sessions` with `status ∈ {lobby, active, paused}`. If a collision happens (very rare), regenerate up to 5 times then fail with `JOIN_CODE_COLLISION`.
+- 6 uppercase alphanumeric characters, excluding visually ambiguous chars (`0`, `O`, `I`, `1`). The 32-character alphabet is `A-H`, `J-N`, `P-Z`, `2-9` and is enforced by the regex check on `party_sessions.join_code` (see `schema.md` §2).
+- Uniqueness is enforced at the schema level by a column-level `unique (join_code)` constraint on `party_sessions`. The constraint applies across **all** session statuses including `ended`, `expired`, and `cancelled` — a join code is permanently consumed once a session has used it. The 32^6 ≈ 1B address space is sufficient that permanent consumption is not a scaling concern for MVP. See `docs/KNOWN_ISSUES.md` #D011 for the rationale behind matching the spec to the stricter schema rather than loosening the schema.
+- On collision, regenerate up to 5 times. If all 5 attempts collide (vanishingly rare), fail with `JOIN_CODE_COLLISION` — the client may retry.
 
 ### 2.6. Returns
 
@@ -143,10 +144,13 @@ join_party(
 
 ### 3.4. Preconditions
 
-- Session with this `joinCode` exists.
-- Session `status = lobby` (cannot join an `active` or `ended` party in MVP — `allowLateJoin` is false). Returns `PARTY_NOT_JOINABLE` otherwise.
-- Session `isLocked = false`. Returns `PARTY_LOCKED` otherwise.
-- Caller has not been previously `removed` from this session. Returns `PLAYER_REMOVED` otherwise.
+These preconditions apply to the **new-join path only**. The reconnect path (§3.6) short-circuits them: if the caller already has a `party_players` row in this session with `status ∈ {active, out}`, the reconnect branch runs and bypasses the status and lock checks below. The session-existence check applies to both paths. The `removed` case is handled entirely by §3.6.
+
+- Session with this `joinCode` exists. Returns `JOIN_CODE_NOT_FOUND` otherwise. (Applies to both paths.)
+- **New-join path only:** Session `status = lobby` (cannot join an `active`, `paused`, or `ended` party in MVP — `allowLateJoin` is false). Returns `PARTY_NOT_JOINABLE` otherwise.
+- **New-join path only:** Session `isLocked = false`. Returns `PARTY_LOCKED` otherwise.
+
+See `docs/KNOWN_ISSUES.md` #D011 for why §3.6 is documented as short-circuiting these preconditions.
 
 ### 3.5. Effects
 
