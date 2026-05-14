@@ -88,7 +88,7 @@ One migration per RPC group (or one per RPC, whichever is cleaner). RPCs to impl
 
 - [x] `create_party` — B1 migration + wrapper, commit `151c90f`. Happy-path / `ALREADY_HOSTING` validation deferred to Phase 3+ per #003.
 - [x] `join_party` (including reconnect path) — B1 migration + wrapper, commit `151c90f`. Happy-path / reconnect / `PARTY_NOT_JOINABLE` / `PARTY_LOCKED` / `PLAYER_REMOVED` validation deferred to Phase 3+ per #003.
-- [ ] `leave_party`
+- [x] `leave_party` — B2 migration + wrapper, commit `874e75d`. Happy-path / `HOST_CANNOT_LEAVE` / `ILLEGAL_TRANSITION` / `PLAYER_REMOVED` (kicked) / idempotent re-leave validation deferred to Phase 3+ per #003.
 - [ ] `start_game`
 - [ ] `mark_done`
 - [ ] `mark_self_out`
@@ -102,7 +102,7 @@ One migration per RPC group (or one per RPC, whichever is cleaner). RPCs to impl
 - [ ] `host_mark_player_active`
 - [ ] `host_mark_player_out`
 - [ ] `host_remove_player`
-- [ ] `end_party`
+- [x] `end_party` — B2 migration + wrapper, commit `874e75d`. Includes new `round_cancelled` value in `timer_event_type` enum (per #D012 (g)). Happy-path (from lobby and from active/paused with in-flight round) / `NOT_HOST` / idempotent already-ended validation deferred to Phase 3+ per #003.
 - [x] `get_party_state` (read-only helper) — A2 migration `5e806be` + A3 wrapper
 - [x] `get_server_time` (read-only helper) — A2 migration `5e806be` + A3 wrapper
 - [x] `get_round_outcomes` (read-only helper) — A2 migration `5e806be` + A3 wrapper
