@@ -790,12 +790,28 @@ export type Database = {
     Functions: {
       _rpc_error: { Args: { code: string; msg: string }; Returns: Json }
       _rpc_success: { Args: { data?: Json }; Returns: Json }
+      create_party: {
+        Args: {
+          p_elimination_enabled: boolean
+          p_grace_mode: Database["public"]["Enums"]["grace_mode"]
+          p_host_display_name: string
+          p_interval_increment_secs: number
+          p_party_name: string
+          p_shot_window_secs: number
+          p_starting_interval_secs: number
+        }
+        Returns: Json
+      }
       get_party_state: { Args: { p_party_session_id: string }; Returns: Json }
       get_round_outcomes: { Args: { p_round_id: string }; Returns: Json }
       get_server_time: { Args: never; Returns: Json }
       is_active_party_member: { Args: { session_id: string }; Returns: boolean }
       is_party_host: { Args: { session_id: string }; Returns: boolean }
       is_party_member: { Args: { session_id: string }; Returns: boolean }
+      join_party: {
+        Args: { p_display_name: string; p_join_code: string }
+        Returns: Json
+      }
       my_party_player_id: { Args: { session_id: string }; Returns: string }
     }
     Enums: {

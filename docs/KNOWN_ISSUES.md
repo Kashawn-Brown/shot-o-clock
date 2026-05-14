@@ -94,26 +94,38 @@ Non-blocking; the app loads. Investigating the root cause is its own ~30-minute 
 
 ---
 
-### #003 — [verification] Verify §13 read RPC happy paths with real party data in Phase 3+
+### #003 — [verification] Verify Phase 2 RPC happy paths and member-state branches with real party data in Phase 3+
 
-**Found:** 2026-05-13 during Phase 2 Batch A2 verification
+**Found:** 2026-05-13 during Phase 2 Batch A2 verification; extended 2026-05-14 to cover Batch B1 deferrals
 **Phase:** 2 (deferred from)
-**Status:** Open (non-blocking — auth gates and SESSION_NOT_FOUND collapse already verified in A2 via fake JWT + fake UUIDs)
+**Status:** Open (non-blocking — auth gates, `INVALID_PARAM`, `JOIN_CODE_NOT_FOUND`, and `SESSION_NOT_FOUND` collapse already verified via fake JWT + fake UUIDs across A2 and B1)
 
 **Why deferred:**
-Happy paths for `get_party_state` and `get_round_outcomes` require a real `auth.users` row referenced by `party_players.user_id`. Direct seeding of `auth.users` is brittle (same rationale as Phase 1 declining `seed.sql`). Same principle as `KNOWN_ISSUES.md` #D010 (5) — defer to where the real auth flow naturally produces the prerequisites.
+Happy paths and member-state-dependent branches require a real `auth.users` row referenced by `party_players.user_id`. Direct seeding of `auth.users` is brittle (same rationale as Phase 1 declining `seed.sql`). Same principle as `KNOWN_ISSUES.md` #D010 (5) — defer to where the real auth flow naturally produces the prerequisites.
 
 **What to verify when closing:**
+
+Batch A2 (§13 read RPCs):
 - `get_party_state` returns the four-key payload (session + settings + current_round + players) for a real active member.
 - §13.1 dual visibility filter exercised across all four caller states: host, regular active player, removed-self caller (should see own row), and removed-other from a non-host caller's perspective (should NOT appear).
 - `get_round_outcomes` returns `[]` for a fresh round and a populated array after a round produces outcomes.
 
+Batch B1 (§2 / §3 write RPCs):
+- `create_party` happy path: returns `{party_session_id, join_code, host_player_id}` with `join_code` matching `^[A-HJ-NP-Z2-9]{6}$`, session row at `status='lobby'`, settings row keyed to it, host party_players row inserted, host_player_id FK populated.
+- `create_party` `ALREADY_HOSTING` branch: caller with an existing host row in a `lobby`/`active`/`paused` party is rejected (per #D011 (2) amendment to §2.2).
+- `join_party` new-join happy path: returns `{party_session_id, party_player_id, is_reconnect: false}`; new party_players row created with `permission_role='player'`, `status='active'`, `duty='normal_player'`.
+- `join_party` `PARTY_NOT_JOINABLE`: started or ended party rejects new joiners.
+- `join_party` `PARTY_LOCKED`: locked party rejects new joiners.
+- `join_party` `PLAYER_REMOVED`: caller with `status='removed'` is rejected.
+- `join_party` reconnect path (§3.6): caller with existing `active`/`out` row returns `{is_reconnect: true}`, `last_seen_at` and `rejoined_at` are refreshed, `display_name` is preserved.
+
 **When to close:**
-Earliest natural opportunity is Phase 6 — host can remove a player, so all four roster-visibility conditions exist together. Phase 3 or 5 can close the basic happy-path checks if convenient there.
+Earliest natural opportunity is Phase 6 — host can remove a player, so all four roster-visibility conditions exist together. Phase 3 / 5 can close the basic happy-path checks (create_party, join_party new-join, get_party_state) if convenient there. B1's reconnect path is naturally exercised in Phase 4 (Anonymous Auth + reconnect-to-in-progress-party requirement).
 
 **Related files:**
-- `docs/specs/rpc-contracts.md` §13.1, §13.3
+- `docs/specs/rpc-contracts.md` §2, §3, §13.1, §13.3
 - `supabase/migrations/20260513150100_rpc_reads.sql`
+- `supabase/migrations/20260514100000_rpc_party_entry.sql`
 
 ---
 
