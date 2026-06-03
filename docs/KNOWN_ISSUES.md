@@ -1,3 +1,5 @@
+> **Deprecated:** Replaced by `decisions.md` + `timeline.md` as of 2026-06-03. No longer maintained.
+
 # Known Issues & Decisions Log
 
 > Single source of truth for things that happen during development that aren't (yet) reflected in the locked specs.
@@ -139,6 +141,32 @@ Earliest natural opportunity is Phase 6 — host can remove a player, so all fou
 - `supabase/migrations/20260514100000_rpc_party_entry.sql`
 - `supabase/migrations/20260514110000_add_round_cancelled_to_timer_event_type.sql`
 - `supabase/migrations/20260514110100_rpc_party_exit.sql`
+
+---
+
+### #004 — [doc] Planning-doc RPC lists are illustrative and drift from the authoritative rpc-contracts.md §14 inventory
+
+**Found:** 2026-06-03 during Phase 2 Batch C planning (the #D014 Round 1 docs pass, while striking `start_next_round()` from the planning blueprint)
+**Phase:** 2 (Batch C)
+**Status:** Open (non-blocking — doc-only; the authoritative RPC surface is rpc-contracts.md §14, which is correct)
+
+**Description:**
+The RPC lists embedded in the planning blueprint were written early as illustrative sketches, not as a maintained inventory. They drift both from each other and from the authoritative surface in `docs/specs/rpc-contracts.md` §14:
+
+- `docs/planning/08-stack.md` §4 (lines ~112–124) lists `advance_phase_if_due()` but omits `leave_party`, `host_pause_timer`, `host_resume_timer`, `host_end_shot_window`, `host_skip_to_shot_window`, `host_remove_player`, and the three read helpers.
+- `docs/planning/09-development-process.md` Phase 2 (lines ~224–238) omits `advance_phase_if_due()`, `leave_party`, `host_end_shot_window`, `host_skip_to_shot_window`, and the read helpers — a *different* set of omissions than 08-stack.md.
+- `docs/planning/09-development-process.md` Testing Strategy (lines ~654–665) is shorter still (no `host_pause_timer` / `host_resume_timer` / `host_remove_player`).
+
+**Why logged now and not fixed:**
+The #D014 Round 1 docs pass touches both files only to strike `start_next_round()` (removed from MVP by #D014). Reconciling the full RPC lists against rpc-contracts.md §14 in the same commit would be scope expansion (CLAUDE.md §7.4) and would also mean editing the locked planning blueprint beyond the narrow #D014 mandate (CLAUDE.md §10). The authoritative inventory lives in rpc-contracts.md §14; the planning lists are descriptive prose, not a contract. So the #D014 pass strikes only `start_next_round()` and leaves the pre-existing gaps in place, tracked here.
+
+**Resolution plan (for whoever picks this up):**
+A dedicated `docs: reconcile planning-blueprint RPC lists with rpc-contracts.md §14` task — gated on user say-so because it edits `docs/planning/` (CLAUDE.md §10). Either bring both lists to parity with §14, or replace the inline lists with a pointer to rpc-contracts.md §14 as the single source of truth.
+
+**Related files:**
+- `docs/planning/08-stack.md` §4
+- `docs/planning/09-development-process.md` Phase 2 + Testing Strategy
+- `docs/specs/rpc-contracts.md` §14 (the authoritative inventory)
 
 ---
 
@@ -562,6 +590,113 @@ The two cases produce different player-facing UX downstream (summary screen mess
 - `supabase/migrations/<timestamp>_rpc_party_exit.sql` (B2 migration)
 - `docs/specs/rpc-contracts.md` §4.6 (amended in B2 docs commit to clarify the distinction)
 - `apps/mobile/src/features/party/api/leaveParty.ts` (B2 wrapper)
+
+---
+
+### #D014 — [decision] Auto-advance round transitions; remove host-gated `start_next_round` from MVP
+
+**Date:** 2026-06-03
+**Phase:** 2 (Batch C)
+**Decided by:** user (after Claude Code drafted the decision in chunks during Batch C planning)
+**Status:** Decided — supersedes the state-machine §10 locked line "`start_next_round` is host-triggered, not auto-after-delay."
+
+**Question:**
+The MVP state machine models `round_complete` as a host-paced resting phase that the host leaves by explicitly calling `start_next_round` (state-machine §3.4, §5, §10; rpc-contracts.md §9). Reviewing the actual MVP experience — a synced group timer that paces itself — this manual gate between every shot is friction, not a feature. Should the chain `shot_window → round_complete → countdown(N+1)` auto-advance, removing the host gate and `start_next_round` from MVP? Four entangled sub-questions had to be locked together:
+
+1. If the chain auto-advances, where does the chaining live?
+2. What happens to the `round_complete` value in the `party_phase` enum?
+3. How is the audit trail emitted across a collapsed transition?
+4. What happens when round-N finalization leaves zero active players?
+
+**Options considered:**
+
+(1) **Transition chaining:**
+- (a) Atomic chain inside the finalizing RPCs (`advance_phase_if_due` / `host_end_shot_window`) via a shared helper `finalize_round_outcomes(p_round_id uuid)` — one transaction performs `shot_window → round_complete → countdown(N+1)`.
+- (b) Keep `round_complete` as a real phase with its own short auto-timer, and let a *second* `advance_phase_if_due` poll fire `round_complete → countdown`. Two transactions; a brief real dwell in `round_complete`.
+
+(2) **`round_complete` enum lifetime:**
+- (a) Keep it in `party_phase` as transitional-only (passed through in ~0ms; retained as the audit anchor and as the resting state for the zero-active-players halt).
+- (b) Remove `round_complete` from the enum entirely, since the client never dwells there.
+
+(3) **Audit-trail events:**
+- (α) Emit a single collapsed event for the whole chain.
+- (β) Emit two ordered events in the same transaction: `round_completed` (`shot_window → round_complete`) then `next_round_started` (`round_complete → countdown`).
+
+(4) **Zero active players after finalization:**
+- (i) Halt at `round_complete` with an explicit data payload (`requires_host_intervention`, typed `reason`).
+- (ii) Auto-end the party (`status = ended`) when finalization drains the roster.
+
+**Decision:**
+
+**(1) Transition chaining — (a) Atomic chain inside the transition RPCs.** The sequence `shot_window → round_complete → countdown(N+1)` collapses into a single atomic transaction owned by the function that finalizes the round: `advance_phase_if_due` (timer-expiry path) and `host_end_shot_window` (host-early-end path). There is no client-observable stop at `round_complete` in the normal flow, and no separate RPC call is needed to begin the next round. A shared SQL helper `finalize_round_outcomes(p_round_id uuid)` performs the round-N finalization (grace logic, missed-outcome creation, player-status updates per `game-rules.md` §7) so both entry points run identical finalization logic. The helper is `SECURITY DEFINER` with `REVOKE EXECUTE FROM public, anon, authenticated` (it is an internal building block, never a PostgREST endpoint — same hardening pattern as `_rpc_error`/`_rpc_success` per #D010 (3)).
+
+**(2) `round_complete` enum lifetime — (a) Keep it, transitional-only.** The `round_complete` value stays in the `party_phase` enum. It is no longer a phase the client dwells in: in the auto-advance chain the session passes *through* `round_complete` and out to `countdown(N+1)` within the same transaction, so the phase is held for ~0ms of client-observable time. It is retained (rather than dropped from the enum) because (i) it remains the correct audit-trail anchor for the `round_completed` timer_event, (ii) the halt case in sub-decision (4) genuinely rests in it, and (iii) removing an enum value is a destructive schema change we have no reason to take.
+
+**(3) Audit-trail events — (β) Two events in the same transaction.** The atomic chain emits **two** `timer_events` rows, in order, within the one transaction: first `round_completed` (`previous_phase = shot_window`, `new_phase = round_complete`), then `next_round_started` (`previous_phase = round_complete`, `new_phase = countdown`). Both carry the same `triggered_by` as the originating call (`system` for the `advance_phase_if_due` path, `host` for the `host_end_shot_window` path). The `next_round_started` enum value already exists (added in Phase 1), so no schema change is required. The pair preserves a faithful audit trail: a reader of `timer_events` sees the round close and the next round open as two distinct, ordered facts, exactly as they would have appeared under the old two-call model.
+
+**(4) Zero active players after finalization — (i) Halt at `round_complete` with an explicit payload.** If finalizing round N leaves zero `status = active` players (everyone went out, was marked out, or was removed), the chain does **not** auto-advance into `countdown(N+1)`. It stops in `round_complete` and returns:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "transitioned": true,
+    "new_phase": "round_complete",
+    "new_round_number": null,
+    "requires_host_intervention": true,
+    "reason": "no_active_players"
+  }
+}
+```
+
+`reason` is a typed string union (initially the single member `"no_active_players"`), extensible for any future halt cause without breaking the payload shape. This is the one path where `round_complete` is a real resting state in MVP: the host must reinstate a player or end the party, consistent with the locked rule in state-machine §10 ("when the last active player goes out, the session does NOT auto-end").
+
+**Why:**
+
+The driving change is to delete a manual step the product never wanted. State-machine §10 had locked "`start_next_round` is host-triggered, not auto-after-delay" — but reviewing the actual MVP experience (a synced group timer that just keeps running) showed the host-gated stop at Round Results is friction: it forces someone to tap "start next round" between every shot, stalling a game whose whole appeal is that it paces itself. Auto-advancing restores the intended feel. Round Results becomes a **view** layered on the live session data (a screen the client renders from the round's finalized outcomes), not a **phase** the state machine parks in.
+
+Choosing **(1)(a)** — one atomic transaction per transition RPC rather than a client-issued follow-up call — is what makes auto-advance safe under the locked architecture (CLAUDE.md §2.1, §2.6). If `round_complete → countdown` were a second round-trip, two clients polling `advance_phase_if_due` in the same instant could race to open Round N+1, and a client that finalized but disconnected before the follow-up call would strand the session at `round_complete` — exactly the manual stop we're removing, reintroduced as a failure mode. Collapsing the chain into the finalizing transaction means the round closes and the next round opens atomically or not at all, and the existing `(party_session_id, round_number)` unique constraint keeps a duplicate N+1 from ever being created. Extracting `finalize_round_outcomes` as a shared helper (rather than duplicating finalization in both `advance_phase_if_due` and `host_end_shot_window`) keeps the grace/missed/status logic in exactly one place — when Batch E builds `host_end_shot_window`, it reuses the helper verbatim instead of cloning a copy that can drift.
+
+Keeping `round_complete` in the enum **(2)(a)** rather than deleting it is the conservative call: it costs nothing to retain, it stays the natural audit anchor, and the halt case in (4) needs it to be a representable resting state. Emitting **two** events **(3)(β)** rather than one collapsed event keeps the audit trail honest — the same accuracy principle behind #D012 (g)'s `round_cancelled` addition. A consumer reading `timer_events` must still see "round N completed" as its own fact, distinct from "round N+1 started," even though no human watched the intervening phase; folding them into one event would erase a real transition from the record forever. Halting on zero active players **(4)(i)** rather than auto-ending upholds state-machine §10's locked decision that the host — not the system — decides whether a drained party reinstates or ends; the explicit `requires_host_intervention` + typed `reason` payload gives the client an unambiguous signal to render the host-intervention prompt instead of a normal Round Results view.
+
+**Documented in:**
+
+This decision lands across one docs commit (Round 1), then is realized in code across two migration commits (Round 2). The docs commit ships *before* any Round 2 migration, per CLAUDE.md §8.1.
+
+*Spec amendments (Round 1 docs commit):*
+
+- `docs/KNOWN_ISSUES.md` — this entry (#D014) plus Open Issue #004 (the pre-existing planning-doc RPC-list drift surfaced by the B5 edit).
+- `docs/specs/mvp-state-machine.md`:
+  - §3.4 (`round_complete`) — reframed from a host-paced resting phase to a transitional pass-through state; `start_next_round` removed from its allowed actions; the zero-active-players halt (sub-decision (4)) documented as the one real resting case.
+  - §5 (transition table) — the `round_complete → countdown / start_next_round / host` row replaced; the `shot_window → round_complete` rows amended to show the atomic chain continuing into `countdown(N+1)` and emitting two timer_events.
+  - §6 (idempotency) — `start_next_round` bullet removed; idempotency of the chained advance folded into the `advance_phase_if_due` bullet (the `(party_session_id, round_number)` constraint still guards duplicate N+1).
+  - §7 (forbidden transitions) — the "Round N+1 starting before Round N is in `round_complete`" and skip-`round_complete` rules reworded so the atomic pass-through is explicitly legal while a *client-initiated* skip remains forbidden.
+  - §8.6 (host pauses during `round_complete`) — amended to note this is now reachable only in the zero-active-players halt case.
+  - §9 (visual) — the `start_next_round` back-edge from `round_complete → countdown` redrawn as an automatic chained transition.
+  - §10 (locked decisions) — the "`start_next_round` is host-triggered, not auto-after-delay" line struck and replaced with the auto-advance rule; cross-referenced to this entry.
+- `docs/specs/rpc-contracts.md`:
+  - §5 (`start_game`) — cross-reference touch-up only.
+  - §8 (`advance_phase_if_due`) — **major rewrite**: the shot_window branch finalizes via `finalize_round_outcomes(p_round_id uuid)` and chains into `countdown(N+1)` in the same transaction; §8.4 emits the two-event sequence; §8.5 return payload extended to `{transitioned, new_phase, new_round_number, requires_host_intervention, reason}`; the zero-active-players halt documented.
+  - **§8.8 (new subsection)** — "Shared helper: `finalize_round_outcomes`": signature, behavior, and `SECURITY DEFINER` + `REVOKE EXECUTE FROM public, anon, authenticated` hardening (internal-only; not a client RPC).
+  - §9 (`start_next_round`) — **removed** from MVP (section content replaced with a stub note recording removal by #D014 and pointing to §8).
+  - §10.4 (`host_end_shot_window`) — cross-reference noting it shares `finalize_round_outcomes` and the same atomic-chain behavior (Batch E implements it against this contract).
+  - §14 (Function Ownership Summary) — `start_next_round` row removed; `finalize_round_outcomes` row added, marked "Internal only — not exposed (REVOKE EXECUTE from public/anon/authenticated)."
+- `docs/PHASE_ACCEPTANCE_CRITERIA.md` — Phase 2: `start_next_round` deliverable removed; RPC count corrected 17 → 16.
+
+*Planning-doc edits (same Round 1 docs commit; these touch the locked blueprint, made only with the user's say-so per CLAUDE.md §10):*
+
+- B1 — `docs/planning/05-prototype.md`: strike the "start next round" button from the Round Results prototype; add a cross-reference sentence pointing at the auto-advance model.
+- B2 — `docs/planning/05-prototype.md`: narrate the locked-decision reversal (host-gated → auto-advance) so the prototype prose matches §10.
+- B4 — `docs/planning/08-stack.md`: strike `start_next_round()` from the RPC list.
+- B5 — `docs/planning/09-development-process.md`: strike `start_next_round()` from the Phase 2 RPC list **only**; the pre-existing list inconsistency is logged as Open Issue **#004** rather than fixed here.
+- B6 — `docs/planning/09-development-process.md`: strike the `start_next_round` idempotency rule.
+- B3 — `docs/planning/07-components.md`: **untouched** (no `start_next_round` reference to remove; recorded here so the no-op is intentional).
+
+*Code (Round 2, separate commits after the docs commit lands):*
+
+- C1 — `supabase/migrations/<timestamp>_rpc_start_game.sql` + `apps/mobile/src/features/party/api/startGame.ts`.
+- C2 — `supabase/migrations/<timestamp>_rpc_advance_phase.sql`: `advance_phase_if_due` rewrite + the extracted `finalize_round_outcomes(p_round_id uuid)` helper (SECURITY DEFINER, REVOKE EXECUTE from public/anon/authenticated, reused by `host_end_shot_window` in Batch E) + `apps/mobile/src/features/party/api/advancePhaseIfDue.ts`.
+- C3 — docs tick commit (PHASE_ACCEPTANCE_CRITERIA.md Phase 2 criteria ticked as C1/C2 land).
 
 ---
 

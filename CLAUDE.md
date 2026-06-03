@@ -249,15 +249,16 @@ After each commit, give the user a one-line note in chat ("Committed: `feat: add
 
 If, while doing task X, you notice task Y also needs doing, **stop and ask**. Do not bundle Y into X silently. Even if Y looks small.
 
-### 7.5. Use AI_BUILD_PROTOCOL.md
+### 7.5. Per-chunk discipline
 
-The full prompt protocol lives in `docs/AI_BUILD_PROTOCOL.md`. Reference it when starting a new chunk.
+Each chunk still follows §7.1 (one goal, specs, files, acceptance criteria). The standalone prompt protocol (formerly `docs/AI_BUILD_PROTOCOL.md`) is retired — the workflow is established and lives in §8.
 
 ---
 
-## 8. Documentation Discipline
+## 8. Documentation Discipline & Session Ritual
 
-The docs are part of the codebase. They are not afterthoughts. Treat them with the same care as code.
+The docs are part of the codebase. Specs in `docs/specs/` stay authoritative.
+Progress and decisions are tracked in the local working files plan.md / decisions.md / timeline.md.
 
 ### 8.1. Spec-code sync
 
@@ -266,22 +267,37 @@ The docs are part of the codebase. They are not afterthoughts. Treat them with t
 - When you change RLS, update `docs/specs/rls-rules.md`.
 - When you change schema, the migration file IS the doc — write clear comments in the migration SQL, and update `docs/specs/schema.md` if column shape changes.
 
-### 8.2. Progress tracking — keep PHASE_ACCEPTANCE_CRITERIA.md current
+### 8.2. Session start
 
-- Update `docs/PHASE_ACCEPTANCE_CRITERIA.md` **as you go, not at phase end**. Tick each criterion as it's verified.
-- Update the phase **Status** line when you start or finish a phase.
-- When a phase is complete, add the commit SHA in the status note.
-- If a criterion was ticked but later regresses, untick it immediately and address before re-declaring.
+Before writing any code:
+1. Read CLAUDE.md, plan.md, decisions.md, timeline.md
+2. Read any spec files relevant to today's work
+3. Confirm current branch and last completed work
+4. State what we're about to build and wait for confirmation
 
-### 8.3. Issue and decision tracking — maintain KNOWN_ISSUES.md
+### 8.3. Session checkpoints
 
-- When you encounter a bug or unexpected behavior that can't be fixed in the current task, log it in `docs/KNOWN_ISSUES.md` under "Open Issues" using the entry format the file documents.
-- When you resolve an open issue, move it from "Open Issues" to "Resolved Issues" with the resolution and commit SHA.
-- When you make a decision during development that wasn't covered by the existing specs (an unanticipated fork in the road), log it under "Decisions Log" **before** implementing.
-- A decision log entry is required, not optional, if you would otherwise be making a judgment call the specs didn't cover. **Silent ad-hoc decisions accumulate into invisible technical debt** — this is one of the most important behaviors for an AI-led build.
-- If a decision rises to the level of "this should be in the locked specs," update the spec AND log the decision. The spec becomes the source of truth; the decision log entry preserves the audit trail.
+After every commit, before proposing the next task: give a 2–4 sentence
+plain-English summary — what the system can now do that it couldn't before,
+why it was built at this point, how it connects to what came before. Jargon
+allowed but must be explained inline.
 
-### 8.4. The blocking rule
+### 8.4. Wrapping a session
+
+1. Finalize or note any in-progress work
+2. Update timeline.md Current Status section
+3. Update decisions.md if anything new was decided
+4. Suggest a commit message for anything uncommitted
+
+### 8.5. Build log (build-log.md)
+
+Local-only, gitignored. Plain-English narrative organized by phase. One short
+prose paragraph per meaningful unit of work (not per commit — small/mechanical
+commits get absorbed into the nearest substantive paragraph). Closing
+`### Summary` paragraph per phase. Write a phase's full section in one sitting
+at phase close only — not incrementally.
+
+### 8.6. The blocking rule
 
 If a code change would invalidate the docs and you don't have time to update them, **stop the code change** and tell the user. Code that drifts from docs is worse than no code.
 
@@ -415,7 +431,9 @@ These are the brightest lines. Violating any of them is a serious bug.
 
 ## 12. Where to Look for More Detail
 
-When you need product context: `docs/planning/01-goal.md` through `10-post-mvp-roadmap.md`, or the master blueprint `shot_oclock_planning_blueprint.md`.
+When you need product context or progress: `plan.md` and `timeline.md` (local working files). The planning blueprint under `docs/planning/` is retired and no longer maintained.
+
+When you need the rationale behind a past choice: `decisions.md`.
 
 When you need to implement game logic: `docs/specs/game-rules.md` and `docs/specs/mvp-state-machine.md`.
 
@@ -427,9 +445,7 @@ When you need schema-level detail: `docs/specs/schema.md` and `docs/specs/enums.
 
 When you need to know the repo structure: `docs/REPO_STRUCTURE.md`.
 
-When you need to know the prompt format the user expects: `docs/AI_BUILD_PROTOCOL.md` and `docs/PROMPT_TEMPLATES.md`.
-
-When you need to know if MVP is done: `docs/MVP_DEFINITION_OF_DONE.md` and `docs/PHASE_ACCEPTANCE_CRITERIA.md`.
+When you need to know if MVP is done: the Definition of Done at the bottom of each phase in `plan.md`.
 
 ---
 
@@ -438,36 +454,3 @@ When you need to know if MVP is done: `docs/MVP_DEFINITION_OF_DONE.md` and `docs
 **Be a careful executor, not a creative author.** The user has done the planning work in the blueprint. Your job is to translate that plan into clean, current, well-organized code, one small piece at a time, with the user reviewing each piece. When the plan is ambiguous, ask. When you spot a real architectural concern, flag it. When you don't know which version of something to use, look it up. When you're about to write 500 lines in one shot, slow down and ask if that's what's wanted.
 
 The goal is a codebase the user can read and trust, not one that's impressive to skim.
-
----
-
-## §14 Session Checkpoints and Build Log
-
-### §14.1 Commit checkpoint summaries
-After every commit, before proposing the next task, provide a brief
-plain-English summary of what was just built:
-- What the system can now do that it couldn't before (behavioral consequence)
-- Why this was built at this point in the sequence
-- How it connects to what came before
-
-2-4 sentences. Jargon is allowed but must be explained inline.
-Target reader: someone who understands software but wasn't in this session.
-
-### §14.2 Build log (build-log.md)
-Local-only, gitignored. A plain-English narrative of what's been built,
-organized by phase: a `## Phase N — Name` heading, one short prose
-paragraph per meaningful commit (what was built and why, jargon-light),
-then a `### Summary` paragraph closing the phase — that one summarizes
-everything above it, so it can run a bit longer. No other sub-headers,
-no bullets.
-
-Small or mechanical commits (tick commits, minor doc cleanup, enum
-additions) get absorbed into the nearest substantive paragraph rather
-than their own entry.
-
-Do NOT add to it between commits. Keep doing the plain-English checkpoint
-summary in chat as normal. Write a phase's full build-log section in one
-sitting only when the phase fully closes — at that point Claude Code will
-be given a dedicated prompt to write it.
-
-File lives at the repo root. Add `build-log.md` to .gitignore.

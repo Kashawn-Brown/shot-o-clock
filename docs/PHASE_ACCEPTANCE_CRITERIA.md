@@ -1,3 +1,5 @@
+> **Deprecated:** Replaced by `plan.md` as of 2026-06-03. No longer maintained.
+
 # Phase Acceptance Criteria
 
 > Per-phase completion criteria for the MVP build sequence.

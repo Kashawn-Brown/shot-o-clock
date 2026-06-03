@@ -1,3 +1,5 @@
+> **Deprecated:** The planning blueprint served its purpose and is no longer maintained as of 2026-06-03. Product context now lives in `plan.md` / `timeline.md`; specs in `docs/specs/` remain authoritative.
+
 > Sliced from the master Shot O'Clock planning blueprint.
 > Cross-reference: See `docs/AI_BUILD_PROTOCOL.md` for the operational version of this workflow and `docs/PROMPT_TEMPLATES.md` for the templates.
 > When this doc and a spec in `docs/specs/` disagree, the spec wins (the spec is the locked implementation contract; this doc is the planning rationale that led there).

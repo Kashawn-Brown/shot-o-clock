@@ -1,3 +1,5 @@
+> **Deprecated:** Absorbed into the per-phase Definition of Done in `plan.md` as of 2026-06-03. No longer maintained.
+
 # MVP Definition of Done
 
 > The locked completion criteria for Shot O'Clock MVP.

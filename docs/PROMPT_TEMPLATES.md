@@ -1,3 +1,5 @@
+> **Deprecated:** No longer needed as of 2026-06-03. No longer maintained.
+
 # PROMPT_TEMPLATES.md
 
 > **Copy-paste templates for prompting Claude Code on Shot O'Clock.**

@@ -1,3 +1,5 @@
+> **Deprecated:** The build workflow is established and now lives in `CLAUDE.md` §8. Retired as of 2026-06-03. No longer maintained.
+
 # AI_BUILD_PROTOCOL.md
 
 > **The operational workflow for building Shot O'Clock with Claude Code.**

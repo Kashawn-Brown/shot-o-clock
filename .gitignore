@@ -119,6 +119,12 @@ docs/learning/
 # Plain-English build narrative — local-only working doc.
 build-log.md
 
+# Local-only project working docs — progress tracker, timeline, and any
+# machine-local CLAUDE overrides. decisions.md is committed (public).
+plan.md
+timeline.md
+CLAUDE.local.md
+
 # ─── Lockfiles for tools we don't use ───
 # (kept commented in case we switch tooling later)
 # Cargo.lock

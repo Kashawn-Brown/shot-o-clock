@@ -1,3 +1,5 @@
+> **Deprecated:** The planning blueprint served its purpose and is no longer maintained as of 2026-06-03. Product context now lives in `plan.md` / `timeline.md`; specs in `docs/specs/` remain authoritative.
+
 > Sliced from the master Shot O'Clock planning blueprint.
 > Cross-reference: The wireframes in the project zip implement these screens. See `docs/REPO_STRUCTURE.md` §2.1 for where the route files live.
 > When this doc and a spec in `docs/specs/` disagree, the spec wins (the spec is the locked implementation contract; this doc is the planning rationale that led there).

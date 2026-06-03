@@ -1,3 +1,5 @@
+> **Deprecated:** The planning blueprint served its purpose and is no longer maintained as of 2026-06-03. Product context now lives in `plan.md` / `timeline.md`; specs in `docs/specs/` remain authoritative.
+
 > Sliced from the master Shot O'Clock planning blueprint.
 > Cross-reference: **The locked schema is in `docs/specs/schema.md`.** This step is the conceptual data model that led to that schema. When in doubt, the schema spec wins.
 > When this doc and a spec in `docs/specs/` disagree, the spec wins (the spec is the locked implementation contract; this doc is the planning rationale that led there).
