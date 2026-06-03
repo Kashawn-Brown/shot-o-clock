@@ -790,6 +790,10 @@ export type Database = {
     Functions: {
       _rpc_error: { Args: { code: string; msg: string }; Returns: Json }
       _rpc_success: { Args: { data?: Json }; Returns: Json }
+      advance_phase_if_due: {
+        Args: { p_party_session_id: string }
+        Returns: Json
+      }
       create_party: {
         Args: {
           p_elimination_enabled: boolean
@@ -803,6 +807,14 @@ export type Database = {
         Returns: Json
       }
       end_party: { Args: { p_party_session_id: string }; Returns: Json }
+      finalize_round_outcomes: {
+        Args: {
+          p_party_session_id: string
+          p_triggered_by: Database["public"]["Enums"]["triggered_by"]
+          p_triggered_by_player_id?: string
+        }
+        Returns: undefined
+      }
       get_party_state: { Args: { p_party_session_id: string }; Returns: Json }
       get_round_outcomes: { Args: { p_round_id: string }; Returns: Json }
       get_server_time: { Args: never; Returns: Json }
