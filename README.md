@@ -87,15 +87,11 @@ shot-o-clock/
 │   ├── seed.sql                  # Optional dev seed data
 │   └── tests/                    # SQL tests (RLS, RPCs)
 ├── docs/
-│   ├── planning/                 # Sliced planning blueprint (10 step files)
+│   ├── planning/                 # Sliced planning blueprint (retired; see plan.md / timeline.md)
 │   ├── specs/                    # Source-of-truth specs (state machine, game rules, RPCs, RLS, schema, enums)
-│   ├── AI_BUILD_PROTOCOL.md      # How to prompt Claude Code on this project
-│   ├── PROMPT_TEMPLATES.md       # Copy-paste prompt templates
-│   ├── REPO_STRUCTURE.md         # Detailed folder layout reference
-│   ├── MVP_DEFINITION_OF_DONE.md # When MVP is actually done
-│   ├── MANUAL_QA_CHECKLIST.md    # Pre-release manual test script
-│   └── PHASE_ACCEPTANCE_CRITERIA.md  # Phase-by-phase done checklist
+│   └── REPO_STRUCTURE.md         # Detailed folder layout reference
 ├── CLAUDE.md                     # Claude Code's standing instructions
+├── decisions.md                  # Architectural decision log
 ├── README.md                     # This file
 ├── .env.example                  # Env var template
 └── .gitignore
@@ -131,7 +127,7 @@ Two key docs make that work:
 1. **`CLAUDE.md`** — standing instructions Claude Code reads at the start of every session. Defines architecture guardrails, code quality standards, commit conventions, and what NOT to do.
 2. **`docs/specs/`** — source-of-truth specs (state machine, game rules, RPC contracts, RLS, schema, enums). Claude Code references these when implementing; if the code and the spec disagree, the spec wins until amended.
 
-When prompting Claude Code, follow `docs/AI_BUILD_PROTOCOL.md` and use the templates in `docs/PROMPT_TEMPLATES.md`.
+The session ritual in `CLAUDE.md` §8 governs how each chunk of work starts and closes (session start, checkpoints, wrap-up).
 
 ---
 
@@ -169,7 +165,7 @@ Explicitly out of scope until MVP is shipped:
 - Web/TV display mode
 - Advanced stats
 
-See `docs/planning/04-mvp.md` for the full scope locked list and `docs/MVP_DEFINITION_OF_DONE.md` for the completion criteria.
+See `docs/planning/04-mvp.md` for the full scope locked list. The per-phase Definition of Done is tracked in the local `plan.md`.
 
 ---
 
@@ -193,10 +189,10 @@ If you're forking for your own use: the planning docs and specs are extensive an
 |---|---|
 | Understand the product vision | `docs/planning/01-goal.md` |
 | Understand the architecture | `docs/planning/07-components.md`, `docs/planning/08-stack.md` |
-| Understand the build process | `docs/planning/09-development-process.md`, `docs/AI_BUILD_PROTOCOL.md` |
+| Understand the build process | `docs/planning/09-development-process.md`, `CLAUDE.md` §8 |
 | Implement game logic | `docs/specs/game-rules.md`, `docs/specs/mvp-state-machine.md` |
 | Write or modify an RPC | `docs/specs/rpc-contracts.md` |
 | Write or modify RLS | `docs/specs/rls-rules.md` |
 | Understand schema choices | `docs/specs/schema.md`, `docs/specs/enums.md` |
-| Prompt Claude Code | `docs/PROMPT_TEMPLATES.md` |
-| Know if MVP is done | `docs/MVP_DEFINITION_OF_DONE.md` |
+| See why a past choice was made | `decisions.md` |
+| Know if MVP is done | per-phase Definition of Done in `plan.md` (local working file) |

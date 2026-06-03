@@ -17,15 +17,11 @@ shot-o-clock/
 │   ├── functions/                    # Edge Functions (post-MVP; empty for now)
 │   └── tests/                        # SQL test files (RLS, RPCs)
 ├── docs/
-│   ├── planning/                     # Sliced planning blueprint
+│   ├── planning/                     # Sliced planning blueprint (retired)
 │   ├── specs/                        # Source-of-truth specs
-│   ├── AI_BUILD_PROTOCOL.md
-│   ├── PROMPT_TEMPLATES.md
-│   ├── REPO_STRUCTURE.md             # This file
-│   ├── MVP_DEFINITION_OF_DONE.md
-│   ├── MANUAL_QA_CHECKLIST.md
-│   └── PHASE_ACCEPTANCE_CRITERIA.md
+│   └── REPO_STRUCTURE.md             # This file
 ├── CLAUDE.md                         # Claude Code's standing instructions
+├── decisions.md                      # Architectural decision log
 ├── README.md
 ├── .env.example
 └── .gitignore
@@ -267,14 +263,13 @@ docs/specs/
 
 When code and specs disagree, specs win until amended. Spec updates and code updates that change behavior should ideally ship in the same commit.
 
-### 4.3. Process docs (top of `docs/`)
+### 4.3. Process docs
 
-- `AI_BUILD_PROTOCOL.md` — how to prompt Claude Code.
-- `PROMPT_TEMPLATES.md` — copy-paste templates.
-- `REPO_STRUCTURE.md` — this file.
-- `MVP_DEFINITION_OF_DONE.md` — completion criteria.
-- `MANUAL_QA_CHECKLIST.md` — pre-release test script.
-- `PHASE_ACCEPTANCE_CRITERIA.md` — phase-by-phase done checklist.
+- `REPO_STRUCTURE.md` (in `docs/`) — this file.
+- `decisions.md` (repo root) — terse architectural decision log.
+- `plan.md`, `timeline.md`, `build-log.md` (repo root, local-only/gitignored) — progress tracker, narrative, and build log.
+
+The former ceremony docs (build protocol, prompt templates, MVP definition of done, manual QA checklist, phase acceptance criteria) were retired on 2026-06-03; their content now lives in `plan.md`, `decisions.md`, and `CLAUDE.md` §8.
 
 ---
 

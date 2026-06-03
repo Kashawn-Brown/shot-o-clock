@@ -242,7 +242,7 @@ Same as 8.1 — once active count hits zero, the transition into `shot_window` i
 
 ### 8.3. Host disconnects mid-game
 
-Session state is durable. System-triggered transitions (`advance_phase_if_due`) do not need the host. Host-only actions (`start_next_round`, `host_end_shot_window`, etc.) wait until the host returns. Host transfer is post-MVP; for MVP, this is documented as a known limitation and surfaced to the host as a warning in `docs/MANUAL_QA_CHECKLIST.md`.
+Session state is durable. System-triggered transitions (`advance_phase_if_due`) do not need the host. Host-only actions (`start_next_round`, `host_end_shot_window`, etc.) wait until the host returns. Host transfer is post-MVP; for MVP, this is a known limitation, surfaced to the host as a warning in the UI.
 
 ### 8.4. Double-tap on `mark_done`
 
