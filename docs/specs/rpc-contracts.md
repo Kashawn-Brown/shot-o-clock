@@ -406,15 +406,22 @@ Branch on `currentPhase`:
 3. Update session: `currentPhase = shot_window`, `phaseStartedAt = now()`, `phaseEndsAt = now() + shotWindowSeconds`.
 4. Insert `timer_events` row with `eventType = shot_window_started`, `triggeredBy = system`.
 
-**shot_window → round_complete:**
+**shot_window → round_complete → countdown(N+1) (auto-advance, D014):**
 
-1. Run finalization per `game-rules.md` §7 for all active players (single transaction):
-   - For each active player without a `done` or `self_out` outcome, create/update outcome row with `playerAction = missed`.
+Delegated to the shared `finalize_round_outcomes` helper (§8.8). In one transaction:
+
+1. Finalize round N per `game-rules.md` §7 for all active players:
+   - For each active player without a `done` or `self_out` outcome, upsert an outcome row with `playerAction = missed`.
    - Apply grace logic to determine `finalOutcome`.
-   - Update player `status`, `usedGrace`, etc. as needed.
-2. Update current round: `status = completed`, `completedAt = now()`.
-3. Update session: `currentPhase = round_complete`, `phaseStartedAt = now()`, `phaseEndsAt = null`.
-4. Insert `timer_events` row with `eventType = round_completed`, `triggeredBy = system`.
+   - Update player `status`, `usedGrace`, `totalShotsCompleted`, `totalMissedRounds`, `outReason`, `outRoundNumber`, `outAt` as needed.
+2. Update round N: `status = completed`, `completedAt = now()`.
+3. Set `currentPhase = round_complete`, `phaseStartedAt = now()`, `phaseEndsAt = null` (transitional).
+4. Insert `timer_events` row: `eventType = round_completed`, `triggeredBy` = the finalization trigger (`system` for timer expiry; `host` for `host_end_shot_window`).
+5. **Auto-advance:** count players with `status = active` after finalization.
+   - If ≥ 1: compute next interval (`prev.intervalSeconds + intervalIncrementSeconds`, clamped at `maxIntervalSeconds` if set); insert round N+1 (`status = countdown`, `countdownStartedAt = now()`, `countdownEndsAt = now() + interval`); update session (`currentPhase = countdown`, `currentRoundNumber = N+1`, `phaseStartedAt = now()`, `phaseEndsAt = now() + interval`); insert `timer_events` `eventType = next_round_started`, `triggeredBy = system`. Final resting phase: `countdown`.
+   - If 0: do not create round N+1; the session rests in `round_complete` (the zero-active halt, `mvp-state-machine.md` §8.1). Final resting phase: `round_complete`.
+
+Two ordered `timer_events` are emitted in the auto-advance case (`round_completed`, then `next_round_started`); one (`round_completed`) in the halt case.
 
 ### 8.5. Returns
 
@@ -423,18 +430,18 @@ Branch on `currentPhase`:
   "ok": true,
   "data": {
     "transitioned": true | false,
-    "new_phase": "shot_window" | "round_complete" | null
+    "new_phase": "shot_window" | "countdown" | "round_complete" | null
   }
 }
 ```
 
-`transitioned = false` means the timer hasn't expired yet or session was paused (this is normal, not an error).
+`transitioned = false` means the timer hasn't expired yet or session was paused (this is normal, not an error). When the shot_window branch auto-advances (§8.4), `new_phase = "countdown"` (round N+1 began); `new_phase = "round_complete"` only when finalization left zero active players and the session halted.
 
 Errors: `SESSION_NOT_FOUND`, `NO_ACTIVE_PLAYERS`.
 
 ### 8.6. Idempotency
 
-Idempotent — calling twice in the same millisecond produces the same end state. The first call advances; the second sees `now() < phaseEndsAt` (now in the new phase) and returns `transitioned = false`.
+Idempotent. Finalization is gated by `round.completedAt`; round N+1 creation is gated by the `rounds (party_session_id, round_number)` unique constraint. The first call advances; the second sees the round already finalized (and/or `now() < phaseEndsAt` in the new phase) and returns `transitioned = false`.
 
 ### 8.7. When is this called?
 
@@ -446,54 +453,44 @@ Three triggers, in order of reliability:
 
 For MVP, rely on (2) and (3). Document (1) as a known scalability improvement.
 
----
+### 8.8. `finalize_round_outcomes` (internal helper — not a client RPC)
 
-## 9. `start_next_round`
+The shared finalization + auto-advance routine extracted per D014. Both
+`advance_phase_if_due` (§8.4 shot_window branch) and `host_end_shot_window`
+(§10.4) call it, so finalize-and-advance is defined exactly once.
 
-Host transitions from `round_complete` to `countdown` for round N+1.
-
-### 9.1. Signature
+Signature (indicative):
 
 ```sql
-start_next_round(p_party_session_id uuid) returns jsonb
+finalize_round_outcomes(
+  p_party_session_id       uuid,
+  p_triggered_by           triggered_by,        -- 'system' or 'host'
+  p_triggered_by_player_id uuid default null    -- host's party_player_id when host-triggered
+) returns void
 ```
 
-### 9.2. Caller requirements
+- `LANGUAGE plpgsql`, `SECURITY DEFINER`, `SET search_path = public, pg_temp`.
+- **`REVOKE EXECUTE` from `public`, `anon`, `authenticated`** — never called by a
+  client; only by the two SECURITY DEFINER RPCs above, which run as the owner and
+  so bypass the revoke (same pattern as the `_rpc_*` helpers, #D010).
+- Assumes the caller has already locked the session row (`select … for update`)
+  and verified `currentPhase = shot_window`.
+- **Idempotent**: returns immediately if round N's `completedAt is not null`
+  (`game-rules.md` §7). Round N+1 creation is additionally guarded by the
+  `rounds (party_session_id, round_number)` unique constraint.
+- Performs steps 1–5 of §8.4. The `round_completed` event carries
+  `p_triggered_by`; the `next_round_started` event is always `system`.
 
-- Caller has `permissionRole = host`.
+---
 
-### 9.3. Preconditions
+## 9. `start_next_round` — REMOVED (D014)
 
-- Session `currentPhase = round_complete`. Returns `ILLEGAL_TRANSITION` otherwise.
-- At least one player has `status = active`. Returns `NO_ACTIVE_PLAYERS` otherwise.
-- Round N+1 does not already exist (idempotency check via unique constraint on `(party_session_id, round_number)`).
-
-### 9.4. Effects (single transaction)
-
-1. Compute new interval: `prev.intervalSeconds + party_settings.intervalIncrementSeconds`, clamped at `party_settings.maxIntervalSeconds` if set.
-2. Insert new `rounds` row: `roundNumber = current + 1`, `status = countdown`, `intervalSeconds = computed`, `countdownStartedAt = now()`, `countdownEndsAt = now() + computed`.
-3. Update session: `currentPhase = countdown`, `currentRoundNumber = current + 1`, `phaseStartedAt = now()`, `phaseEndsAt = now() + computed`.
-4. Insert `timer_events` row with `eventType = next_round_started`, `triggeredBy = host`.
-
-### 9.5. Returns
-
-```json
-{
-  "ok": true,
-  "data": {
-    "round_id": "uuid",
-    "round_number": 2,
-    "interval_seconds": 90,
-    "phase_ends_at": "..."
-  }
-}
-```
-
-Errors: `NOT_HOST`, `ILLEGAL_TRANSITION`, `NO_ACTIVE_PLAYERS`.
-
-### 9.6. Idempotency
-
-Idempotent — if round N+1 already exists with `status = countdown`, return it.
+Removed from MVP. Rounds auto-advance inside `finalize_round_outcomes` (§8.4,
+§8.8); there is no manual host gate between rounds. This section number is kept
+as a tombstone so later cross-references (§10–§17) retain their numbers. See
+`decisions.md` D014 and `mvp-state-machine.md` §10. The only non-auto path back
+into `countdown` is the zero-active halt, exited by `host_mark_player_active`
+(§11.1), which re-triggers the auto-advance.
 
 ---
 
@@ -517,7 +514,7 @@ Caller: host. Precondition: `status ∈ {active, paused}` AND `currentPhase ∈ 
 
 ### 10.4. `host_end_shot_window(p_party_session_id uuid) returns jsonb`
 
-Caller: host. Precondition: `currentPhase = shot_window`. Effect: same as `advance_phase_if_due` shot_window → round_complete branch (§8.4), but triggered by host. `triggeredBy = host` in the `timer_events` row. Logs `admin_action_logs` with `actionType = end_shot_window`. Idempotent via current-round.status check. Errors: `NOT_HOST`, `ILLEGAL_TRANSITION`.
+Caller: host. Precondition: `currentPhase = shot_window`. Effect: calls the shared `finalize_round_outcomes` helper (§8.8) with `p_triggered_by = 'host'` — same finalize + auto-advance as the timer path (§8.4). The `round_completed` event carries `triggeredBy = host`; the `next_round_started` event (when ≥1 active remains) is `system`. Logs `admin_action_logs` with `actionType = end_shot_window`. Idempotent via the round `completedAt` gate. Errors: `NOT_HOST`, `ILLEGAL_TRANSITION`. (Implemented in Batch E.)
 
 ### 10.5. `host_skip_to_shot_window(p_party_session_id uuid) returns jsonb`
 
@@ -529,7 +526,7 @@ Caller: host. Precondition: `currentPhase = countdown`. Effect: same as `advance
 
 ### 11.1. `host_mark_player_active(p_party_player_id uuid) returns jsonb`
 
-Caller: host. Preconditions per `game-rules.md` §6.1 (target `status = out`, `outRoundNumber >= currentRoundNumber - 1`). Effects per same. Logs `admin_action_logs` with `actionType = mark_player_active`. Idempotent (already-active is no-op + ok). Errors: `NOT_HOST`, `PLAYER_NOT_FOUND`, `PLAYER_NOT_OUT`, `REINSTATE_TOO_OLD`.
+Caller: host. Preconditions per `game-rules.md` §6.1 (target `status = out`, `outRoundNumber >= currentRoundNumber - 1`). Effects per same. Logs `admin_action_logs` with `actionType = mark_player_active`. Idempotent (already-active is no-op + ok). Errors: `NOT_HOST`, `PLAYER_NOT_FOUND`, `PLAYER_NOT_OUT`, `REINSTATE_TOO_OLD`. When the session is resting in the zero-active `round_complete` halt (§8.1 / `mvp-state-machine.md` §3.4), a successful reinstatement re-triggers the auto-advance into `countdown` for round N+1 (D014). (Implemented in Batch E.)
 
 ### 11.2. `host_mark_player_out(p_party_player_id uuid) returns jsonb`
 
@@ -677,7 +674,6 @@ Returns all outcome rows for a given round.
 | `mark_done` | Active player in party |
 | `mark_self_out` | Active player in party |
 | `advance_phase_if_due` | Any party member |
-| `start_next_round` | Host |
 | `host_pause_timer` | Host |
 | `host_resume_timer` | Host |
 | `host_add_time` | Host |
@@ -690,6 +686,8 @@ Returns all outcome rows for a given round.
 | `get_party_state` | Any party member |
 | `get_server_time` | Any authenticated user |
 | `get_round_outcomes` | Any party member |
+
+`finalize_round_outcomes` (§8.8) is intentionally absent from this table — it is an internal helper, not a client RPC. `REVOKE EXECUTE` from all API roles; only `advance_phase_if_due` and `host_end_shot_window` invoke it.
 
 Caller checks are enforced inside each function. The function `SECURITY DEFINER` model bypasses RLS for writes, so these in-function checks are the actual security boundary for writes. Reads still go through RLS — see `rls-rules.md`.
 

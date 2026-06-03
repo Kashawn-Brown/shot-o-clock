@@ -86,7 +86,6 @@ Allowed actions:
 
 Forbidden:
 - `mark_done` (no shot is happening yet)
-- `start_next_round` (current round not yet completed)
 
 ### 3.3. `shot_window`
 
@@ -111,30 +110,34 @@ Allowed actions:
 - `advance_phase_if_due` — system; if `now() >= phaseEndsAt`, transitions to `round_complete`
 
 Forbidden:
-- `start_next_round` (must finalize this round first)
 - `mark_done` from non-active players
 
 ### 3.4. `round_complete`
 
-The shot window is closed. Round N's outcomes have been finalized and are being shown.
+The shot window is closed and round N's outcomes have been finalized. Under the
+auto-advance model (D014) this phase is normally **transitional**: inside the same
+finalizing transaction the session immediately advances to `countdown` for round
+N+1 whenever at least one player is still `active`. The session only *rests* in
+`round_complete` when finalization leaves **zero active players** — the halt state
+in §8.1 and `game-rules.md` §9.5.
 
-State shape:
+State shape (resting case — zero active players):
 - `status` = `active`
 - `currentPhase` = `round_complete`
 - `phaseStartedAt` = when round_complete began
-- `phaseEndsAt` = null (host paces this manually in MVP)
+- `phaseEndsAt` = null (no timer)
 - `currentRoundNumber` = N (the round just finalized)
 
-Allowed actions:
-- `host_override_outcome` (post-MVP; for MVP, host can use `host_mark_player_out` / `host_mark_player_active` as a coarser tool)
-- `host_mark_player_out` / `host_mark_player_active`
-- `start_next_round` — transitions to `countdown` for round N+1
+Allowed actions (resting case):
+- `host_mark_player_active` — reinstating a player re-triggers the auto-advance into
+  `countdown` for round N+1 (see `rpc-contracts.md` §11.1; implemented in Batch E)
+- `host_mark_player_out`
 - `end_party`
 
 Forbidden:
 - Player actions on round N (round is finalized; outcomes are now read-only)
 - `mark_done` (no active shot)
-- `advance_phase_if_due` (this phase has no timer in MVP)
+- `advance_phase_if_due` (this phase has no timer)
 
 ### 3.5. `ended`
 
@@ -179,7 +182,6 @@ Allowed while paused:
 Forbidden while paused:
 - Phase transitions (`advance_phase_if_due` is a no-op)
 - `mark_done`
-- `start_next_round`
 
 ---
 
@@ -190,9 +192,9 @@ Forbidden while paused:
 | lobby | countdown | `start_game` | host | Create round 1; set phase = countdown; set `phaseEndsAt` = `now()` + `startingIntervalSeconds` |
 | countdown | shot_window | timer expiry via `advance_phase_if_due` | system | Set phase = shot_window; set `phaseEndsAt` = `now()` + `shotWindowSeconds`; set `shotWindowStartedAt` on round |
 | countdown | shot_window | `host_skip_to_shot_window` | host | Same as above |
-| shot_window | round_complete | timer expiry | system | Set phase = round_complete; finalize round outcomes for all active players per `game-rules.md` §7; log `TimerEvent` |
-| shot_window | round_complete | `host_end_shot_window` | host | Same as above |
-| round_complete | countdown | `start_next_round` | host | Increment round number; compute next interval (`prevInterval + intervalIncrementSeconds`, clamped at `maxIntervalSeconds` if set); create new round row; set phase = countdown; `phaseEndsAt` = `now()` + new interval |
+| shot_window | round_complete → countdown(N+1) | timer expiry via `advance_phase_if_due` | system | Finalize round N per `game-rules.md` §7 (via `finalize_round_outcomes`); mark round completed; log `round_completed`. Then if ≥1 active player remains: increment round number, compute next interval (`prevInterval + intervalIncrementSeconds`, clamped at `maxIntervalSeconds` if set), create round N+1, set phase = countdown, `phaseEndsAt` = `now()` + interval, log `next_round_started`. If 0 active remain: rest in `round_complete`. |
+| shot_window | round_complete → countdown(N+1) | `host_end_shot_window` | host | Same finalize + auto-advance via the shared `finalize_round_outcomes` helper. `round_completed` carries `triggeredBy = host`; `next_round_started` is `system`. |
+| round_complete (resting, 0 active) | countdown(N+1) | `host_mark_player_active` re-triggers advance | host → system | Reinstating a player when none are active resumes the loop with the same auto-advance side effects. |
 | any active phase | paused | `host_pause_timer` | host | Set status = paused; record `pausedAt` |
 | paused | active (resume same phase) | `host_resume_timer` | host | Set status = active; recompute `phaseEndsAt`; increment `totalPausedSeconds` |
 | any | ended | `end_party` | host | Set status = ended; currentPhase = ended; `endedAt` = `now()` |
@@ -205,7 +207,7 @@ These functions must be idempotent — calling them twice in the same moment mus
 
 - `start_game` — if already started, return current state; do not re-create round 1
 - `advance_phase_if_due` — if phase has already advanced, no-op
-- `start_next_round` — if a new round already exists with `roundNumber = current+1`, return it; do not create a duplicate
+- auto-advance (within `finalize_round_outcomes`) — finalization is gated by `round.completedAt`; round N+1 creation is gated by the `(party_session_id, round_number)` unique constraint. Calling `advance_phase_if_due` twice yields one finalization and one round N+1.
 - `mark_done` — if already marked done for this round, no-op (return existing outcome)
 - `mark_self_out` — if already self-out for this round, no-op
 - `end_party` — if already ended, no-op
@@ -224,8 +226,8 @@ Any function attempting one of these must return an error with code `ILLEGAL_TRA
 - `round_complete → shot_window` (cannot replay a finalized round)
 - `ended → anything` (terminal)
 - `lobby → shot_window` directly (must pass through countdown — even if `startingIntervalSeconds` is 0, create the countdown phase briefly so the state machine stays consistent)
-- Direct transitions skipping `round_complete` (every round must be finalized before starting the next one)
-- Round N+1 starting before Round N is in `round_complete`
+- Direct transitions skipping finalization (every round must be finalized — passing through `round_complete` — before round N+1 is created, even though the two steps are now atomic)
+- Round N+1 being created before round N's outcomes are finalized
 - Any host-only transition triggered by a non-host
 
 ---
@@ -264,52 +266,56 @@ Clients display timer based on server-provided `phaseEndsAt`. All authoritative 
 
 Only one host exists in MVP, but the host may have multiple tabs/devices. Use the function-level idempotency check (§6): second call returns the already-paused state without changing anything. No race-induced double-pause.
 
-### 8.9. `start_next_round` called twice in the same millisecond
+### 8.9. `advance_phase_if_due` called twice in the same millisecond
 
-DB-level idempotency: unique constraint on `(party_session_id, round_number)` in `rounds` ensures only one round N+1 exists. Function returns the existing row on the second call.
+DB-level idempotency: finalization is gated by `round.completedAt`, and the `(party_session_id, round_number)` unique constraint on `rounds` ensures the auto-advance creates only one round N+1. The first call finalizes + advances; the second sees the round already completed (and/or `now() < phaseEndsAt` in the new countdown) and returns `transitioned = false`.
 
 ---
 
 ## 9. Visual
 
-```text
-                    ┌──────────────┐
-                    │    lobby     │
-                    └──────┬───────┘
-                           │ start_game
-                           ▼
-              ┌────────────────────────┐
-              │      countdown         │◀──────┐
-              └───────────┬────────────┘       │
-                          │ timer / skip       │ start_next_round
-                          ▼                    │
-              ┌────────────────────────┐       │
-              │      shot_window       │       │
-              └───────────┬────────────┘       │
-                          │ timer / end        │
-                          ▼                    │
-              ┌────────────────────────┐       │
-              │     round_complete     │───────┘
-              └───────────┬────────────┘
-                          │ end_party
-                          ▼
-                    ┌──────────────┐
-                    │    ended     │
-                    └──────────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> lobby
 
-  (Any active phase) ←── host_pause_timer ──→ (paused, same phase)
-                       host_resume_timer
+    lobby --> countdown: start_game (host)
+    countdown --> shot_window: timer expiry / host_skip (≥1 active)
+    shot_window --> round_complete: timer expiry / host_end_shot_window
+
+    round_complete --> countdown: auto-advance (≥1 active)
+    round_complete --> ended: end_party (0 active halt)
+
+    lobby --> ended: end_party
+    countdown --> ended: end_party
+    shot_window --> ended: end_party
+
+    ended --> [*]
+
+    note right of round_complete
+        Normally transitional: auto-advances to
+        countdown(N+1) in the same transaction when
+        ≥1 player is active. Rests here only when
+        finalization leaves 0 active players; the host
+        then reinstates someone (host_mark_player_active
+        re-triggers the advance) or ends the party.
+    end note
+
+    note left of shot_window
+        Any active phase can be paused
+        (host_pause_timer / host_resume_timer);
+        pause freezes time without changing phase.
+    end note
 ```
 
 ---
 
 ## 10. Locked Decisions
 
-- `start_next_round` is host-triggered in MVP, not auto-after-delay.
+- Rounds auto-advance: `shot_window → round_complete → countdown(N+1)` happens atomically inside the finalizing RPC (`finalize_round_outcomes`); there is no manual host gate between rounds and no `start_next_round` RPC (D014). The sole exception is the zero-active-players halt (§3.4, §8.1).
 - `mark_self_out` during countdown records an outcome for round N (the upcoming shot), not N-1.
 - Removing a player does NOT clear their existing round outcomes — history is preserved.
 - Host pausing mid-shot-window does NOT invalidate already-recorded player actions; only new actions are blocked until resume.
-- When the last active player goes out, the session does NOT auto-end. Host sees a clear message and decides to reinstate or end.
+- When the last active player goes out, the session does NOT auto-end. It rests in `round_complete`; the host reinstates someone (which re-triggers the auto-advance) or ends the party.
 
 ---
 
