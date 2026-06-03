@@ -279,12 +279,12 @@ create table rounds (
 
 **Indexes:**
 
-- `unique (party_session_id, round_number)` — declared inline. Critical for `start_next_round` idempotency.
+- `unique (party_session_id, round_number)` — declared inline. Guards against duplicate round creation during auto-advance.
 - `index on (party_session_id, status)` — fast lookup of current round.
 
 **Notes:**
 
-- The unique constraint on `(party_session_id, round_number)` is the DB-level idempotency guarantee for `start_next_round` (see `rpc-contracts.md` §9.6).
+- The unique constraint on `(party_session_id, round_number)` guards against duplicate round creation during auto-advance (see `rpc-contracts.md` §8.4, §8.8).
 - Both `shot_window_started_at` and `shot_window_ends_at` are populated when the round enters `shot_window` phase. `completed_at` is set at finalization.
 
 ---
@@ -476,7 +476,7 @@ A compact list of every cross-field check or unique constraint, for quick refere
 | `party_sessions` | `unique (join_code)` | One active session per code |
 | `party_settings` | `unique (party_session_id)` | One settings row per session |
 | `party_players` | `unique (party_session_id, user_id)` | One row per identity per session |
-| `rounds` | `unique (party_session_id, round_number)` | DB-level idempotency for `start_next_round` |
+| `rounds` | `unique (party_session_id, round_number)` | Guards against duplicate round creation during auto-advance |
 | `round_player_outcomes` | `unique (round_id, party_player_id)` | DB-level idempotency for `mark_done` / `mark_self_out` |
 | `party_player_notification_settings` | `unique (party_session_id, party_player_id)` | One row per player per session |
 

@@ -307,7 +307,7 @@ The host cannot be `removed` via `host_remove_player` (§6.3). The host can effe
 
 After finalization, if zero players have `status = active`, the session does NOT auto-end. The host sees a clear "No active players remaining" message in `round_complete` and decides:
 
-- Reinstate someone via `host_mark_player_active`, then call `start_next_round`
+- Reinstate someone via `host_mark_player_active`, which re-triggers the auto-advance into `countdown` for round N+1 (per D014)
 - Call `end_party` to close the session
 
 This is the locked decision (`mvp-state-machine.md` §10). The reason: auto-end is a surprise; host control is predictable.
