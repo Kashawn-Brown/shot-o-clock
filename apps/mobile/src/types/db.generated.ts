@@ -815,6 +815,7 @@ export type Database = {
       }
       leave_party: { Args: { p_party_session_id: string }; Returns: Json }
       my_party_player_id: { Args: { session_id: string }; Returns: string }
+      start_game: { Args: { p_party_session_id: string }; Returns: Json }
     }
     Enums: {
       admin_action_type:
