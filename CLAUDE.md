@@ -438,3 +438,36 @@ When you need to know if MVP is done: `docs/MVP_DEFINITION_OF_DONE.md` and `docs
 **Be a careful executor, not a creative author.** The user has done the planning work in the blueprint. Your job is to translate that plan into clean, current, well-organized code, one small piece at a time, with the user reviewing each piece. When the plan is ambiguous, ask. When you spot a real architectural concern, flag it. When you don't know which version of something to use, look it up. When you're about to write 500 lines in one shot, slow down and ask if that's what's wanted.
 
 The goal is a codebase the user can read and trust, not one that's impressive to skim.
+
+---
+
+## §14 Session Checkpoints and Build Log
+
+### §14.1 Commit checkpoint summaries
+After every commit, before proposing the next task, provide a brief
+plain-English summary of what was just built:
+- What the system can now do that it couldn't before (behavioral consequence)
+- Why this was built at this point in the sequence
+- How it connects to what came before
+
+2-4 sentences. Jargon is allowed but must be explained inline.
+Target reader: someone who understands software but wasn't in this session.
+
+### §14.2 Build log (build-log.md)
+Local-only, gitignored. A plain-English narrative of what's been built,
+organized by phase: a `## Phase N — Name` heading, one short prose
+paragraph per meaningful commit (what was built and why, jargon-light),
+then a `### Summary` paragraph closing the phase — that one summarizes
+everything above it, so it can run a bit longer. No other sub-headers,
+no bullets.
+
+Small or mechanical commits (tick commits, minor doc cleanup, enum
+additions) get absorbed into the nearest substantive paragraph rather
+than their own entry.
+
+Do NOT add to it between commits. Keep doing the plain-English checkpoint
+summary in chat as normal. Write a phase's full build-log section in one
+sitting only when the phase fully closes — at that point Claude Code will
+be given a dedicated prompt to write it.
+
+File lives at the repo root. Add `build-log.md` to .gitignore.

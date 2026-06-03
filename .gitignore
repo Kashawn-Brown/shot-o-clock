@@ -116,6 +116,9 @@ notes.local.*
 # Claude Code should not write here unless explicitly told to.
 docs/learning/
 
+# Plain-English build narrative — local-only working doc.
+build-log.md
+
 # ─── Lockfiles for tools we don't use ───
 # (kept commented in case we switch tooling later)
 # Cargo.lock
