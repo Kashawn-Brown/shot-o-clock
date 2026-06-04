@@ -55,8 +55,11 @@ Decided 2026-06-04. Confirm legal age + responsible-use via BOTH (a) a one-time 
 ## D017 — Display name captured at first launch, reused as guest identity
 Decided 2026-06-04. The display name is captured once on first launch (NameEntryGate, after the age/terms gate) and persisted device-local in SecureStore. It serves as the host's name on Create (which has no name field — confirming the intent) and prefills the Join screen's Display Name field, which stays editable for per-party aliasing. Validated 1–40 code points to mirror the create_party/join_party DB CHECK (schema.md:183). On-form-only capture was rejected because Create has no host-name field; locking the Join field was rejected to allow per-party names. Would change if a profile/account flow later owns the name.
 
+## D018 — Shared-device guests share one identity (known limitation)
+Decided 2026-06-04. Guest identity (display name), consent flags, and the anonymous Supabase session are all stored device-local (SecureStore + the persisted supabase session, per D016/D017). Two people sharing one physical device therefore share the same guest identity, consent, and session — there is no per-person separation for guests. Accepted for MVP. Planned fix: a "Reset this device" option in the Settings screen (plan.md Phase 12) that clears the stored identity, consent flags, and anonymous session, returning the device to a fresh first-launch flow for the next person. Would change if accounts/profiles land and guests can claim or switch identities.
+
 ## Open Items
 - **#001:** Metro `icon.png` warning — non-blocking, try clearing `.expo/` cache.
 - **#003:** Happy-path + member-state RPC verification deferred to Phase 3+ (needs the real auth flow).
 - **#004:** Planning-doc RPC lists drift from rpc-contracts.md §14 — needs a reconciliation pass, low priority.
-- **#005:** 14 moderate-severity npm advisories in the dependency tree (surfaced during the Phase 3 expo patch-align); clear only via breaking upgrades (`npm audit fix --force`) — deferred to Phase 12 hardening.
+- **#005:** 14 moderate-severity npm advisories in the dependency tree (surfaced during the Phase 3 expo patch-align); clear only via breaking upgrades (`npm audit fix --force`) — deferred to Phase 13 hardening.
