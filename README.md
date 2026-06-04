@@ -30,9 +30,9 @@ Versions of Expo SDK, React Native, and Supabase JS are not pinned in this READM
 git clone https://github.com/<your-username>/shot-o-clock.git
 cd shot-o-clock
 
-# Copy env template
-cp .env.example .env
-# Then fill in the values (see "Environment variables" below)
+# Copy the mobile env template — Expo reads .env from apps/mobile/, not the repo root
+cp apps/mobile/.env.example apps/mobile/.env
+# Then fill in the values (see "Environment Variables" below)
 
 # Install deps — once apps/mobile exists
 cd apps/mobile
@@ -82,6 +82,7 @@ Top level:
 shot-o-clock/
 ├── apps/
 │   └── mobile/                   # React Native + Expo app (TypeScript)
+│       └── .env.example          # Mobile env template → copy to apps/mobile/.env
 ├── supabase/
 │   ├── migrations/               # SQL migrations, timestamp-named
 │   ├── seed.sql                  # Optional dev seed data
@@ -103,7 +104,11 @@ See `docs/REPO_STRUCTURE.md` for the full layout once `apps/mobile/src/` exists,
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in the values. Never commit `.env`.
+The Expo app loads its env file from **`apps/mobile/.env`** — Expo reads `.env` from the app directory, not the repo root. Copy the template into that folder and fill in the values. Never commit `.env` (it's gitignored):
+
+```bash
+cp apps/mobile/.env.example apps/mobile/.env
+```
 
 Required for local dev:
 

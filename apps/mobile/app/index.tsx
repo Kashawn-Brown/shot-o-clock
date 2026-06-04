@@ -5,13 +5,55 @@
 // route to hardcoded destinations so the full flow is tappable.
 
 import { router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
+import { useActiveParty } from '@/features/party/useActiveParty';
+import { routeForPhase } from '@/features/party/reconnectRoute';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 export default function HomeScreen(): React.JSX.Element {
+  // Reconnect: if the guest is already in an in-progress party (e.g. after a
+  // force-close), route them straight back to its current screen instead of home.
+  const { status, activeParty } = useActiveParty();
+
+  useEffect(() => {
+    if (!activeParty) return;
+    const { partyId, phase } = activeParty;
+    switch (routeForPhase(phase)) {
+      case 'timer':
+        router.replace(`/party/${partyId}/timer`);
+        break;
+      case 'shot-oclock':
+        router.replace(`/party/${partyId}/shot-oclock`);
+        break;
+      case 'results':
+        router.replace(`/party/${partyId}/results`);
+        break;
+      case 'summary':
+        router.replace(`/party/${partyId}/summary`);
+        break;
+      case 'lobby':
+      default:
+        router.replace(`/party/${partyId}/lobby`);
+        break;
+    }
+  }, [activeParty]);
+
+  // Keep the spinner up while checking, and while a redirect to the active party
+  // is pending, so the home actions never flash before navigation.
+  if (status === 'checking' || activeParty !== null) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.loading}>
+          <ActivityIndicator color={COLORS.textPrimary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.hero}>
@@ -40,6 +82,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     paddingHorizontal: SPACING.lg,
     justifyContent: 'space-between',
+  },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hero: {
     flex: 1,

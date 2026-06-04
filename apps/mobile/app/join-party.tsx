@@ -1,29 +1,37 @@
 // Join Party — guest enters a join code and display name.
 //
-// Phase 3 placeholder: renders the code field, name field, and the two
-// required confirmation checkboxes from the wireframe. No validation, no
-// join_party RPC. "Join Party" navigates to a placeholder lobby. Real wiring
-// (and the age/terms gate) lands in Phases 4–5.
+// Phase 4: the two age/terms checkboxes are now functional and gate the Join
+// button (Figma shows them per-join; the host is covered by the first-launch
+// gate — see D016). The code/name inputs and the join_party RPC are still
+// Phase 5; "Join Party" navigates to a placeholder lobby for now.
 
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { DISPLAY_NAME_MAX_LENGTH, isValidDisplayName } from '@/features/auth/api/displayName';
+import { useDisplayName } from '@/features/auth/useDisplayName';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 const PLACEHOLDER_PARTY_ID = 'test-party';
 
-function Checkbox({ label }: { label: string }): React.JSX.Element {
-  return (
-    <View style={styles.checkboxRow}>
-      <View style={styles.checkbox} />
-      <Text style={styles.checkboxLabel}>{label}</Text>
-    </View>
-  );
-}
-
 export default function JoinPartyScreen(): React.JSX.Element {
+  const { displayName } = useDisplayName();
+  const [name, setName] = useState('');
+  const [ageChecked, setAgeChecked] = useState(false);
+  const [termsChecked, setTermsChecked] = useState(false);
+
+  // Prefill from the stored guest identity; the field stays editable so a player
+  // can use a different name for this party.
+  useEffect(() => {
+    if (displayName !== null) setName(displayName);
+  }, [displayName]);
+
+  const canJoin = ageChecked && termsChecked && isValidDisplayName(name);
+
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -48,20 +56,32 @@ export default function JoinPartyScreen(): React.JSX.Element {
           <Text style={styles.label}>Display Name</Text>
           <TextInput
             style={styles.input}
+            value={name}
+            onChangeText={setName}
             placeholder="Your name"
             placeholderTextColor={COLORS.textSecondary}
-            editable={false}
+            maxLength={DISPLAY_NAME_MAX_LENGTH}
+            autoCapitalize="words"
           />
         </View>
 
         <View style={styles.checks}>
-          <Checkbox label="I confirm I am of legal drinking age in my jurisdiction" />
-          <Checkbox label="I agree to play responsibly and follow the rules" />
+          <Checkbox
+            checked={ageChecked}
+            onToggle={() => setAgeChecked((prev) => !prev)}
+            label="I confirm I am of legal drinking age in my jurisdiction"
+          />
+          <Checkbox
+            checked={termsChecked}
+            onToggle={() => setTermsChecked((prev) => !prev)}
+            label="I agree to play responsibly and follow the rules"
+          />
         </View>
 
         <Button
           label="Join Party"
           onPress={() => router.push(`/party/${PLACEHOLDER_PARTY_ID}/lobby`)}
+          disabled={!canJoin}
           style={styles.submit}
         />
       </View>
@@ -119,24 +139,6 @@ const styles = StyleSheet.create({
   },
   checks: {
     gap: SPACING.md,
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: RADIUS.sm / 2,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-  },
-  checkboxLabel: {
-    flexShrink: 1,
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.textSecondary,
   },
   submit: {
     marginTop: SPACING.md,
