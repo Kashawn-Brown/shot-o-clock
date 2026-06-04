@@ -25,5 +25,8 @@ function required(name: string, value: string | undefined): string {
 
 export const env: Env = {
   supabaseUrl: required('EXPO_PUBLIC_SUPABASE_URL', process.env.EXPO_PUBLIC_SUPABASE_URL),
-  supabaseAnonKey: required('EXPO_PUBLIC_SUPABASE_ANON_KEY', process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY),
+  supabaseAnonKey: required(
+    'EXPO_PUBLIC_SUPABASE_ANON_KEY',
+    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+  ),
 };
