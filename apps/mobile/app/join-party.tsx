@@ -6,21 +6,31 @@
 // Phase 5; "Join Party" navigates to a placeholder lobby for now.
 
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
+import { DISPLAY_NAME_MAX_LENGTH, isValidDisplayName } from '@/features/auth/api/displayName';
+import { useDisplayName } from '@/features/auth/useDisplayName';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 const PLACEHOLDER_PARTY_ID = 'test-party';
 
 export default function JoinPartyScreen(): React.JSX.Element {
+  const { displayName } = useDisplayName();
+  const [name, setName] = useState('');
   const [ageChecked, setAgeChecked] = useState(false);
   const [termsChecked, setTermsChecked] = useState(false);
 
-  const canJoin = ageChecked && termsChecked;
+  // Prefill from the stored guest identity; the field stays editable so a player
+  // can use a different name for this party.
+  useEffect(() => {
+    if (displayName !== null) setName(displayName);
+  }, [displayName]);
+
+  const canJoin = ageChecked && termsChecked && isValidDisplayName(name);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
@@ -46,9 +56,12 @@ export default function JoinPartyScreen(): React.JSX.Element {
           <Text style={styles.label}>Display Name</Text>
           <TextInput
             style={styles.input}
+            value={name}
+            onChangeText={setName}
             placeholder="Your name"
             placeholderTextColor={COLORS.textSecondary}
-            editable={false}
+            maxLength={DISPLAY_NAME_MAX_LENGTH}
+            autoCapitalize="words"
           />
         </View>
 
