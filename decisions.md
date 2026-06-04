@@ -53,3 +53,4 @@ Decided 2026-06-04. Three forks resolved before writing the 8 host-control RPCs.
 - **#001:** Metro `icon.png` warning — non-blocking, try clearing `.expo/` cache.
 - **#003:** Happy-path + member-state RPC verification deferred to Phase 3+ (needs the real auth flow).
 - **#004:** Planning-doc RPC lists drift from rpc-contracts.md §14 — needs a reconciliation pass, low priority.
+- **#005:** 14 moderate-severity npm advisories in the dependency tree (surfaced during the Phase 3 expo patch-align); clear only via breaking upgrades (`npm audit fix --force`) — deferred to Phase 12 hardening.

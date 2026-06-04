@@ -33,9 +33,7 @@ export type CreatePartyData = {
   host_player_id: string;
 };
 
-export function createParty(
-  params: CreatePartyParams,
-): Promise<RpcResult<CreatePartyData>> {
+export function createParty(params: CreatePartyParams): Promise<RpcResult<CreatePartyData>> {
   return callRpc<CreatePartyData>('create_party', {
     p_party_name: params.partyName,
     p_starting_interval_secs: params.startingIntervalSecs,

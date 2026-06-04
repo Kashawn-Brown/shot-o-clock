@@ -27,9 +27,7 @@ export type JoinPartyData = {
   is_reconnect: boolean;
 };
 
-export function joinParty(
-  params: JoinPartyParams,
-): Promise<RpcResult<JoinPartyData>> {
+export function joinParty(params: JoinPartyParams): Promise<RpcResult<JoinPartyData>> {
   return callRpc<JoinPartyData>('join_party', {
     p_join_code: params.joinCode,
     p_display_name: params.displayName,

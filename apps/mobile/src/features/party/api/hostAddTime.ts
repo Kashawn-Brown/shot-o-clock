@@ -26,9 +26,7 @@ export type HostAddTimeData = {
   paused_remaining_seconds: number | null;
 };
 
-export function hostAddTime(
-  params: HostAddTimeParams,
-): Promise<RpcResult<HostAddTimeData>> {
+export function hostAddTime(params: HostAddTimeParams): Promise<RpcResult<HostAddTimeData>> {
   return callRpc<HostAddTimeData>('host_add_time', {
     p_party_session_id: params.partySessionId,
     p_seconds: params.seconds,

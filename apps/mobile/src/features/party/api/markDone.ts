@@ -26,9 +26,7 @@ export type MarkDoneData = {
   tapped_at: string;
 };
 
-export function markDone(
-  params: MarkDoneParams,
-): Promise<RpcResult<MarkDoneData>> {
+export function markDone(params: MarkDoneParams): Promise<RpcResult<MarkDoneData>> {
   return callRpc<MarkDoneData>('mark_done', {
     p_party_session_id: params.partySessionId,
   });

@@ -22,9 +22,7 @@ export type LeavePartyParams = {
 // "empty object" type.
 export type LeavePartyData = Record<string, never>;
 
-export function leaveParty(
-  params: LeavePartyParams,
-): Promise<RpcResult<LeavePartyData>> {
+export function leaveParty(params: LeavePartyParams): Promise<RpcResult<LeavePartyData>> {
   return callRpc<LeavePartyData>('leave_party', {
     p_party_session_id: params.partySessionId,
   });

@@ -33,10 +33,7 @@ export async function callRpc<T>(fnName: string, args: RpcArgs = {}): Promise<Rp
     //   (c) Revisit / tighten in A3 or a Batch B cleanup if the regenerated
     //       Functions union lets us drop the casts without losing the
     //       generic shape — see docs/KNOWN_ISSUES.md #D010.
-    const { data, error } = await supabase.rpc(
-      fnName as never,
-      args as never,
-    );
+    const { data, error } = await supabase.rpc(fnName as never, args as never);
 
     if (error) {
       return unexpected(`RPC ${fnName} failed: ${error.message}`);

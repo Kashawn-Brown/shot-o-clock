@@ -221,7 +221,7 @@ For non-trivial changes, explain briefly what you'll change and why **before** w
 
 ### 7.3. Commit frequently — you own the commits
 
-**You (Claude Code) are responsible for committing your work.** The user is not driving git. They review diffs after the fact.
+**You (Claude Code) are responsible for committing your work.** The user is not driving git. They review diffs after the fact via GitHub Desktop.
 
 **Cadence: often, in small checkpoints, not at the end of each phase.** A working phase will typically produce 5–15 commits. Commit whenever the code is in a self-consistent state, even if the phase isn't done.
 
@@ -243,7 +243,7 @@ Anti-patterns to avoid:
 - Committing without a meaningful body
 - Going more than ~30 minutes of active work without a commit
 
-After each commit, give the user a one-line note in chat ("Committed: `feat: add join_party RPC` — 4 files") so they can review at their pace. See §9 for full branch and message conventions.
+After committing, continue working unless you are at a natural stop point. Do not interrupt flow with a chat note after every commit — the user reviews via GitHub Desktop at their own pace. See CLAUDE.local.md for stop point guidance.
 
 ### 7.4. Never expand scope unilaterally
 
@@ -277,25 +277,28 @@ Before writing any code:
 
 ### 8.3. Session checkpoints
 
-After every commit, before proposing the next task: give a 2–4 sentence
-plain-English summary — what the system can now do that it couldn't before,
-why it was built at this point, how it connects to what came before. Jargon
-allowed but must be explained inline.
+Stop points happen at natural semantic breaks — not after every commit. See CLAUDE.local.md for the full definition of a stop point, what to include in a summary, and examples of good vs bad summaries.
+
+The short version: stop when a coherent chunk of work is complete and has a clear name. At each stop point give a plain-English summary of what changed in the system's behavior, the list of commits since the last stop, and what's next.
 
 ### 8.4. Wrapping a session
 
-1. Finalize or note any in-progress work
-2. Update timeline.md Current Status section
-3. Update decisions.md if anything new was decided
-4. Suggest a commit message for anything uncommitted
+When wrapping — asked to wrap, or at a phase or batch close — follow the session wrap checklist in CLAUDE.local.md. All steps are required. The short version:
+
+1. Tick completed items in plan.md
+2. Update timeline.md Current Status
+3. Update decisions.md if anything architectural was decided
+4. Write the build-log.md entry (show draft in chat first)
+5. Give a handoff note in chat
+6. At phase close only: generate a PR description (see CLAUDE.local.md for format). Show it in chat after the build-log draft is approved.
+
+All four local files are gitignored — no commit needed, just write to disk.
 
 ### 8.5. Build log (build-log.md)
 
-Local-only, gitignored. Plain-English narrative organized by phase. One short
-prose paragraph per meaningful unit of work (not per commit — small/mechanical
-commits get absorbed into the nearest substantive paragraph). Closing
-`### Summary` paragraph per phase. Write a phase's full section in one sitting
-at phase close only — not incrementally.
+Rules for build-log timing, format, and voice live in CLAUDE.local.md. Read that before writing any build-log entry.
+
+The one rule that belongs here: always show the draft in chat before writing to disk. The user approves before it lands.
 
 ### 8.6. The blocking rule
 

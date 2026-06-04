@@ -48,7 +48,7 @@ apps/mobile/
 │   │       ├── _layout.tsx           # Party context provider
 │   │       ├── lobby.tsx
 │   │       ├── timer.tsx
-│   │       ├── shot-window.tsx
+│   │       ├── shot-oclock.tsx
 │   │       ├── results.tsx
 │   │       ├── roster.tsx
 │   │       └── summary.tsx
