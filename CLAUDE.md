@@ -290,6 +290,7 @@ When wrapping — asked to wrap, or at a phase or batch close — follow the ses
 3. Update decisions.md if anything architectural was decided
 4. Write the build-log.md entry (show draft in chat first)
 5. Give a handoff note in chat
+6. At phase close only: generate a PR description (see CLAUDE.local.md for format). Show it in chat after the build-log draft is approved.
 
 All four local files are gitignored — no commit needed, just write to disk.
 
