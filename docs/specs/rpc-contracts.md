@@ -699,7 +699,7 @@ Returns all outcome rows for a given round.
 | `get_server_time` | Any authenticated user |
 | `get_round_outcomes` | Any party member |
 
-`finalize_round_outcomes` (§8.8) is intentionally absent from this table — it is an internal helper, not a client RPC. `REVOKE EXECUTE` from all API roles; only `advance_phase_if_due` and `host_end_shot_window` invoke it.
+`finalize_round_outcomes` (§8.8) and `advance_to_next_round` (§8.8, Batch E0) are intentionally absent from this table — both are internal helpers, not client RPCs, with `REVOKE EXECUTE` from all API roles. `finalize_round_outcomes` is invoked only by `advance_phase_if_due` and `host_end_shot_window`; `advance_to_next_round` only by `finalize_round_outcomes` and `host_mark_player_active`.
 
 Caller checks are enforced inside each function. The function `SECURITY DEFINER` model bypasses RLS for writes, so these in-function checks are the actual security boundary for writes. Reads still go through RLS — see `rls-rules.md`.
 

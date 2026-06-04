@@ -404,7 +404,7 @@ create type timer_event_type as enum (
 );
 ```
 
-MVP-used: all except `referee_window_started`. `round_cancelled` was added in Phase 2 Batch B2 so `end_party` can emit a semantically accurate event when killing an in-flight round (distinct from `round_completed`, which signals a finalized round). See `docs/KNOWN_ISSUES.md` #D012 (g).
+MVP-used: all except `referee_window_started` and `phase_skipped`. `round_cancelled` was added in Phase 2 Batch B2 so `end_party` can emit a semantically accurate event when killing an in-flight round (distinct from `round_completed`, which signals a finalized round). See `docs/KNOWN_ISSUES.md` #D012 (g). `phase_skipped` is **not** emitted in MVP (Batch E2 / D015): `host_skip_to_shot_window` reuses the `advance_phase_if_due` countdown→shot_window branch, which emits `shot_window_started` with `triggeredBy = host` — the skip's host origin is carried by the `skip_to_shot_window` `admin_action_logs` row instead, so no information is lost. `phase_skipped` is reserved for a possible future dedicated skip event.
 
 ---
 
