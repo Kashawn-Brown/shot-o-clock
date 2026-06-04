@@ -480,6 +480,16 @@ finalize_round_outcomes(
   `rounds (party_session_id, round_number)` unique constraint.
 - Performs steps 1–5 of §8.4. The `round_completed` event carries
   `p_triggered_by`; the `next_round_started` event is always `system`.
+- **Auto-advance is delegated** (Batch E0 refactor): step 5 (create round N+1, or
+  rest in the zero-active halt) lives in a second internal helper,
+  `advance_to_next_round(p_party_session_id)`, which `finalize_round_outcomes`
+  calls after emitting `round_completed`. The split exists so `host_mark_player_active`
+  (§11.1) can re-trigger the auto-advance directly when a host reinstates a player
+  during the zero-active `round_complete` halt — it cannot route through
+  `finalize_round_outcomes`, whose `completed_at` idempotency gate returns before
+  step 5 (round N is already finalized). `advance_to_next_round` is likewise
+  `SECURITY DEFINER` / `REVOKE EXECUTE` from all API roles; only
+  `finalize_round_outcomes` and `host_mark_player_active` invoke it.
 
 ---
 
