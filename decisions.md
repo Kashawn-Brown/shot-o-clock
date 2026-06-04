@@ -52,6 +52,9 @@ Decided 2026-06-04. Three forks resolved before writing the 8 host-control RPCs.
 ## D016 — Age/terms: first-launch gate + per-join checkboxes
 Decided 2026-06-04. Confirm legal age + responsible-use via BOTH (a) a one-time first-launch gate that renders after auth and before the navigator, covering host and guest, with flags persisted device-local in SecureStore (no DB write — `terms_acceptances` is a reserved/future table, schema.md §10); AND (b) per-join checkboxes on the Join Party screen (matches Figma, point-of-action reaffirmation, local form state with no persistence — reset each visit). Pure per-join checkboxes (Figma-only) were rejected: the host's create-party path never passes through Join, so it would leave the host's age/terms unconfirmed. plan.md's "first launch gates, second launch skips them" still holds for the gate. Would change if the product drops one of the two paths.
 
+## D017 — Display name captured at first launch, reused as guest identity
+Decided 2026-06-04. The display name is captured once on first launch (NameEntryGate, after the age/terms gate) and persisted device-local in SecureStore. It serves as the host's name on Create (which has no name field — confirming the intent) and prefills the Join screen's Display Name field, which stays editable for per-party aliasing. Validated 1–40 code points to mirror the create_party/join_party DB CHECK (schema.md:183). On-form-only capture was rejected because Create has no host-name field; locking the Join field was rejected to allow per-party names. Would change if a profile/account flow later owns the name.
+
 ## Open Items
 - **#001:** Metro `icon.png` warning — non-blocking, try clearing `.expo/` cache.
 - **#003:** Happy-path + member-state RPC verification deferred to Phase 3+ (needs the real auth flow).
