@@ -510,17 +510,19 @@ These four RPCs share a common shape: host-only, session-authoritative time mani
 
 ### 10.1. `host_pause_timer(p_party_session_id uuid) returns jsonb`
 
-Caller: host. Precondition: `status = active`. Effect: `status = paused`, `pausedAt = now()`. Idempotent (if already paused, no-op + ok). Logs `admin_action_logs` with `actionType = pause_timer`. Errors: `NOT_HOST`, `ILLEGAL_TRANSITION`.
+Caller: host. Precondition: `status = active`. Effect: `status = paused`, `pausedAt = now()`, and `pausedRemainingSeconds` set to the remaining time at the pause instant (null when the phase has no timer — the `round_complete` halt, §8.6). Idempotent (if already paused, no-op + ok). Logs `admin_action_logs` with `actionType = pause_timer` **and** emits a `timer_paused` `timer_events` row (`triggeredBy = host`; Batch E1 — see below). Errors: `NOT_HOST`, `ILLEGAL_TRANSITION`.
 
 ### 10.2. `host_resume_timer(p_party_session_id uuid) returns jsonb`
 
-Caller: host. Precondition: `status = paused`. Effect: compute `remainingTime = (original phaseEndsAt) - pausedAt`. Set `phaseEndsAt = now() + remainingTime`, `totalPausedSeconds += (now() - pausedAt)`, `pausedAt = null`, `status = active`. Idempotent. Logs `admin_action_logs` with `actionType = resume_timer`. Errors: `NOT_HOST`, `ILLEGAL_TRANSITION`.
+Caller: host. Precondition: `status = paused`. Effect: rebuild `phaseEndsAt = now() + pausedRemainingSeconds` (null remaining → `phaseEndsAt` stays null), `totalPausedSeconds += (now() - pausedAt)`, `pausedAt = null`, `pausedRemainingSeconds = null`, `status = active`. Idempotent (already `active` → no-op + ok; a non-paused, non-active lifecycle state such as `lobby`/`ended` → `ILLEGAL_TRANSITION`). Logs `admin_action_logs` with `actionType = resume_timer` **and** emits a `timer_resumed` `timer_events` row. Errors: `NOT_HOST`, `ILLEGAL_TRANSITION`.
 
 Implementation note: storing the original `phaseEndsAt` across pause requires remembering it. Two options: (a) don't mutate `phaseEndsAt` on pause; store `remainingSeconds` on pause and rebuild on resume; or (b) mutate `phaseEndsAt` to `pausedAt + remainingSeconds` semantics. **Locked: option (a)** — `phaseEndsAt` is not mutated on pause, and there's a separate `pausedRemainingSeconds` column populated on pause and consumed on resume.
 
 ### 10.3. `host_add_time(p_party_session_id uuid, p_seconds int) returns jsonb`
 
-Caller: host. Precondition: `status ∈ {active, paused}` AND `currentPhase ∈ {countdown, shot_window}`. Param validation: `p_seconds` between 1 and 600. Effect: if active, set `phaseEndsAt += p_seconds`. If paused, set `pausedRemainingSeconds += p_seconds`. Logs `admin_action_logs` with `actionType = add_time`, `newValue = p_seconds`. NOT idempotent — repeated calls keep adding time, that's intended. Clients should debounce. Errors: `NOT_HOST`, `ILLEGAL_TRANSITION`, `INVALID_PARAM`.
+Caller: host. Precondition: `status ∈ {active, paused}` AND `currentPhase ∈ {countdown, shot_window}`. Param validation: `p_seconds` between 1 and 600. Effect: if active, set `phaseEndsAt += p_seconds`. If paused, set `pausedRemainingSeconds += p_seconds`. Logs `admin_action_logs` with `actionType = add_time`, `newValue = p_seconds` **and** emits a `time_added` `timer_events` row (`secondsAdded = p_seconds`). NOT idempotent — repeated calls keep adding time, that's intended. Clients should debounce. Errors: `NOT_HOST`, `ILLEGAL_TRANSITION`, `INVALID_PARAM`.
+
+> **Batch E1 timer_events note.** §10.1–§10.3 emit `timer_paused` / `timer_resumed` / `time_added` events in addition to the `admin_action_logs` row, so the timer timeline (`timer_events`) stays reconstructable. The enum values were reserved for exactly these actions (`enums.md` §3.16). Phase is unchanged across all three, so `previousPhase = newPhase = currentPhase`. This was a deliberate addition to the original §10 text, which named only the admin log.
 
 ### 10.4. `host_end_shot_window(p_party_session_id uuid) returns jsonb`
 
