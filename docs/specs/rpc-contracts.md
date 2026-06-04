@@ -538,15 +538,15 @@ Caller: host. Precondition: `status = active` AND `currentPhase = countdown` (Ba
 
 ### 11.1. `host_mark_player_active(p_party_player_id uuid) returns jsonb`
 
-Caller: host. Preconditions per `game-rules.md` §6.1 (target `status = out`, `outRoundNumber >= currentRoundNumber - 1`). Effects per same. Logs `admin_action_logs` with `actionType = mark_player_active`. Idempotent (already-active is no-op + ok). Errors: `NOT_HOST`, `PLAYER_NOT_FOUND`, `PLAYER_NOT_OUT`, `REINSTATE_TOO_OLD`. When the session is resting in the zero-active `round_complete` halt (§8.1 / `mvp-state-machine.md` §3.4), a successful reinstatement re-triggers the auto-advance into `countdown` for round N+1 (D014). (Implemented in Batch E.)
+Caller: host. Preconditions per `game-rules.md` §6.1 (target `status = out`, `outRoundNumber >= currentRoundNumber - 1`). Mid-game only: `currentRoundNumber >= 1`, else `ILLEGAL_TRANSITION` (Batch E3 lobby guard — overrides are mid-game actions). Effects per same. Logs `admin_action_logs` with `actionType = mark_player_active`. Idempotent (already-active is no-op + ok, still logged with reason `no-change: already active` per game-rules §8; a `removed` target → `PLAYER_NOT_OUT`). Returns `{ party_player_id, status: 'active', new_phase }`. Errors: `NOT_HOST`, `PLAYER_NOT_FOUND`, `PLAYER_NOT_OUT`, `REINSTATE_TOO_OLD`, `ILLEGAL_TRANSITION`. When the session is resting in the zero-active `round_complete` halt (§8.1 / `mvp-state-machine.md` §3.4), a successful reinstatement re-triggers the auto-advance into `countdown` for round N+1 via `advance_to_next_round` (§8.8, D014); `new_phase` reflects the resulting phase. (A paused halt is left for the host to resume first.) (Implemented in Batch E3.)
 
 ### 11.2. `host_mark_player_out(p_party_player_id uuid) returns jsonb`
 
-Caller: host. Preconditions per `game-rules.md` §6.2 (target `status = active`). Effects per same. Logs `admin_action_logs` with `actionType = mark_player_out`. Idempotent. Errors: `NOT_HOST`, `PLAYER_NOT_FOUND`, `PLAYER_NOT_ACTIVE`.
+Caller: host. Preconditions per `game-rules.md` §6.2 (target `status = active`). Mid-game only: `currentRoundNumber >= 1`, else `ILLEGAL_TRANSITION` (Batch E3 lobby guard — marking out at round 0 would trip the `out_round_number >= 1` CHECK). Effects per same. Logs `admin_action_logs` with `actionType = mark_player_out`. Idempotent (already-out is a logged no-op + ok with reason `no-change: already out` per game-rules §8; a `removed` target → `PLAYER_NOT_ACTIVE`). Returns `{ party_player_id, status: 'out' }`. Errors: `NOT_HOST`, `PLAYER_NOT_FOUND`, `PLAYER_NOT_ACTIVE`, `ILLEGAL_TRANSITION`.
 
 ### 11.3. `host_remove_player(p_party_player_id uuid, p_reason text default null) returns jsonb`
 
-Caller: host. Preconditions per `game-rules.md` §6.3 (target is not host, target `status ∈ {active, out}`). Effects per same. Logs `admin_action_logs` with `actionType = remove_player`, `reason = p_reason`. NOT idempotent on already-removed players (returns `ALREADY_REMOVED` per game-rules §8). Errors: `NOT_HOST`, `PLAYER_NOT_FOUND`, `CANNOT_REMOVE_HOST`, `ALREADY_REMOVED`.
+Caller: host. Preconditions per `game-rules.md` §6.3 (target is not host, target `status ∈ {active, out}`). Legal in lobby and mid-game (no round guard). Effects per same — `removedByPlayerId = host's player id`, `removedReason = p_reason` (free text, null allowed; still reads as "kicked" vs `leave_party`'s `self_left_lobby` marker, #D013). Logs `admin_action_logs` with `actionType = remove_player`, `reason = p_reason`. NOT idempotent on already-removed players (returns `ALREADY_REMOVED` per game-rules §8). Returns `{ party_player_id, status: 'removed' }`. Errors: `NOT_HOST`, `PLAYER_NOT_FOUND`, `CANNOT_REMOVE_HOST`, `ALREADY_REMOVED`.
 
 ---
 
