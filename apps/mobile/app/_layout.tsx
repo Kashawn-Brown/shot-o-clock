@@ -3,16 +3,16 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { AgeTermsGate } from '@/features/auth/AgeTermsGate';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
-import { NameEntryGate } from '@/features/auth/NameEntryGate';
+import { OnboardingGate } from '@/features/auth/OnboardingGate';
 import { useConsent } from '@/features/auth/useConsent';
 import { useDisplayName } from '@/features/auth/useDisplayName';
 import { COLORS, FONT_SIZE, SPACING } from '@/styles/tokens';
 
 // Gates the navigator: nothing renders until (1) an anonymous identity is resolved
-// — so no screen runs without an auth.uid for RLS / RPCs — (2) the guest has
-// confirmed legal age + terms once on this device, and (3) a display name is set.
+// — so no screen runs without an auth.uid for RLS / RPCs — and (2) first-launch
+// onboarding is complete (display name set + legal age / terms confirmed). The
+// name and consent persist independently, but are collected on one screen.
 function RootNavigator(): React.JSX.Element {
   const { status: authStatus } = useAuth();
   const { status: consentStatus, confirm } = useConsent();
@@ -36,7 +36,7 @@ function RootNavigator(): React.JSX.Element {
     );
   }
 
-  if (consentStatus === 'loading') {
+  if (consentStatus === 'loading' || nameStatus === 'loading') {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={COLORS.textPrimary} />
@@ -44,20 +44,15 @@ function RootNavigator(): React.JSX.Element {
     );
   }
 
-  if (consentStatus === 'needed') {
-    return <AgeTermsGate onConfirm={() => void confirm()} />;
-  }
-
-  if (nameStatus === 'loading') {
+  if (consentStatus === 'needed' || nameStatus === 'needed') {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color={COLORS.textPrimary} />
-      </View>
+      <OnboardingGate
+        onComplete={(name) => {
+          void saveName(name);
+          void confirm();
+        }}
+      />
     );
-  }
-
-  if (nameStatus === 'needed') {
-    return <NameEntryGate onSubmit={(name) => void saveName(name)} />;
   }
 
   return <Stack screenOptions={{ headerShown: false }} />;
