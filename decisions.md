@@ -63,3 +63,4 @@ Decided 2026-06-04. Guest identity (display name), consent flags, and the anonym
 - **#003:** Happy-path + member-state RPC verification deferred to Phase 3+ (needs the real auth flow).
 - **#004:** Planning-doc RPC lists drift from rpc-contracts.md §14 — needs a reconciliation pass, low priority.
 - **#005:** 14 moderate-severity npm advisories in the dependency tree (surfaced during the Phase 3 expo patch-align); clear only via breaking upgrades (`npm audit fix --force`) — deferred to Phase 13 hardening.
+- **#006:** Reconnect (launch-time active-party detection + routing) is built but verified only at the unit level (phase→route mapping). End-to-end verification — force-close mid-party and reopen — needs a real party to exist, so it defers to Phase 5 (create/join wiring). The server read (`getActiveParty`) also assumes the party_sessions SELECT RLS policy returns the caller's own party; confirm during that E2E pass.
