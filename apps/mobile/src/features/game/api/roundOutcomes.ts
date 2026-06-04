@@ -17,9 +17,7 @@ export type GetRoundOutcomesData = {
   outcomes: OutcomeRow[];
 };
 
-export function getRoundOutcomes(
-  roundId: string,
-): Promise<RpcResult<GetRoundOutcomesData>> {
+export function getRoundOutcomes(roundId: string): Promise<RpcResult<GetRoundOutcomesData>> {
   return callRpc<GetRoundOutcomesData>('get_round_outcomes', {
     p_round_id: roundId,
   });

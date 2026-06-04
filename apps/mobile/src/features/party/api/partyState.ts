@@ -28,9 +28,7 @@ export type GetPartyStateData = {
   players: PlayerRow[];
 };
 
-export function getPartyState(
-  partySessionId: string,
-): Promise<RpcResult<GetPartyStateData>> {
+export function getPartyState(partySessionId: string): Promise<RpcResult<GetPartyStateData>> {
   return callRpc<GetPartyStateData>('get_party_state', {
     p_party_session_id: partySessionId,
   });

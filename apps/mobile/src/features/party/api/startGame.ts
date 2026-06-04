@@ -24,9 +24,7 @@ export type StartGameData = {
   phase_ends_at: string;
 };
 
-export function startGame(
-  params: StartGameParams,
-): Promise<RpcResult<StartGameData>> {
+export function startGame(params: StartGameParams): Promise<RpcResult<StartGameData>> {
   return callRpc<StartGameData>('start_game', {
     p_party_session_id: params.partySessionId,
   });

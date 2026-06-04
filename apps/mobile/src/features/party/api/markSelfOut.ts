@@ -22,9 +22,7 @@ export type MarkSelfOutData = {
   outcome_id: string;
 };
 
-export function markSelfOut(
-  params: MarkSelfOutParams,
-): Promise<RpcResult<MarkSelfOutData>> {
+export function markSelfOut(params: MarkSelfOutParams): Promise<RpcResult<MarkSelfOutData>> {
   return callRpc<MarkSelfOutData>('mark_self_out', {
     p_party_session_id: params.partySessionId,
   });

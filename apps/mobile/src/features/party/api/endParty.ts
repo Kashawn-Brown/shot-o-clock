@@ -25,9 +25,7 @@ export type EndPartyData = {
   ended_at: string;
 };
 
-export function endParty(
-  params: EndPartyParams,
-): Promise<RpcResult<EndPartyData>> {
+export function endParty(params: EndPartyParams): Promise<RpcResult<EndPartyData>> {
   return callRpc<EndPartyData>('end_party', {
     p_party_session_id: params.partySessionId,
   });
