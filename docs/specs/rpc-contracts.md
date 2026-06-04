@@ -526,11 +526,11 @@ Caller: host. Precondition: `status ∈ {active, paused}` AND `currentPhase ∈ 
 
 ### 10.4. `host_end_shot_window(p_party_session_id uuid) returns jsonb`
 
-Caller: host. Precondition: `currentPhase = shot_window`. Effect: calls the shared `finalize_round_outcomes` helper (§8.8) with `p_triggered_by = 'host'` — same finalize + auto-advance as the timer path (§8.4). The `round_completed` event carries `triggeredBy = host`; the `next_round_started` event (when ≥1 active remains) is `system`. Logs `admin_action_logs` with `actionType = end_shot_window`. Idempotent via the round `completedAt` gate. Errors: `NOT_HOST`, `ILLEGAL_TRANSITION`. (Implemented in Batch E.)
+Caller: host. Precondition: `status = active` AND `currentPhase = shot_window` (Batch E2: a paused session must be resumed first — `mvp-state-machine.md` §4 does not list `host_end_shot_window` among paused-allowed actions; a paused call returns `ILLEGAL_TRANSITION`). Effect: calls the shared `finalize_round_outcomes` helper (§8.8) with `p_triggered_by = 'host'` — same finalize + auto-advance as the timer path (§8.4). The `round_completed` event carries `triggeredBy = host`; the `next_round_started` event (when ≥1 active remains) is `system`. Logs `admin_action_logs` with `actionType = end_shot_window` (against the round that was ended, not the new round). Idempotent via the round `completedAt` gate (the phase guard rejects a late second call with `ILLEGAL_TRANSITION` once the phase has moved). Returns `{ new_phase }` — `countdown` on auto-advance, `round_complete` on the zero-active halt. Errors: `NOT_HOST`, `ILLEGAL_TRANSITION`. (Implemented in Batch E2.)
 
 ### 10.5. `host_skip_to_shot_window(p_party_session_id uuid) returns jsonb`
 
-Caller: host. Precondition: `currentPhase = countdown`. Effect: same as `advance_phase_if_due` countdown → shot_window branch, but triggered by host. Logs `admin_action_logs` with `actionType = skip_to_shot_window`. Idempotent. Errors: `NOT_HOST`, `ILLEGAL_TRANSITION`, `NO_ACTIVE_PLAYERS`.
+Caller: host. Precondition: `status = active` AND `currentPhase = countdown` (Batch E2: paused → `ILLEGAL_TRANSITION`, same rationale as §10.4). Effect: same as `advance_phase_if_due` countdown → shot_window branch, but triggered by host — opens the shot window and emits a `shot_window_started` event with `triggeredBy = host` (the skip semantics are recorded on the `skip_to_shot_window` admin log, so no `phase_skipped` event is emitted). Logs `admin_action_logs` with `actionType = skip_to_shot_window`. Idempotent (already in `shot_window` → no-op + ok). Returns `{ new_phase: 'shot_window' }`. Errors: `NOT_HOST`, `ILLEGAL_TRANSITION`, `NO_ACTIVE_PLAYERS`.
 
 ---
 
