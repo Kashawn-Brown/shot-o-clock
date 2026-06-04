@@ -3,15 +3,19 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AgeTermsGate } from '@/features/auth/AgeTermsGate';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
+import { useConsent } from '@/features/auth/useConsent';
 import { COLORS, FONT_SIZE, SPACING } from '@/styles/tokens';
 
-// Gates the navigator on the guest session: nothing renders until an anonymous
-// identity is resolved, so no screen runs without an auth.uid for RLS / RPCs.
+// Gates the navigator: nothing renders until (1) an anonymous identity is resolved
+// — so no screen runs without an auth.uid for RLS / RPCs — and (2) the guest has
+// confirmed legal age + terms once on this device.
 function RootNavigator(): React.JSX.Element {
-  const { status } = useAuth();
+  const { status: authStatus } = useAuth();
+  const { status: consentStatus, confirm } = useConsent();
 
-  if (status === 'loading') {
+  if (authStatus === 'loading') {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={COLORS.textPrimary} />
@@ -19,7 +23,7 @@ function RootNavigator(): React.JSX.Element {
     );
   }
 
-  if (status === 'error') {
+  if (authStatus === 'error') {
     return (
       <View style={styles.center}>
         <Text style={styles.errorText}>
@@ -27,6 +31,18 @@ function RootNavigator(): React.JSX.Element {
         </Text>
       </View>
     );
+  }
+
+  if (consentStatus === 'loading') {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color={COLORS.textPrimary} />
+      </View>
+    );
+  }
+
+  if (consentStatus === 'needed') {
+    return <AgeTermsGate onConfirm={() => void confirm()} />;
   }
 
   return <Stack screenOptions={{ headerShown: false }} />;
