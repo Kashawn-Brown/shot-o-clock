@@ -163,7 +163,6 @@ declare
   v_session            party_sessions%rowtype;
   v_elimination        boolean;
   v_grace              grace_mode;
-  v_shot_window        int;
   v_round_id           uuid;
   v_round_number       int;
   v_completed          timestamptz;
@@ -186,8 +185,10 @@ begin
   from party_sessions
   where id = p_party_session_id;
 
-  select elimination_enabled, grace_mode, shot_window_seconds
-    into v_elimination, v_grace, v_shot_window
+  -- shot_window_seconds is read by advance_to_next_round (round N+1 creation),
+  -- not here; finalize only needs the grace/elimination settings.
+  select elimination_enabled, grace_mode
+    into v_elimination, v_grace
   from party_settings
   where party_session_id = p_party_session_id;
 
