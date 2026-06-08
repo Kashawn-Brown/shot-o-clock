@@ -138,9 +138,9 @@ export default function CreatePartyScreen(): React.JSX.Element {
             max={STARTING_INTERVAL_MAX_MINUTES}
             step={STARTING_INTERVAL_STEP_MINUTES}
             unit="minutes"
+            hint="Time until first shot"
             accessibilityLabel="Starting interval in minutes"
           />
-          <Text style={[styles.hint, styles.hintCentered]}>Time until first shot</Text>
         </View>
 
         <View style={styles.field}>
@@ -152,9 +152,9 @@ export default function CreatePartyScreen(): React.JSX.Element {
             max={INTERVAL_INCREMENT_MAX_MINUTES}
             step={INTERVAL_INCREMENT_STEP_MINUTES}
             unit="minutes"
+            hint="How much longer each round gets"
             accessibilityLabel="Interval increase in minutes"
           />
-          <Text style={[styles.hint, styles.hintCentered]}>How much longer each round gets</Text>
         </View>
 
         <View style={styles.field}>
@@ -166,11 +166,9 @@ export default function CreatePartyScreen(): React.JSX.Element {
             max={SHOT_WINDOW_MAX_SECONDS}
             step={SHOT_WINDOW_STEP_SECONDS}
             unit="seconds"
+            hint="Time players have to take their shot"
             accessibilityLabel="Shot window in seconds"
           />
-          <Text style={[styles.hint, styles.hintCentered]}>
-            Time players have to take their shot
-          </Text>
         </View>
 
         <View style={styles.toggleRow}>
@@ -267,10 +265,6 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.textSecondary,
-  },
-  // Centers a stepper's hint under the centered control above it.
-  hintCentered: {
-    textAlign: 'center',
   },
   toggleRow: {
     flexDirection: 'row',
