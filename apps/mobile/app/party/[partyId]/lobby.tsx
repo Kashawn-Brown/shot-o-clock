@@ -5,12 +5,23 @@
 // Phase 3 placeholder: renders the host layout with mock roster and no role
 // detection. Real role-based rendering + realtime roster land in Phase 6.
 // "Start Game" navigates to the placeholder timer.
+//
+// Phase 5 addition: a real back/leave control with a confirmation gate, so a
+// host can end the party (or a guest can leave) and return home instead of being
+// trapped here by the launch reconnect. Role isn't loaded yet, so exit tries
+// end_party and falls back to leave_party on NOT_HOST. The full role-aware lobby
+// is Phase 6.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
+import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { endParty } from '@/features/party/api/endParty';
+import { leaveParty } from '@/features/party/api/leaveParty';
+import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 const MOCK_PLAYERS = [
@@ -22,9 +33,57 @@ const MOCK_PLAYERS = [
 
 export default function LobbyScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
+  const [leaving, setLeaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Exit the party and return home. We don't know the caller's role yet, so try
+  // end_party (host) and fall back to leave_party (guest) on NOT_HOST. end_party
+  // is idempotent if the party is already ended.
+  const handleExit = useCallback(async () => {
+    if (!partyId || leaving) return;
+
+    setErrorMessage(null);
+    setLeaving(true);
+
+    const ended = await endParty({ partySessionId: partyId });
+    if (ended.ok) {
+      router.replace('/');
+      return;
+    }
+
+    if (ended.error_code === 'NOT_HOST') {
+      const left = await leaveParty({ partySessionId: partyId });
+      if (left.ok) {
+        router.replace('/');
+        return;
+      }
+      setErrorMessage(rpcErrorMessage(left.error_code));
+      setLeaving(false);
+      return;
+    }
+
+    setErrorMessage(rpcErrorMessage(ended.error_code));
+    setLeaving(false);
+  }, [partyId, leaving]);
+
+  // Confirmation gate — leaving is destructive (ends the party for a host).
+  const confirmExit = useCallback(() => {
+    if (leaving) return;
+    Alert.alert('Leave party?', 'If you are the host, this ends the party for everyone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Leave', style: 'destructive', onPress: handleExit },
+    ]);
+  }, [leaving, handleExit]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+      <View style={styles.header}>
+        <Pressable onPress={confirmExit} accessibilityRole="button" hitSlop={8} disabled={leaving}>
+          <Text style={styles.back}>←</Text>
+        </Pressable>
+        <Text style={styles.title}>Lobby</Text>
+      </View>
+
       <Text style={styles.partyName}>Friday Night Shots</Text>
 
       <View style={styles.codeCard}>
@@ -47,6 +106,7 @@ export default function LobbyScreen(): React.JSX.Element {
       </ScrollView>
 
       <View style={styles.footer}>
+        <ErrorBanner message={errorMessage} />
         <Button label="Start Game" onPress={() => router.push(`/party/${partyId}/timer`)} />
       </View>
     </SafeAreaView>
@@ -57,6 +117,22 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  back: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.textPrimary,
+  },
+  title: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.textPrimary,
   },
   partyName: {
     fontSize: FONT_SIZE.md,
@@ -127,5 +203,6 @@ const styles = StyleSheet.create({
   },
   footer: {
     padding: SPACING.lg,
+    gap: SPACING.md,
   },
 });
