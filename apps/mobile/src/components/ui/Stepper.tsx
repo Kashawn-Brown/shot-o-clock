@@ -2,18 +2,16 @@
 // by a fixed amount; the value in the middle is also tappable, opening a numeric
 // keyboard for direct entry that clamps to [min, max] on blur/submit.
 //
-// Layout: only the box (− value +) is centered on screen, via equal flex spacers
-// on each side. The unit label floats just to the right of the centered box
-// without affecting its centering, so a field reads: [−  5  +] minutes. The hint
-// sits below, left-aligned and indented to the box's left edge (measured at
-// layout) rather than the screen edge.
+// Layout: the box (− value +) is left-aligned, with the unit label floating just
+// to its right, so a field reads: [−  5  +] minutes. The hint sits below,
+// left-aligned to the same edge as the box.
 //
 // Direct entry can land on any in-range integer (not just step multiples) — the
 // step only governs the buttons. Used by the Create Party screen. Colors/spacing
 // come from tokens.ts.
 
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
@@ -41,9 +39,6 @@ export function Stepper({
   // Local draft for the editable field; resynced whenever `value` changes from
   // the buttons or a parent update.
   const [text, setText] = useState(String(value));
-  // Left offset of the centered box within its row, so the hint can indent to
-  // the box's left edge instead of the screen edge.
-  const [boxOffset, setBoxOffset] = useState(0);
 
   useEffect(() => {
     setText(String(value));
@@ -69,18 +64,11 @@ export function Stepper({
     if (next !== value) onChange(next);
   };
 
-  // The box sits between two equal flex spacers, so its x within the row is the
-  // left spacer's width — exactly the indent the hint needs.
-  const handleBoxLayout = (event: LayoutChangeEvent): void => {
-    setBoxOffset(event.nativeEvent.layout.x);
-  };
-
   return (
     <View>
       <View style={styles.row}>
         <View
           style={styles.box}
-          onLayout={handleBoxLayout}
           accessibilityRole="adjustable"
           accessibilityLabel={accessibilityLabel}
           accessibilityValue={{ now: value, min, max }}
@@ -127,12 +115,11 @@ export function Stepper({
           </Pressable>
         </View>
 
-        {/* Right flex zone equal to the left spacer keeps the box centered; the
-            unit just hangs at the box's right edge. */}
-        <View style={styles.unitZone}>{unit ? <Text style={styles.unit}>{unit}</Text> : null}</View>
+        {/* Unit hangs just to the right of the box. */}
+        {unit ? <Text style={styles.unit}>{unit}</Text> : null}
       </View>
 
-      {hint ? <Text style={[styles.hint, { marginLeft: boxOffset }]}>{hint}</Text> : null}
+      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
     </View>
   );
 }
@@ -141,15 +128,6 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  spacer: {
-    flex: 1,
-  },
-  unitZone: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: SPACING.sm,
   },
   box: {
     flexDirection: 'row',
@@ -188,6 +166,7 @@ const styles = StyleSheet.create({
   },
   // Smaller than the value and in the secondary color, so it reads as a label.
   unit: {
+    marginLeft: SPACING.sm,
     fontSize: FONT_SIZE.sm,
     color: COLORS.textSecondary,
   },
