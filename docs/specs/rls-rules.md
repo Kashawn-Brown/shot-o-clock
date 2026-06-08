@@ -47,7 +47,7 @@ public.is_party_host(session_id uuid) returns boolean
 public.my_party_player_id(session_id uuid) returns uuid
 ```
 
-All helpers are `STABLE`, `SECURITY INVOKER`, and check `auth.uid()` against `party_players.user_id` (or `guest_identity_id` joined through to the user via the identity link).
+All helpers are `STABLE`, `SECURITY DEFINER` (with `search_path` pinned), and check `auth.uid()` against `party_players.user_id` (or `guest_identity_id` joined through to the user via the identity link). `SECURITY DEFINER` is load-bearing, not a convenience: these helpers query `party_players`, and the `party_players` SELECT policy itself calls them — as `SECURITY INVOKER` the helper's internal read would re-trigger `party_players` RLS through a function-call boundary and recurse without bound (`54001 stack depth limit exceeded`, which Postgres's `42P17` direct-recursion detector cannot catch across a function). Running as `DEFINER` makes the internal read bypass RLS and terminates the recursion. Safe because each helper returns only a boolean (or the caller's own `party_player_id`) about `auth.uid()`'s own membership. See `decisions.md` D020.
 
 ### 1.5. Policy role scoping
 
@@ -350,7 +350,7 @@ using (
 
 ## 12. Helper Functions (Reference Implementation)
 
-These are the helpers referenced throughout this spec. They live in the `public` schema as `STABLE SECURITY INVOKER` functions. They return `boolean` or `uuid`. They MUST not have side effects.
+These are the helpers referenced throughout this spec. They live in the `public` schema as `STABLE SECURITY DEFINER` functions with a pinned `search_path`. They return `boolean` or `uuid`. They MUST not have side effects. `SECURITY DEFINER` is required to avoid RLS recursion — see §1.4 and `decisions.md` D020; a `SECURITY INVOKER` version of these helpers overflows the stack (`54001`) the moment any party-table read evaluates the `party_players` policy.
 
 ```sql
 -- Is the calling user a member of this party (any status including removed)?
@@ -358,7 +358,8 @@ create or replace function public.is_party_member(session_id uuid)
 returns boolean
 language sql
 stable
-security invoker
+security definer
+set search_path = public, pg_temp
 as $$
   select exists (
     select 1 from party_players
@@ -372,7 +373,8 @@ create or replace function public.is_active_party_member(session_id uuid)
 returns boolean
 language sql
 stable
-security invoker
+security definer
+set search_path = public, pg_temp
 as $$
   select exists (
     select 1 from party_players
@@ -387,7 +389,8 @@ create or replace function public.is_party_host(session_id uuid)
 returns boolean
 language sql
 stable
-security invoker
+security definer
+set search_path = public, pg_temp
 as $$
   select exists (
     select 1 from party_players
@@ -403,7 +406,8 @@ create or replace function public.my_party_player_id(session_id uuid)
 returns uuid
 language sql
 stable
-security invoker
+security definer
+set search_path = public, pg_temp
 as $$
   select id from party_players
   where party_session_id = session_id
