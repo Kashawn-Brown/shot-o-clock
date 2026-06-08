@@ -1,21 +1,96 @@
-// Create Party — host configures a new party.
+// Create Party — host configures and creates a new party.
 //
-// Phase 3 placeholder: renders the full form shape from the Figma wireframe
-// (name, intervals, shot window, elimination toggle, grace mode) but holds no
-// real state and calls no RPC. "Create Party" navigates to a placeholder
-// lobby. Real validation + create_party wiring land in Phase 5.
+// Phase 5: the form is live. It collects the party name, the minute-based
+// interval fields, the shot window, the elimination toggle, and (only when
+// elimination is on) the grace mode, validates them against the create_party
+// bounds, and calls the RPC. On success it routes to the new party's lobby; on
+// failure it surfaces the error in the shared ErrorBanner. The host's name comes
+// from the stored guest identity (this screen has no name field — see D017).
+//
+// Validation + minute→second conversion live in createPartyForm.ts so they can
+// be unit-tested without the UI. See docs/specs/rpc-contracts.md §2.
 
 import { router } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
+import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { useDisplayName } from '@/features/auth/useDisplayName';
+import { createParty } from '@/features/party/api/createParty';
+import {
+  DEFAULT_GRACE_MODE,
+  DEFAULT_INTERVAL_INCREMENT_MINUTES,
+  DEFAULT_SHOT_WINDOW_SECONDS,
+  DEFAULT_STARTING_INTERVAL_MINUTES,
+  GRACE_MODE_OPTIONS,
+  PARTY_NAME_MAX_LENGTH,
+  validateCreatePartyForm,
+  type GraceMode,
+} from '@/features/party/createPartyForm';
+import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
-const PLACEHOLDER_PARTY_ID = 'test-party';
-const GRACE_MODES = ['No Grace', 'Grace', 'Unlimited'] as const;
-
 export default function CreatePartyScreen(): React.JSX.Element {
+  const { displayName } = useDisplayName();
+
+  const [partyName, setPartyName] = useState('');
+  const [startingIntervalMinutes, setStartingIntervalMinutes] = useState(
+    String(DEFAULT_STARTING_INTERVAL_MINUTES),
+  );
+  const [intervalIncrementMinutes, setIntervalIncrementMinutes] = useState(
+    String(DEFAULT_INTERVAL_INCREMENT_MINUTES),
+  );
+  const [shotWindowSeconds, setShotWindowSeconds] = useState(String(DEFAULT_SHOT_WINDOW_SECONDS));
+  const [eliminationEnabled, setEliminationEnabled] = useState(false);
+  const [graceMode, setGraceMode] = useState<GraceMode>(DEFAULT_GRACE_MODE);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleCreate = useCallback(async () => {
+    if (submitting) return;
+
+    const result = validateCreatePartyForm({
+      partyName,
+      startingIntervalMinutes,
+      intervalIncrementMinutes,
+      shotWindowSeconds,
+      eliminationEnabled,
+      graceMode,
+      hostDisplayName: displayName,
+    });
+
+    if (!result.ok) {
+      setErrorMessage(result.error);
+      return;
+    }
+
+    setErrorMessage(null);
+    setSubmitting(true);
+
+    const response = await createParty(result.params);
+
+    if (response.ok) {
+      // replace (not push) so Back from the lobby doesn't return to a stale
+      // create form for a party that now exists.
+      router.replace(`/party/${response.data.party_session_id}/lobby`);
+      return;
+    }
+
+    setErrorMessage(rpcErrorMessage(response.error_code));
+    setSubmitting(false);
+  }, [
+    submitting,
+    partyName,
+    startingIntervalMinutes,
+    intervalIncrementMinutes,
+    shotWindowSeconds,
+    eliminationEnabled,
+    graceMode,
+    displayName,
+  ]);
+
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -25,32 +100,58 @@ export default function CreatePartyScreen(): React.JSX.Element {
         <Text style={styles.title}>Create Party</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.field}>
           <Text style={styles.label}>Party Name</Text>
           <TextInput
             style={styles.input}
+            value={partyName}
+            onChangeText={setPartyName}
             placeholder="e.g., Friday Night Shots"
             placeholderTextColor={COLORS.textSecondary}
-            editable={false}
+            maxLength={PARTY_NAME_MAX_LENGTH}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Starting Interval (minutes)</Text>
-          <TextInput style={styles.input} placeholder="5" editable={false} />
+          <TextInput
+            style={styles.input}
+            value={startingIntervalMinutes}
+            onChangeText={setStartingIntervalMinutes}
+            placeholder="5"
+            placeholderTextColor={COLORS.textSecondary}
+            keyboardType="number-pad"
+            maxLength={2}
+          />
           <Text style={styles.hint}>Time until first shot</Text>
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Interval Increase (minutes)</Text>
-          <TextInput style={styles.input} placeholder="2" editable={false} />
+          <TextInput
+            style={styles.input}
+            value={intervalIncrementMinutes}
+            onChangeText={setIntervalIncrementMinutes}
+            placeholder="2"
+            placeholderTextColor={COLORS.textSecondary}
+            keyboardType="number-pad"
+            maxLength={2}
+          />
           <Text style={styles.hint}>How much longer each round gets</Text>
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Shot Window Length (seconds)</Text>
-          <TextInput style={styles.input} placeholder="30" editable={false} />
+          <TextInput
+            style={styles.input}
+            value={shotWindowSeconds}
+            onChangeText={setShotWindowSeconds}
+            placeholder="30"
+            placeholderTextColor={COLORS.textSecondary}
+            keyboardType="number-pad"
+            maxLength={3}
+          />
           <Text style={styles.hint}>Time players have to take their shot</Text>
         </View>
 
@@ -59,28 +160,41 @@ export default function CreatePartyScreen(): React.JSX.Element {
             <Text style={styles.label}>Elimination Mode</Text>
             <Text style={styles.hint}>Players who miss are eliminated</Text>
           </View>
-          <Switch value={false} disabled />
+          <Switch value={eliminationEnabled} onValueChange={setEliminationEnabled} />
         </View>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Grace Mode</Text>
-          <View style={styles.segment}>
-            {GRACE_MODES.map((mode, index) => (
-              <View
-                key={mode}
-                style={[styles.segmentItem, index === 0 && styles.segmentItemActive]}
-              >
-                <Text style={[styles.segmentLabel, index === 0 && styles.segmentLabelActive]}>
-                  {mode}
-                </Text>
-              </View>
-            ))}
+        {/* Grace mode only matters with elimination on — hide it otherwise
+            (plan.md Phase 5). */}
+        {eliminationEnabled && (
+          <View style={styles.field}>
+            <Text style={styles.label}>Grace Mode</Text>
+            <View style={styles.segment}>
+              {GRACE_MODE_OPTIONS.map((option) => {
+                const active = graceMode === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => setGraceMode(option.value)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    style={[styles.segmentItem, active && styles.segmentItemActive]}
+                  >
+                    <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
-        </View>
+        )}
+
+        <ErrorBanner message={errorMessage} />
 
         <Button
-          label="Create Party"
-          onPress={() => router.push(`/party/${PLACEHOLDER_PARTY_ID}/lobby`)}
+          label={submitting ? 'Creating…' : 'Create Party'}
+          onPress={handleCreate}
+          disabled={submitting}
           style={styles.submit}
         />
       </ScrollView>
