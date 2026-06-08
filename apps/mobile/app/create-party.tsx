@@ -47,11 +47,11 @@ import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens
 export default function CreatePartyScreen(): React.JSX.Element {
   const { displayName } = useDisplayName();
 
-  // Prefill the party name with today's default; cleared on first focus so the
-  // host can type freely, but used as-is if left untouched.
+  // Held silently as the fallback name. The visible field stays empty (showing
+  // its placeholder) to nudge the host to enter their own, but a submit with an
+  // empty field uses this default rather than failing — so we never submit empty.
   const defaultPartyName = useMemo(() => formatDefaultPartyName(new Date()), []);
-  const [partyName, setPartyName] = useState(defaultPartyName);
-  const [nameTouched, setNameTouched] = useState(false);
+  const [partyName, setPartyName] = useState('');
   const [startingIntervalMinutes, setStartingIntervalMinutes] = useState(
     DEFAULT_STARTING_INTERVAL_MINUTES,
   );
@@ -67,8 +67,12 @@ export default function CreatePartyScreen(): React.JSX.Element {
   const handleCreate = useCallback(async () => {
     if (submitting) return;
 
+    // Fall back to the silent default when the field is left empty (or blank),
+    // so the submitted name is never empty.
+    const effectivePartyName = partyName.trim().length > 0 ? partyName : defaultPartyName;
+
     const result = validateCreatePartyForm({
-      partyName,
+      partyName: effectivePartyName,
       // Steppers hold numbers; the validator parses strings and owns the
       // minute→second conversion + param assembly, so stringify here.
       startingIntervalMinutes: String(startingIntervalMinutes),
@@ -101,6 +105,7 @@ export default function CreatePartyScreen(): React.JSX.Element {
   }, [
     submitting,
     partyName,
+    defaultPartyName,
     startingIntervalMinutes,
     intervalIncrementMinutes,
     shotWindowSeconds,
@@ -108,15 +113,6 @@ export default function CreatePartyScreen(): React.JSX.Element {
     graceMode,
     displayName,
   ]);
-
-  // On first focus, clear the prefilled default so the host types into an empty
-  // field. After that it behaves like a normal input (empty stays blocked).
-  const handleNameFocus = useCallback(() => {
-    if (!nameTouched) {
-      setNameTouched(true);
-      if (partyName === defaultPartyName) setPartyName('');
-    }
-  }, [nameTouched, partyName, defaultPartyName]);
 
   const graceHint =
     GRACE_MODE_OPTIONS.find((option) => option.value === graceMode)?.description ?? '';
@@ -137,7 +133,6 @@ export default function CreatePartyScreen(): React.JSX.Element {
             style={styles.input}
             value={partyName}
             onChangeText={setPartyName}
-            onFocus={handleNameFocus}
             placeholder="e.g., Friday Night Shots"
             placeholderTextColor={COLORS.textSecondary}
             maxLength={PARTY_NAME_MAX_LENGTH}
