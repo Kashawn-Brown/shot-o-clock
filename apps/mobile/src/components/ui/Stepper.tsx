@@ -115,11 +115,11 @@ export function Stepper({
 }
 
 const styles = StyleSheet.create({
-  // Left-aligned and content-sized so the control isn't full width.
+  // Content-sized (not full width) and centered on screen.
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
     gap: SPACING.sm,
   },
   box: {
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   value: {
-    minWidth: 44,
+    minWidth: 100,
     textAlign: 'center',
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xs,
