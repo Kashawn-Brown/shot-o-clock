@@ -1,0 +1,153 @@
+// Pure validation + parsing for the Create Party form.
+//
+// The screen collects raw text (party name, intervals, shot window) plus an
+// elimination toggle and a grace-mode choice, then calls create_party with
+// seconds. This module is the seam between the two: it validates the raw input
+// against the rpc-contracts.md §2.3 bounds, converts the minute-based interval
+// fields to the seconds the RPC expects, and produces a ready-to-send
+// CreatePartyParams — or a single user-facing message naming the bad field.
+//
+// Kept pure (no React, no network) so the bounds + conversion are unit-tested
+// directly. The server re-validates every field; this is the first line, not
+// the only one. See docs/specs/rpc-contracts.md §2.
+
+import { isValidDisplayName } from '@/features/auth/api/displayName';
+import type { CreatePartyParams } from '@/features/party/api/createParty';
+import type { Database } from '@/types/db.generated';
+
+export type GraceMode = Database['public']['Enums']['grace_mode'];
+
+const SECONDS_PER_MINUTE = 60;
+
+// Party-name bounds mirror the create_party CHECK (§2.3: length 1–60).
+export const PARTY_NAME_MIN_LENGTH = 1;
+export const PARTY_NAME_MAX_LENGTH = 60;
+
+// Interval fields are entered in whole minutes in the UI. The minute bounds are
+// chosen to sit inside the RPC's second bounds (§2.3): starting interval
+// 10–3600s, increment 0–600s. A 1-minute floor (60s) is a deliberate product
+// floor — finer than a minute isn't a sensible drinking-game cadence.
+export const STARTING_INTERVAL_MIN_MINUTES = 1;
+export const STARTING_INTERVAL_MAX_MINUTES = 60;
+export const INTERVAL_INCREMENT_MIN_MINUTES = 0;
+export const INTERVAL_INCREMENT_MAX_MINUTES = 10;
+
+// Shot window is entered directly in seconds (§2.3: 5–300s).
+export const SHOT_WINDOW_MIN_SECONDS = 5;
+export const SHOT_WINDOW_MAX_SECONDS = 300;
+
+// Defaults prefill the form so the happy path is one tap. Values match the
+// Phase 3 placeholder copy (5 min / 2 min / 30 s).
+export const DEFAULT_STARTING_INTERVAL_MINUTES = 5;
+export const DEFAULT_INTERVAL_INCREMENT_MINUTES = 2;
+export const DEFAULT_SHOT_WINDOW_SECONDS = 30;
+
+// Grace-mode segmented control: display label paired with the enum value the
+// RPC stores. Order matches the Figma wireframe.
+export const GRACE_MODE_OPTIONS: readonly { label: string; value: GraceMode }[] = [
+  { label: 'No Grace', value: 'disabled' },
+  { label: 'Grace', value: 'enabled' },
+  { label: 'Unlimited', value: 'unlimited' },
+];
+
+export const DEFAULT_GRACE_MODE: GraceMode = 'disabled';
+
+// Raw form state as held by the screen — interval/shot-window fields are the
+// literal text in the inputs so partial/invalid entries are representable.
+export type CreatePartyFormInput = {
+  partyName: string;
+  startingIntervalMinutes: string;
+  intervalIncrementMinutes: string;
+  shotWindowSeconds: string;
+  eliminationEnabled: boolean;
+  graceMode: GraceMode;
+  hostDisplayName: string | null;
+};
+
+export type CreatePartyFormResult =
+  | { ok: true; params: CreatePartyParams }
+  | { ok: false; error: string };
+
+// Whole non-negative integer only — rejects empty, decimals, signs, and stray
+// characters so "5.5" or "" never silently coerce.
+function parseWholeNumber(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  return Number(trimmed);
+}
+
+export function validateCreatePartyForm(input: CreatePartyFormInput): CreatePartyFormResult {
+  const partyName = input.partyName.trim();
+  // Count code points (not UTF-16 units) to match Postgres length().
+  const nameLength = [...partyName].length;
+  if (nameLength < PARTY_NAME_MIN_LENGTH || nameLength > PARTY_NAME_MAX_LENGTH) {
+    return {
+      ok: false,
+      error: `Party name must be ${PARTY_NAME_MIN_LENGTH}–${PARTY_NAME_MAX_LENGTH} characters.`,
+    };
+  }
+
+  const startingMinutes = parseWholeNumber(input.startingIntervalMinutes);
+  if (
+    startingMinutes === null ||
+    startingMinutes < STARTING_INTERVAL_MIN_MINUTES ||
+    startingMinutes > STARTING_INTERVAL_MAX_MINUTES
+  ) {
+    return {
+      ok: false,
+      error: `Starting interval must be between ${STARTING_INTERVAL_MIN_MINUTES} and ${STARTING_INTERVAL_MAX_MINUTES} minutes.`,
+    };
+  }
+
+  const incrementMinutes = parseWholeNumber(input.intervalIncrementMinutes);
+  if (
+    incrementMinutes === null ||
+    incrementMinutes < INTERVAL_INCREMENT_MIN_MINUTES ||
+    incrementMinutes > INTERVAL_INCREMENT_MAX_MINUTES
+  ) {
+    return {
+      ok: false,
+      error: `Interval increase must be between ${INTERVAL_INCREMENT_MIN_MINUTES} and ${INTERVAL_INCREMENT_MAX_MINUTES} minutes.`,
+    };
+  }
+
+  const shotWindowSeconds = parseWholeNumber(input.shotWindowSeconds);
+  if (
+    shotWindowSeconds === null ||
+    shotWindowSeconds < SHOT_WINDOW_MIN_SECONDS ||
+    shotWindowSeconds > SHOT_WINDOW_MAX_SECONDS
+  ) {
+    return {
+      ok: false,
+      error: `Shot window must be between ${SHOT_WINDOW_MIN_SECONDS} and ${SHOT_WINDOW_MAX_SECONDS} seconds.`,
+    };
+  }
+
+  // hostDisplayName comes from the stored guest identity, already validated at
+  // capture — but guard anyway so a missing/corrupt value fails loudly here
+  // rather than at the RPC.
+  if (input.hostDisplayName === null || !isValidDisplayName(input.hostDisplayName)) {
+    return {
+      ok: false,
+      error: 'Your display name is missing. Restart the app to set it up.',
+    };
+  }
+
+  // Grace mode is meaningless without elimination, so collapse it to `disabled`
+  // when elimination is off — keeps the stored setting unambiguous and matches
+  // the UI hiding the selector in that case.
+  const graceMode: GraceMode = input.eliminationEnabled ? input.graceMode : 'disabled';
+
+  return {
+    ok: true,
+    params: {
+      partyName,
+      startingIntervalSecs: startingMinutes * SECONDS_PER_MINUTE,
+      intervalIncrementSecs: incrementMinutes * SECONDS_PER_MINUTE,
+      shotWindowSecs: shotWindowSeconds,
+      eliminationEnabled: input.eliminationEnabled,
+      graceMode,
+      hostDisplayName: input.hostDisplayName,
+    },
+  };
+}
