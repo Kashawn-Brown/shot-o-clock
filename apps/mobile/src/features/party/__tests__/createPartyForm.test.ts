@@ -80,9 +80,14 @@ describe('validateCreatePartyForm', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('rejects a shot window below the 5-second min', () => {
-    const result = validateCreatePartyForm(baseInput({ shotWindowSeconds: '4' }));
+  it('rejects a shot window below the 15-second min', () => {
+    const result = validateCreatePartyForm(baseInput({ shotWindowSeconds: '14' }));
     expect(result.ok).toBe(false);
+  });
+
+  it('accepts a shot window at the 15-second min', () => {
+    const result = validateCreatePartyForm(baseInput({ shotWindowSeconds: '15' }));
+    expect(result.ok && result.params.shotWindowSecs).toBe(15);
   });
 
   it('rejects a shot window above the 300-second max', () => {

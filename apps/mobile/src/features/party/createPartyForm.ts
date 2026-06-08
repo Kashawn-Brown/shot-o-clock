@@ -23,24 +23,30 @@ const SECONDS_PER_MINUTE = 60;
 export const PARTY_NAME_MIN_LENGTH = 1;
 export const PARTY_NAME_MAX_LENGTH = 60;
 
-// Interval fields are entered in whole minutes in the UI. The minute bounds are
-// chosen to sit inside the RPC's second bounds (§2.3): starting interval
-// 10–3600s, increment 0–600s. A 1-minute floor (60s) is a deliberate product
-// floor — finer than a minute isn't a sensible drinking-game cadence.
+// Interval fields are chosen with steppers in whole minutes. The minute bounds
+// sit inside the RPC's second bounds (§2.3): starting interval 10–3600s,
+// increment 0–600s. A 1-minute floor (60s) is a deliberate product floor —
+// finer than a minute isn't a sensible drinking-game cadence. The increment max
+// (10 min = 600s) is the RPC's hard cap, not a soft choice — create_party
+// rejects anything above it with INVALID_PARAM.
 export const STARTING_INTERVAL_MIN_MINUTES = 1;
 export const STARTING_INTERVAL_MAX_MINUTES = 60;
+export const STARTING_INTERVAL_STEP_MINUTES = 1;
 export const INTERVAL_INCREMENT_MIN_MINUTES = 0;
 export const INTERVAL_INCREMENT_MAX_MINUTES = 10;
+export const INTERVAL_INCREMENT_STEP_MINUTES = 1;
 
-// Shot window is entered directly in seconds (§2.3: 5–300s).
-export const SHOT_WINDOW_MIN_SECONDS = 5;
+// Shot window is chosen in seconds. The 15s stepper floor is a product choice
+// that sits inside the RPC's wider 5–300s bound (§2.3); the step is 15s.
+export const SHOT_WINDOW_MIN_SECONDS = 15;
 export const SHOT_WINDOW_MAX_SECONDS = 300;
+export const SHOT_WINDOW_STEP_SECONDS = 15;
 
-// Defaults prefill the form so the happy path is one tap. Values match the
-// Phase 3 placeholder copy (5 min / 2 min / 30 s).
+// Defaults prefill the form so the happy path is one tap.
 export const DEFAULT_STARTING_INTERVAL_MINUTES = 5;
-export const DEFAULT_INTERVAL_INCREMENT_MINUTES = 2;
-export const DEFAULT_SHOT_WINDOW_SECONDS = 30;
+export const DEFAULT_INTERVAL_INCREMENT_MINUTES = 1;
+export const DEFAULT_SHOT_WINDOW_SECONDS = 60;
+export const DEFAULT_ELIMINATION_ENABLED = true;
 
 // Grace-mode segmented control: display label paired with the enum value the
 // RPC stores. Order matches the Figma wireframe.

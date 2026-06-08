@@ -17,15 +17,26 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { Stepper } from '@/components/ui/Stepper';
 import { useDisplayName } from '@/features/auth/useDisplayName';
 import { createParty } from '@/features/party/api/createParty';
 import {
+  DEFAULT_ELIMINATION_ENABLED,
   DEFAULT_GRACE_MODE,
   DEFAULT_INTERVAL_INCREMENT_MINUTES,
   DEFAULT_SHOT_WINDOW_SECONDS,
   DEFAULT_STARTING_INTERVAL_MINUTES,
   GRACE_MODE_OPTIONS,
+  INTERVAL_INCREMENT_MAX_MINUTES,
+  INTERVAL_INCREMENT_MIN_MINUTES,
+  INTERVAL_INCREMENT_STEP_MINUTES,
   PARTY_NAME_MAX_LENGTH,
+  SHOT_WINDOW_MAX_SECONDS,
+  SHOT_WINDOW_MIN_SECONDS,
+  SHOT_WINDOW_STEP_SECONDS,
+  STARTING_INTERVAL_MAX_MINUTES,
+  STARTING_INTERVAL_MIN_MINUTES,
+  STARTING_INTERVAL_STEP_MINUTES,
   validateCreatePartyForm,
   type GraceMode,
 } from '@/features/party/createPartyForm';
@@ -37,13 +48,13 @@ export default function CreatePartyScreen(): React.JSX.Element {
 
   const [partyName, setPartyName] = useState('');
   const [startingIntervalMinutes, setStartingIntervalMinutes] = useState(
-    String(DEFAULT_STARTING_INTERVAL_MINUTES),
+    DEFAULT_STARTING_INTERVAL_MINUTES,
   );
   const [intervalIncrementMinutes, setIntervalIncrementMinutes] = useState(
-    String(DEFAULT_INTERVAL_INCREMENT_MINUTES),
+    DEFAULT_INTERVAL_INCREMENT_MINUTES,
   );
-  const [shotWindowSeconds, setShotWindowSeconds] = useState(String(DEFAULT_SHOT_WINDOW_SECONDS));
-  const [eliminationEnabled, setEliminationEnabled] = useState(false);
+  const [shotWindowSeconds, setShotWindowSeconds] = useState(DEFAULT_SHOT_WINDOW_SECONDS);
+  const [eliminationEnabled, setEliminationEnabled] = useState(DEFAULT_ELIMINATION_ENABLED);
   const [graceMode, setGraceMode] = useState<GraceMode>(DEFAULT_GRACE_MODE);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -53,9 +64,11 @@ export default function CreatePartyScreen(): React.JSX.Element {
 
     const result = validateCreatePartyForm({
       partyName,
-      startingIntervalMinutes,
-      intervalIncrementMinutes,
-      shotWindowSeconds,
+      // Steppers hold numbers; the validator parses strings and owns the
+      // minute→second conversion + param assembly, so stringify here.
+      startingIntervalMinutes: String(startingIntervalMinutes),
+      intervalIncrementMinutes: String(intervalIncrementMinutes),
+      shotWindowSeconds: String(shotWindowSeconds),
       eliminationEnabled,
       graceMode,
       hostDisplayName: displayName,
@@ -115,42 +128,39 @@ export default function CreatePartyScreen(): React.JSX.Element {
 
         <View style={styles.field}>
           <Text style={styles.label}>Starting Interval (minutes)</Text>
-          <TextInput
-            style={styles.input}
+          <Stepper
             value={startingIntervalMinutes}
-            onChangeText={setStartingIntervalMinutes}
-            placeholder="5"
-            placeholderTextColor={COLORS.textSecondary}
-            keyboardType="number-pad"
-            maxLength={2}
+            onChange={setStartingIntervalMinutes}
+            min={STARTING_INTERVAL_MIN_MINUTES}
+            max={STARTING_INTERVAL_MAX_MINUTES}
+            step={STARTING_INTERVAL_STEP_MINUTES}
+            accessibilityLabel="Starting interval in minutes"
           />
           <Text style={styles.hint}>Time until first shot</Text>
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Interval Increase (minutes)</Text>
-          <TextInput
-            style={styles.input}
+          <Stepper
             value={intervalIncrementMinutes}
-            onChangeText={setIntervalIncrementMinutes}
-            placeholder="2"
-            placeholderTextColor={COLORS.textSecondary}
-            keyboardType="number-pad"
-            maxLength={2}
+            onChange={setIntervalIncrementMinutes}
+            min={INTERVAL_INCREMENT_MIN_MINUTES}
+            max={INTERVAL_INCREMENT_MAX_MINUTES}
+            step={INTERVAL_INCREMENT_STEP_MINUTES}
+            accessibilityLabel="Interval increase in minutes"
           />
           <Text style={styles.hint}>How much longer each round gets</Text>
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Shot Window Length (seconds)</Text>
-          <TextInput
-            style={styles.input}
+          <Stepper
             value={shotWindowSeconds}
-            onChangeText={setShotWindowSeconds}
-            placeholder="30"
-            placeholderTextColor={COLORS.textSecondary}
-            keyboardType="number-pad"
-            maxLength={3}
+            onChange={setShotWindowSeconds}
+            min={SHOT_WINDOW_MIN_SECONDS}
+            max={SHOT_WINDOW_MAX_SECONDS}
+            step={SHOT_WINDOW_STEP_SECONDS}
+            accessibilityLabel="Shot window in seconds"
           />
           <Text style={styles.hint}>Time players have to take their shot</Text>
         </View>
