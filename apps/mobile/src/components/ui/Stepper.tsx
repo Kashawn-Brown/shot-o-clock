@@ -78,8 +78,6 @@ export function Stepper({
   return (
     <View>
       <View style={styles.row}>
-        <View style={styles.spacer} />
-
         <View
           style={styles.box}
           onLayout={handleBoxLayout}
