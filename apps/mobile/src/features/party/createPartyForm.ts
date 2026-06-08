@@ -49,11 +49,20 @@ export const DEFAULT_SHOT_WINDOW_SECONDS = 60;
 export const DEFAULT_ELIMINATION_ENABLED = true;
 
 // Grace-mode segmented control: display label paired with the enum value the
-// RPC stores. Order matches the Figma wireframe.
-export const GRACE_MODE_OPTIONS: readonly { label: string; value: GraceMode }[] = [
-  { label: 'No Grace', value: 'disabled' },
-  { label: 'Grace', value: 'enabled' },
-  { label: 'Unlimited', value: 'unlimited' },
+// RPC stores, plus a one-line description shown under the selector. Order
+// matches the Figma wireframe.
+export const GRACE_MODE_OPTIONS: readonly {
+  label: string;
+  value: GraceMode;
+  description: string;
+}[] = [
+  { label: 'No Grace', value: 'disabled', description: "Miss a shot and you're out" },
+  { label: 'Grace', value: 'enabled', description: 'First miss is forgiven, second means out' },
+  {
+    label: 'Unlimited',
+    value: 'unlimited',
+    description: 'Misses are tracked but nobody is eliminated',
+  },
 ];
 
 export const DEFAULT_GRACE_MODE: GraceMode = 'disabled';

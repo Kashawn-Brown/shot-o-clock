@@ -104,6 +104,9 @@ export default function CreatePartyScreen(): React.JSX.Element {
     displayName,
   ]);
 
+  const graceHint =
+    GRACE_MODE_OPTIONS.find((option) => option.value === graceMode)?.description ?? '';
+
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -137,7 +140,7 @@ export default function CreatePartyScreen(): React.JSX.Element {
             unit="minutes"
             accessibilityLabel="Starting interval in minutes"
           />
-          <Text style={styles.hint}>Time until first shot</Text>
+          <Text style={[styles.hint, styles.hintCentered]}>Time until first shot</Text>
         </View>
 
         <View style={styles.field}>
@@ -151,7 +154,7 @@ export default function CreatePartyScreen(): React.JSX.Element {
             unit="minutes"
             accessibilityLabel="Interval increase in minutes"
           />
-          <Text style={styles.hint}>How much longer each round gets</Text>
+          <Text style={[styles.hint, styles.hintCentered]}>How much longer each round gets</Text>
         </View>
 
         <View style={styles.field}>
@@ -165,7 +168,9 @@ export default function CreatePartyScreen(): React.JSX.Element {
             unit="seconds"
             accessibilityLabel="Shot window in seconds"
           />
-          <Text style={styles.hint}>Time players have to take their shot</Text>
+          <Text style={[styles.hint, styles.hintCentered]}>
+            Time players have to take their shot
+          </Text>
         </View>
 
         <View style={styles.toggleRow}>
@@ -199,6 +204,7 @@ export default function CreatePartyScreen(): React.JSX.Element {
                 );
               })}
             </View>
+            <Text style={styles.hint}>{graceHint}</Text>
           </View>
         )}
 
@@ -261,6 +267,10 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.textSecondary,
+  },
+  // Centers a stepper's hint under the centered control above it.
+  hintCentered: {
+    textAlign: 'center',
   },
   toggleRow: {
     flexDirection: 'row',
