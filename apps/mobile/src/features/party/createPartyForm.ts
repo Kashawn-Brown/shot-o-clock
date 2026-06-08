@@ -48,6 +48,16 @@ export const DEFAULT_INTERVAL_INCREMENT_MINUTES = 1;
 export const DEFAULT_SHOT_WINDOW_SECONDS = 60;
 export const DEFAULT_ELIMINATION_ENABLED = true;
 
+// Default party name, e.g. "Shot O'Clock 06/08/26". Prefilled on Create so a
+// host can ship without naming the party; the field clears on first focus for
+// free typing. Date is passed in (not read here) to keep this pure/testable.
+export function formatDefaultPartyName(date: Date): string {
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const yy = String(date.getFullYear() % 100).padStart(2, '0');
+  return `Shot O'Clock ${mm}/${dd}/${yy}`;
+}
+
 // Grace-mode segmented control: display label paired with the enum value the
 // RPC stores, plus a one-line description shown under the selector. Order
 // matches the Figma wireframe.

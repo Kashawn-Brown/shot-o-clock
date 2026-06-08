@@ -11,7 +11,7 @@
 // be unit-tested without the UI. See docs/specs/rpc-contracts.md §2.
 
 import { router } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -26,6 +26,7 @@ import {
   DEFAULT_INTERVAL_INCREMENT_MINUTES,
   DEFAULT_SHOT_WINDOW_SECONDS,
   DEFAULT_STARTING_INTERVAL_MINUTES,
+  formatDefaultPartyName,
   GRACE_MODE_OPTIONS,
   INTERVAL_INCREMENT_MAX_MINUTES,
   INTERVAL_INCREMENT_MIN_MINUTES,
@@ -46,7 +47,11 @@ import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens
 export default function CreatePartyScreen(): React.JSX.Element {
   const { displayName } = useDisplayName();
 
-  const [partyName, setPartyName] = useState('');
+  // Prefill the party name with today's default; cleared on first focus so the
+  // host can type freely, but used as-is if left untouched.
+  const defaultPartyName = useMemo(() => formatDefaultPartyName(new Date()), []);
+  const [partyName, setPartyName] = useState(defaultPartyName);
+  const [nameTouched, setNameTouched] = useState(false);
   const [startingIntervalMinutes, setStartingIntervalMinutes] = useState(
     DEFAULT_STARTING_INTERVAL_MINUTES,
   );
@@ -104,6 +109,15 @@ export default function CreatePartyScreen(): React.JSX.Element {
     displayName,
   ]);
 
+  // On first focus, clear the prefilled default so the host types into an empty
+  // field. After that it behaves like a normal input (empty stays blocked).
+  const handleNameFocus = useCallback(() => {
+    if (!nameTouched) {
+      setNameTouched(true);
+      if (partyName === defaultPartyName) setPartyName('');
+    }
+  }, [nameTouched, partyName, defaultPartyName]);
+
   const graceHint =
     GRACE_MODE_OPTIONS.find((option) => option.value === graceMode)?.description ?? '';
 
@@ -123,6 +137,7 @@ export default function CreatePartyScreen(): React.JSX.Element {
             style={styles.input}
             value={partyName}
             onChangeText={setPartyName}
+            onFocus={handleNameFocus}
             placeholder="e.g., Friday Night Shots"
             placeholderTextColor={COLORS.textSecondary}
             maxLength={PARTY_NAME_MAX_LENGTH}

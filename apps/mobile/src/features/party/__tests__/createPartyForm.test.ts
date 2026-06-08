@@ -1,4 +1,5 @@
 import {
+  formatDefaultPartyName,
   validateCreatePartyForm,
   type CreatePartyFormInput,
 } from '@/features/party/createPartyForm';
@@ -112,5 +113,20 @@ describe('validateCreatePartyForm', () => {
   it('rejects a missing display name', () => {
     const result = validateCreatePartyForm(baseInput({ hostDisplayName: null }));
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('formatDefaultPartyName', () => {
+  it('formats as "Shot O\'Clock MM/DD/YY"', () => {
+    // Month is 0-indexed: 5 = June.
+    expect(formatDefaultPartyName(new Date(2026, 5, 8))).toBe("Shot O'Clock 06/08/26");
+  });
+
+  it('zero-pads single-digit month and day', () => {
+    expect(formatDefaultPartyName(new Date(2026, 0, 3))).toBe("Shot O'Clock 01/03/26");
+  });
+
+  it('uses the last two digits of the year', () => {
+    expect(formatDefaultPartyName(new Date(2030, 11, 25))).toBe("Shot O'Clock 12/25/30");
   });
 });
