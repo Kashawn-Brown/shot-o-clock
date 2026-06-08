@@ -1,11 +1,14 @@
-// Stepper — a bounded −/+ numeric control: a minus button, the current value in
-// the middle, and a plus button. The value is display-only (no text entry), so
-// the result is always a valid in-range integer by construction. Used by the
-// Create Party screen for the interval and shot-window settings. The minus
-// button disables at `min`, the plus button at `max`, and steps clamp to the
-// bounds. Colors/spacing come from tokens.ts.
+// Stepper — a compact −/value/+ numeric control. The minus and plus buttons step
+// by a fixed amount; the value in the middle is also tappable, opening a numeric
+// keyboard for direct entry that clamps to [min, max] on blur/submit. An optional
+// unit label sits after the + button, so a field reads: [−  5  +] minutes.
+//
+// Direct entry can land on any in-range integer (not just step multiples) — the
+// step only governs the buttons. Used by the Create Party screen. Colors/spacing
+// come from tokens.ts.
 
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
@@ -15,6 +18,7 @@ type StepperProps = {
   min: number;
   max: number;
   step: number;
+  unit?: string;
   accessibilityLabel?: string;
 };
 
@@ -24,8 +28,17 @@ export function Stepper({
   min,
   max,
   step,
+  unit,
   accessibilityLabel,
 }: StepperProps): React.JSX.Element {
+  // Local draft for the editable field; resynced whenever `value` changes from
+  // the buttons or a parent update.
+  const [text, setText] = useState(String(value));
+
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
+
   const canDecrement = value - step >= min;
   const canIncrement = value + step <= max;
 
@@ -37,48 +50,79 @@ export function Stepper({
     if (canIncrement) onChange(value + step);
   };
 
+  // Parse the draft on blur/submit: revert to the current value on invalid
+  // input, otherwise clamp into [min, max].
+  const commit = (): void => {
+    const parsed = parseInt(text, 10);
+    const next = Number.isNaN(parsed) ? value : Math.min(max, Math.max(min, parsed));
+    setText(String(next));
+    if (next !== value) onChange(next);
+  };
+
   return (
-    <View
-      style={styles.row}
-      accessibilityRole="adjustable"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityValue={{ now: value, min, max }}
-    >
-      <Pressable
-        onPress={decrement}
-        disabled={!canDecrement}
-        accessibilityRole="button"
-        accessibilityLabel="Decrease"
-        style={({ pressed }) => [
-          styles.button,
-          pressed && styles.pressed,
-          !canDecrement && styles.buttonDisabled,
-        ]}
+    <View style={styles.container}>
+      <View
+        style={styles.box}
+        accessibilityRole="adjustable"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityValue={{ now: value, min, max }}
       >
-        <Text style={styles.symbol}>−</Text>
-      </Pressable>
+        <Pressable
+          onPress={decrement}
+          disabled={!canDecrement}
+          accessibilityRole="button"
+          accessibilityLabel="Decrease"
+          style={({ pressed }) => [
+            styles.button,
+            pressed && styles.pressed,
+            !canDecrement && styles.buttonDisabled,
+          ]}
+        >
+          <Text style={styles.symbol}>−</Text>
+        </Pressable>
 
-      <Text style={styles.value}>{value}</Text>
+        <TextInput
+          style={styles.value}
+          value={text}
+          onChangeText={setText}
+          onBlur={commit}
+          onSubmitEditing={commit}
+          keyboardType="number-pad"
+          returnKeyType="done"
+          selectTextOnFocus
+          maxLength={String(max).length}
+          accessibilityLabel={accessibilityLabel}
+        />
 
-      <Pressable
-        onPress={increment}
-        disabled={!canIncrement}
-        accessibilityRole="button"
-        accessibilityLabel="Increase"
-        style={({ pressed }) => [
-          styles.button,
-          pressed && styles.pressed,
-          !canIncrement && styles.buttonDisabled,
-        ]}
-      >
-        <Text style={styles.symbol}>+</Text>
-      </Pressable>
+        <Pressable
+          onPress={increment}
+          disabled={!canIncrement}
+          accessibilityRole="button"
+          accessibilityLabel="Increase"
+          style={({ pressed }) => [
+            styles.button,
+            pressed && styles.pressed,
+            !canIncrement && styles.buttonDisabled,
+          ]}
+        >
+          <Text style={styles.symbol}>+</Text>
+        </Pressable>
+      </View>
+
+      {unit ? <Text style={styles.unit}>{unit}</Text> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
+  // Left-aligned and content-sized so the control isn't full width.
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: SPACING.sm,
+  },
+  box: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.surface,
@@ -88,7 +132,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   button: {
-    width: 56,
+    paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -105,10 +149,16 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   value: {
-    flex: 1,
+    minWidth: 44,
     textAlign: 'center',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xs,
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.medium,
     color: COLORS.textPrimary,
+  },
+  unit: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.textSecondary,
   },
 });

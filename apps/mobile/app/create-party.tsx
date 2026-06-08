@@ -127,39 +127,42 @@ export default function CreatePartyScreen(): React.JSX.Element {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Starting Interval (minutes)</Text>
+          <Text style={styles.label}>Starting Interval</Text>
           <Stepper
             value={startingIntervalMinutes}
             onChange={setStartingIntervalMinutes}
             min={STARTING_INTERVAL_MIN_MINUTES}
             max={STARTING_INTERVAL_MAX_MINUTES}
             step={STARTING_INTERVAL_STEP_MINUTES}
+            unit="minutes"
             accessibilityLabel="Starting interval in minutes"
           />
           <Text style={styles.hint}>Time until first shot</Text>
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Interval Increase (minutes)</Text>
+          <Text style={styles.label}>Interval Increase</Text>
           <Stepper
             value={intervalIncrementMinutes}
             onChange={setIntervalIncrementMinutes}
             min={INTERVAL_INCREMENT_MIN_MINUTES}
             max={INTERVAL_INCREMENT_MAX_MINUTES}
             step={INTERVAL_INCREMENT_STEP_MINUTES}
+            unit="minutes"
             accessibilityLabel="Interval increase in minutes"
           />
           <Text style={styles.hint}>How much longer each round gets</Text>
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Shot Window Length (seconds)</Text>
+          <Text style={styles.label}>Shot Window Length</Text>
           <Stepper
             value={shotWindowSeconds}
             onChange={setShotWindowSeconds}
             min={SHOT_WINDOW_MIN_SECONDS}
             max={SHOT_WINDOW_MAX_SECONDS}
             step={SHOT_WINDOW_STEP_SECONDS}
+            unit="seconds"
             accessibilityLabel="Shot window in seconds"
           />
           <Text style={styles.hint}>Time players have to take their shot</Text>
