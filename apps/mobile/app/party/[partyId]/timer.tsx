@@ -3,42 +3,63 @@
 // and the Host Controls section; a player sees only the ring, View Roster, and
 // I'm Out.
 //
-// Phase 3 placeholder: the ring is a static styled circle (a real SVG progress
-// ring arrives with the live timer in Phase 7) and the time is computed through
-// formatDuration to exercise the helper. No server timer, no RPCs. Tapping the
-// ring simulates the server-driven transition to the Shot O'Clock window.
+// Phase 7 task 1: the ring shows the REAL countdown, computed from the session's
+// phase_ends_at minus skew-corrected server time (useCountdown) — no client owns
+// the timer (CLAUDE.md §2.1). useTimerSession loads the party snapshot once on
+// mount and aligns the clock. Still placeholder this task: the host controls and
+// I'm Out (Phase 8/10), and the actual countdown→shot_window transition, which
+// task 2 drives via advance_phase_if_due polling.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
+import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { useCountdown } from '@/features/game/useCountdown';
+import { useTimerSession } from '@/features/party/useTimerSession';
 import { formatDuration } from '@/lib/time';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
-// 7 minutes 42 seconds — matches the wireframe; placeholder value only.
-const PLACEHOLDER_REMAINING_MS = (7 * 60 + 42) * 1000;
-
 export default function TimerScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
+  const { status, session, errorMessage } = useTimerSession(partyId);
+  const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
+
+  if (status === 'loading') {
+    return (
+      <SafeAreaView style={[styles.screen, styles.centered]} edges={['top', 'bottom']}>
+        <ActivityIndicator color={COLORS.textPrimary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <SafeAreaView style={[styles.screen, styles.centered]} edges={['top', 'bottom']}>
+        <ErrorBanner message={errorMessage} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Text style={styles.partyName}>Friday Night Shots</Text>
-        <Text style={styles.subtitle}>Round 3 · Shot #3</Text>
+        <Text style={styles.partyName}>{session?.name}</Text>
+        <Text style={styles.subtitle}>Round {session?.current_round_number}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.ringLabel}>NEXT SHOT O&apos;CLOCK IN</Text>
 
-        {/* Tapping the ring stands in for the server-driven shot transition. */}
-        <Pressable onPress={() => router.push(`/party/${partyId}/shot-oclock`)} style={styles.ring}>
-          <Text style={styles.ringTime}>{formatDuration(PLACEHOLDER_REMAINING_MS)}</Text>
+        {/* Real remaining time. The server-driven transition into the shot window
+            is wired in Phase 7 task 2 (advance_phase_if_due polling). */}
+        <View style={styles.ring}>
+          <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
           <View style={styles.pauseButton}>
             <Text style={styles.pauseIcon}>❚❚</Text>
           </View>
-        </Pressable>
+        </View>
 
         <View style={styles.addTimeRow}>
           <Button label="+ Add 30s" variant="outline" onPress={() => {}} style={styles.addTime} />
@@ -78,6 +99,11 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
   },
   header: {
     alignItems: 'center',
