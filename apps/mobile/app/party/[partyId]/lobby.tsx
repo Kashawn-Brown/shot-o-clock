@@ -41,7 +41,14 @@ import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens
 
 export default function LobbyScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
-  const { status, session, view, errorMessage: loadError, refresh } = useLobby(partyId);
+  const {
+    status,
+    session,
+    view,
+    errorMessage: loadError,
+    membershipLost,
+    refresh,
+  } = useLobby(partyId);
 
   const [leaving, setLeaving] = useState(false);
   const [exitError, setExitError] = useState<string | null>(null);
@@ -68,6 +75,13 @@ export default function LobbyScreen(): React.JSX.Element {
     if (copyTimer.current) clearTimeout(copyTimer.current);
     copyTimer.current = setTimeout(() => setCopied(false), 1500);
   }, [session?.join_code]);
+
+  // The host removed us — surface why, then return home. (plan.md Phase 6.)
+  useEffect(() => {
+    if (!membershipLost) return;
+    Alert.alert('Removed from party', 'The host removed you from this party.');
+    router.replace('/');
+  }, [membershipLost]);
 
   // Exit the party and return home. Role-agnostic so it works even before the
   // snapshot resolves: try end_party (host) and fall back to leave_party (guest)

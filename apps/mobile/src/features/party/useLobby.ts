@@ -33,6 +33,10 @@ interface UseLobbyResult {
   settings: SettingsRow | null;
   view: LobbyView | null;
   errorMessage: string | null;
+  // Flips true when a realtime refresh finds the caller is no longer a member
+  // (get_party_state → SESSION_NOT_FOUND) — i.e. the host removed them. The
+  // screen routes out on this. See plan.md Phase 6 "removed player routes out."
+  membershipLost: boolean;
   reload: () => void;
   refresh: () => void;
 }
@@ -44,6 +48,7 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
   const [settings, setSettings] = useState<SettingsRow | null>(null);
   const [view, setView] = useState<LobbyView | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [membershipLost, setMembershipLost] = useState(false);
 
   // The realtime subscription must not resubscribe when identity changes, so the
   // silent-refresh handler reads the latest userId off a ref instead of closing
@@ -73,7 +78,13 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
   const refresh = useCallback(() => {
     if (!partyId) return;
     getPartyState(partyId).then((result) => {
-      if (!mountedRef.current || !result.ok) return;
+      if (!mountedRef.current) return;
+      if (!result.ok) {
+        // The caller has lost membership (removed by the host) — signal the
+        // screen to route out. Any other failure is transient: keep last good.
+        if (result.error_code === 'SESSION_NOT_FOUND') setMembershipLost(true);
+        return;
+      }
       setSession(result.data.session);
       setSettings(result.data.settings);
       setView(deriveLobbyView(result.data.players, userIdRef.current));
@@ -133,5 +144,5 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
     };
   }, [partyId, refresh]);
 
-  return { status, session, settings, view, errorMessage, reload, refresh };
+  return { status, session, settings, view, errorMessage, membershipLost, reload, refresh };
 }
