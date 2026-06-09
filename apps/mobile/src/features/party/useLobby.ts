@@ -34,6 +34,7 @@ interface UseLobbyResult {
   view: LobbyView | null;
   errorMessage: string | null;
   reload: () => void;
+  refresh: () => void;
 }
 
 export function useLobby(partyId: string | undefined): UseLobbyResult {
@@ -50,10 +51,34 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
   const userIdRef = useRef(userId);
   userIdRef.current = userId;
 
+  // Guards setState after unmount in the fire-and-forget silent refresh.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   // Bumping this re-runs the initial-load effect — a manual, spinner-showing
   // refresh (e.g. an error-state retry).
   const [reloadToken, setReloadToken] = useState(0);
   const reload = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  // Silent refresh — swaps in fresh state without touching status/error, so
+  // realtime events and post-action refreshes (e.g. after a host removes a
+  // player) neither flash the spinner nor blank a working roster on a transient
+  // failure. The screen calls this after a mutation for an immediate update
+  // rather than waiting on the realtime round-trip.
+  const refresh = useCallback(() => {
+    if (!partyId) return;
+    getPartyState(partyId).then((result) => {
+      if (!mountedRef.current || !result.ok) return;
+      setSession(result.data.session);
+      setSettings(result.data.settings);
+      setView(deriveLobbyView(result.data.players, userIdRef.current));
+    });
+  }, [partyId]);
 
   // Initial / identity load. callRpc never rejects — it folds transport/throw
   // failures into an UNEXPECTED_ERROR result — so one ok/!ok branch covers all.
@@ -84,21 +109,10 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
     };
   }, [partyId, userId, reloadToken]);
 
-  // Realtime roster sync. Keyed on partyId only; the silent refresh keeps the
-  // last good state on a failed re-fetch instead of surfacing an error.
+  // Realtime roster sync. Keyed on partyId; an incoming party_players change
+  // (RLS gates delivery per subscriber) triggers the shared silent refresh.
   useEffect(() => {
     if (!partyId) return;
-
-    let active = true;
-
-    const refresh = (): void => {
-      getPartyState(partyId).then((result) => {
-        if (!active || !result.ok) return;
-        setSession(result.data.session);
-        setSettings(result.data.settings);
-        setView(deriveLobbyView(result.data.players, userIdRef.current));
-      });
-    };
 
     const channel = supabase
       .channel(`lobby:party_players:${partyId}`)
@@ -115,10 +129,9 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
       .subscribe();
 
     return () => {
-      active = false;
       supabase.removeChannel(channel);
     };
-  }, [partyId]);
+  }, [partyId, refresh]);
 
-  return { status, session, settings, view, errorMessage, reload };
+  return { status, session, settings, view, errorMessage, reload, refresh };
 }
