@@ -165,7 +165,10 @@ If the caller already has a `party_players` row for this session with `status �
 - Return the existing row's id (treat the call as a successful reconnect).
 - `displayName` is NOT updated on reconnect (preserve original).
 
-If the caller's existing row has `status = removed`: return `PLAYER_REMOVED`.
+If the caller's existing row has `status = removed`, branch on `removed_reason` (see `decisions.md` D024):
+
+- `removed_reason = 'self_left_lobby'` (the caller left the lobby voluntarily via `leave_party`): treat as a **re-join**, not a live reconnect. Apply the §3.4 new-join preconditions (session `status = lobby` else `PARTY_NOT_JOINABLE`; `isLocked = false` else `PARTY_LOCKED`), then restore the existing row to an active lobby player — `status = active`, clear `removed_at` / `left_at` / `removed_reason`, refresh `joined_at` / `rejoined_at` / `last_seen_at`, and adopt the supplied `display_name`. Returns `is_reconnect = false`. Self-left only ever happens in lobby, so no in-game data is resurrected.
+- any other `removed_reason` — including `NULL` or a host-supplied free-text reason, i.e. removed by the host via `host_remove_player`: return `PLAYER_REMOVED`. The test is a whitelist (`removed_reason IS DISTINCT FROM 'self_left_lobby'`) because a host kick may leave `removed_reason` null.
 
 ### 3.7. Returns
 
