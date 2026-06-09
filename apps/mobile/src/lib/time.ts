@@ -4,17 +4,34 @@
 // `timeRemaining = phaseEndsAt - serverNow()` from session timestamps. These
 // helpers centralize that math so no screen reimplements it.
 //
-// NOTE: in Phase 3 `serverNow()` returns the device clock directly. The real
-// implementation will correct for client/server skew using the get_server_time
-// RPC (already built in Phase 2) once the timer screen is wired up in Phase 7.
-// Keeping the call site stable now means that upgrade is internal to this file.
+// `serverNow()` is skew-corrected: it adds a measured device→server clock offset
+// so two phones with slightly different clocks compute the same remaining time
+// (state-machine §8.7). The offset is measured by syncServerTime()
+// (features/game/syncServerTime.ts) from the get_server_time RPC; it is 0 until
+// the first sync, so serverNow() falls back to the raw device clock. The offset
+// state lives here — not in a feature module — so serverNow()/msUntil()/
+// formatDuration() stay import-free and unit-testable without the supabase client.
 
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
 
-/** Current server time as a Date. Phase 3: device clock; Phase 7: skew-corrected. */
+// Milliseconds to add to the device clock to estimate server time (server_ms −
+// client_ms). Module-level mutable state, set once per session by syncServerTime.
+let serverTimeOffsetMs = 0;
+
+/** Store the device→server clock offset (server_ms − client_ms). See syncServerTime. */
+export function setServerTimeOffset(offsetMs: number): void {
+  serverTimeOffsetMs = offsetMs;
+}
+
+/** Current device→server offset in ms (0 before the first sync). */
+export function getServerTimeOffset(): number {
+  return serverTimeOffsetMs;
+}
+
+/** Current server time as a Date, skew-corrected by the measured offset. */
 export function serverNow(): Date {
-  return new Date();
+  return new Date(Date.now() + serverTimeOffsetMs);
 }
 
 /**
