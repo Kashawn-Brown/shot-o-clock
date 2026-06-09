@@ -1,48 +1,98 @@
 // Lobby — pre-game waiting room. Single file that adapts for host vs player
-// (CLAUDE.md screen inventory): host sees the join code + Start Game, a player
-// sees "Waiting for host to start" + Leave Party.
+// (CLAUDE.md screen inventory): the host sees the join code, a removable roster,
+// and Start Game; a player sees "Waiting for host to start" and Leave Party.
+// Role is read from the caller's own roster row via useLobby (lobbyView.ts).
 //
-// Phase 3 placeholder: renders the host layout with mock roster and no role
-// detection. Real role-based rendering + realtime roster land in Phase 6.
-// "Start Game" navigates to the placeholder timer.
+// Phase 6: wired to real party state with a live roster (useLobby's realtime
+// subscription). The host can remove any non-host player (host_remove_player);
+// the host's own row never shows a Remove action, and the RPC rejects
+// CANNOT_REMOVE_HOST as a backstop. A player leaves via leave_party. Start is
+// gated on at least one active player. "Start Game" still navigates to the
+// placeholder timer — Phase 7 owns start_game. The host can copy the join code
+// to the clipboard (expo-clipboard).
 //
-// Phase 5 addition: a real back/leave control with a confirmation gate, so a
-// host can end the party (or a guest can leave) and return home instead of being
-// trapped here by the launch reconnect. Role isn't loaded yet, so exit tries
-// end_party and falls back to leave_party on NOT_HOST. The full role-aware lobby
-// is Phase 6.
+// Exit (back arrow + player's Leave Party) is role-agnostic by construction: it
+// tries end_party (host) and falls back to leave_party (guest) on NOT_HOST, so
+// it works even before the snapshot resolves.
 
+import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { endParty } from '@/features/party/api/endParty';
+import { hostRemovePlayer } from '@/features/party/api/hostRemovePlayer';
 import { leaveParty } from '@/features/party/api/leaveParty';
+import type { LobbyRosterEntry } from '@/features/party/lobbyView';
+import { useLobby } from '@/features/party/useLobby';
 import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
-const MOCK_PLAYERS = [
-  { name: 'Alex (You)', isHost: true },
-  { name: 'Jordan', isHost: false },
-  { name: 'Casey', isHost: false },
-  { name: 'Morgan', isHost: false },
-];
-
 export default function LobbyScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
-  const [leaving, setLeaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const {
+    status,
+    session,
+    view,
+    errorMessage: loadError,
+    membershipLost,
+    refresh,
+  } = useLobby(partyId);
 
-  // Exit the party and return home. We don't know the caller's role yet, so try
-  // end_party (host) and fall back to leave_party (guest) on NOT_HOST. end_party
-  // is idempotent if the party is already ended.
+  const [leaving, setLeaving] = useState(false);
+  const [exitError, setExitError] = useState<string | null>(null);
+  // The id of the player currently being removed, so only that row's action
+  // disables while the RPC is in flight.
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  // Brief "Copied!" confirmation on the join-code button.
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+
+  const handleCopy = useCallback(async () => {
+    const code = session?.join_code;
+    if (!code) return;
+    await Clipboard.setStringAsync(code);
+    setCopied(true);
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(false), 1500);
+  }, [session?.join_code]);
+
+  // The host removed us — surface why, then return home. (plan.md Phase 6.)
+  useEffect(() => {
+    if (!membershipLost) return;
+    Alert.alert(
+      'Removed from party',
+      "The host removed you from this party. You won't be able to rejoin.",
+    );
+    router.replace('/');
+  }, [membershipLost]);
+
+  // Exit the party and return home. Role-agnostic so it works even before the
+  // snapshot resolves: try end_party (host) and fall back to leave_party (guest)
+  // on NOT_HOST. end_party is idempotent once ended.
   const handleExit = useCallback(async () => {
     if (!partyId || leaving) return;
 
-    setErrorMessage(null);
+    setExitError(null);
     setLeaving(true);
 
     const ended = await endParty({ partySessionId: partyId });
@@ -57,12 +107,12 @@ export default function LobbyScreen(): React.JSX.Element {
         router.replace('/');
         return;
       }
-      setErrorMessage(rpcErrorMessage(left.error_code));
+      setExitError(rpcErrorMessage(left.error_code));
       setLeaving(false);
       return;
     }
 
-    setErrorMessage(rpcErrorMessage(ended.error_code));
+    setExitError(rpcErrorMessage(ended.error_code));
     setLeaving(false);
   }, [partyId, leaving]);
 
@@ -75,6 +125,42 @@ export default function LobbyScreen(): React.JSX.Element {
     ]);
   }, [leaving, handleExit]);
 
+  // Host removes a player. Guarded by a confirmation; on success the silent
+  // refresh drops them from the roster immediately (the row is now 'removed',
+  // which deriveLobbyView filters out) without waiting on realtime.
+  const handleRemove = useCallback(
+    (player: LobbyRosterEntry) => {
+      if (removingId) return;
+      Alert.alert(
+        'Remove player?',
+        `Remove ${player.displayName} from the party? This is permanent — they won't be able to rejoin.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: async () => {
+              setRemoveError(null);
+              setRemovingId(player.id);
+              const result = await hostRemovePlayer({ partyPlayerId: player.id });
+              setRemovingId(null);
+              if (result.ok) {
+                refresh();
+                return;
+              }
+              setRemoveError(rpcErrorMessage(result.error_code));
+            },
+          },
+        ],
+      );
+    },
+    [removingId, refresh],
+  );
+
+  const isHost = view?.isHost ?? false;
+  const roster = view?.roster ?? [];
+  const activePlayerCount = view?.activePlayerCount ?? 0;
+
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -84,31 +170,85 @@ export default function LobbyScreen(): React.JSX.Element {
         <Text style={styles.title}>Lobby</Text>
       </View>
 
-      <Text style={styles.partyName}>Friday Night Shots</Text>
+      {status === 'loading' ? (
+        <View style={styles.centered}>
+          <ActivityIndicator color={COLORS.textPrimary} />
+        </View>
+      ) : status === 'error' ? (
+        <View style={styles.centered}>
+          <ErrorBanner message={loadError} />
+        </View>
+      ) : (
+        <>
+          <Text style={styles.partyName}>{session?.name}</Text>
 
-      <View style={styles.codeCard}>
-        <Text style={styles.codeLabel}>Join Code</Text>
-        <Text style={styles.code}>ABC123</Text>
-        <Button label="Copy / Share Code" variant="outline" onPress={() => {}} />
-      </View>
-
-      <Text style={styles.sectionTitle}>Players ({MOCK_PLAYERS.length})</Text>
-      <ScrollView contentContainerStyle={styles.list}>
-        {MOCK_PLAYERS.map((player) => (
-          <View key={player.name} style={styles.playerRow}>
-            <View style={styles.avatar} />
-            <View>
-              <Text style={styles.playerName}>{player.name}</Text>
-              {player.isHost ? <Text style={styles.hostBadge}>Host</Text> : null}
+          {isHost ? (
+            <View style={styles.codeCard}>
+              <Text style={styles.codeLabel}>Join Code</Text>
+              <Text style={styles.code}>{session?.join_code}</Text>
+              <Button
+                label={copied ? 'Copied!' : 'Copy / Share Code'}
+                variant="outline"
+                onPress={handleCopy}
+              />
             </View>
-          </View>
-        ))}
-      </ScrollView>
+          ) : null}
 
-      <View style={styles.footer}>
-        <ErrorBanner message={errorMessage} />
-        <Button label="Start Game" onPress={() => router.push(`/party/${partyId}/timer`)} />
-      </View>
+          <Text style={styles.sectionTitle}>Players ({roster.length})</Text>
+          <ScrollView contentContainerStyle={styles.list}>
+            {roster.map((player) => {
+              // Host can remove any non-host player but never themselves — the
+              // host row is both isHost and isSelf, so this hides it there.
+              const canRemove = isHost && !player.isHost && !player.isSelf;
+              return (
+                <View key={player.id} style={styles.playerRow}>
+                  <View style={styles.avatar} />
+                  <View style={styles.playerInfo}>
+                    <Text style={styles.playerName}>
+                      {player.displayName}
+                      {player.isSelf ? ' (You)' : ''}
+                    </Text>
+                    {player.isHost ? <Text style={styles.hostBadge}>Host</Text> : null}
+                  </View>
+                  {canRemove ? (
+                    <Pressable
+                      onPress={() => handleRemove(player)}
+                      accessibilityRole="button"
+                      hitSlop={8}
+                      disabled={removingId !== null}
+                    >
+                      <Text style={styles.remove}>
+                        {removingId === player.id ? 'Removing…' : 'Remove'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              );
+            })}
+          </ScrollView>
+
+          <View style={styles.footer}>
+            <ErrorBanner message={removeError ?? exitError} />
+            {isHost ? (
+              <Button
+                label="Start Game"
+                onPress={() => router.push(`/party/${partyId}/timer`)}
+                disabled={activePlayerCount < 1}
+              />
+            ) : (
+              <>
+                <Text style={styles.waiting}>Waiting for host to start…</Text>
+                <Button
+                  label="Leave Party"
+                  variant="outline"
+                  onPress={confirmExit}
+                  disabled={leaving}
+                />
+              </>
+            )}
+          </View>
+        </>
+      )}
     </SafeAreaView>
   );
 }
@@ -133,6 +273,11 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.lg,
   },
   partyName: {
     fontSize: FONT_SIZE.md,
@@ -180,6 +325,9 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     padding: SPACING.md,
   },
+  playerInfo: {
+    flex: 1,
+  },
   avatar: {
     width: 36,
     height: 36,
@@ -201,8 +349,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
   },
+  remove: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.medium,
+    color: COLORS.danger,
+  },
   footer: {
     padding: SPACING.lg,
     gap: SPACING.md,
+  },
+  waiting: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
   },
 });

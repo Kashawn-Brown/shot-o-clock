@@ -559,6 +559,18 @@ Subsequent migrations add RPC functions (per `rpc-contracts.md`), each in its ow
 
 ---
 
-## 15. Open Questions
+## 15. Realtime Publication
+
+Supabase Realtime delivers `postgres_changes` only for tables that belong to the `supabase_realtime` publication. Membership is managed by migration (not the dashboard toggle) so it is reproducible on a fresh CI database.
+
+Published tables:
+
+- `party_players` — added in `20260609120000_realtime_party_players.sql` for the Phase 6 lobby roster sync. Clients subscribe to INSERT/UPDATE row changes filtered by `party_session_id`. RLS on `party_players` (`rls-rules.md` §4) governs which changes each subscriber receives — realtime evaluates the table's SELECT policy per client, so a non-member receives nothing. There are no hard deletes of player rows (leave/remove set `status = 'removed'` via UPDATE), so no `REPLICA IDENTITY FULL` is needed.
+
+Add a table here when a screen needs to react to its changes live; until then a table stays unpublished and is read on demand.
+
+---
+
+## 16. Open Questions
 
 (None currently. Add as they arise.)
