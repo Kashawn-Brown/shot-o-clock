@@ -79,7 +79,10 @@ export default function LobbyScreen(): React.JSX.Element {
   // The host removed us — surface why, then return home. (plan.md Phase 6.)
   useEffect(() => {
     if (!membershipLost) return;
-    Alert.alert('Removed from party', 'The host removed you from this party.');
+    Alert.alert(
+      'Removed from party',
+      "The host removed you from this party. You won't be able to rejoin.",
+    );
     router.replace('/');
   }, [membershipLost]);
 
@@ -128,24 +131,28 @@ export default function LobbyScreen(): React.JSX.Element {
   const handleRemove = useCallback(
     (player: LobbyRosterEntry) => {
       if (removingId) return;
-      Alert.alert('Remove player?', `Remove ${player.displayName} from the party?`, [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setRemoveError(null);
-            setRemovingId(player.id);
-            const result = await hostRemovePlayer({ partyPlayerId: player.id });
-            setRemovingId(null);
-            if (result.ok) {
-              refresh();
-              return;
-            }
-            setRemoveError(rpcErrorMessage(result.error_code));
+      Alert.alert(
+        'Remove player?',
+        `Remove ${player.displayName} from the party? This is permanent — they won't be able to rejoin.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: async () => {
+              setRemoveError(null);
+              setRemovingId(player.id);
+              const result = await hostRemovePlayer({ partyPlayerId: player.id });
+              setRemovingId(null);
+              if (result.ok) {
+                refresh();
+                return;
+              }
+              setRemoveError(rpcErrorMessage(result.error_code));
+            },
           },
-        },
-      ]);
+        ],
+      );
     },
     [removingId, refresh],
   );
