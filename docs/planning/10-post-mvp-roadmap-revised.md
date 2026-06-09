@@ -26,8 +26,8 @@ Shot O'Clock should grow in this order:
 3. Add saved sessions/history.
 4. Add party memories/albums.
 5. Add larger-party controls.
-6. Prepare for public/app-store release.
-7. Add deeper stats only if they actually matter later.
+6. Add deeper stats and shared-screen display only if they actually matter later.
+7. Prepare for public/app-store release — the final gate before submission.
 
 Stats are not the point of the app. The live game and saved party experience matter more.
 
@@ -40,11 +40,13 @@ Stats are not the point of the app. The live game and saved party experience mat
 4. Photo/Video Party Albums
 5. Assigned Admins
 6. Settings (Guest Reset + Account Settings)
-7. Polish + App Store Readiness
-8. Web / TV Display Mode
-9. Stats / Deeper Analytics
-10. Persistent Countdown Notification Spike
+7. Web / TV Display Mode
+8. Stats / Deeper Analytics
+9. Persistent Countdown Notification Spike
+10. Polish + App Store Readiness
 ```
+
+Polish + App Store Readiness is **always last** — it is the final gate before App Store submission, so everything else (web/TV display, stats, the persistent-countdown spike) ships before it if it ships at all.
 
 Note on dropped items: the original roadmap opened with **Referee Pool Mode** and slotted **Assigned Monitor Mode** later. Both are removed entirely (D029). They existed to verify that a player actually took their shot; for a friend-group drinking game the group's own social accountability covers that, and the technical cost — a whole permission tier, duty-assignment UI, a confirmation flow, and the access control to scope it — outweighs the value. The `PartyPlayer.duty` enum still carries `referee_pool` and `assigned_monitor` (schema is not stripped), but no feature is planned against them. They reopen only if a genuinely competitive or public use case emerges with real user demand.
 
@@ -256,9 +258,96 @@ Out of scope:
 - full preference matrix
 - per-party setting overrides
 
-## Phase 7 — Polish + App Store Readiness
+## Phase 7 — Web / TV Display Mode
 
-Goal: prepare for real public use.
+Goal: let the party show the timer on a shared screen.
+
+Includes:
+
+- display-only web route
+- big countdown
+- party name
+- join code / QR code
+- Shot O'Clock screen
+- active/out roster
+- final recap screen
+
+Important rule:
+
+> Web/TV display should be read-only first.
+
+Out of scope:
+
+- full web app
+- browser host controls
+- Chromecast/AirPlay native integration
+- custom display themes
+
+## Phase 8 — Stats / Deeper Analytics
+
+Goal: only add stats if they actually improve the app.
+
+Defer:
+
+```text
+lifetime stats
+leaderboards
+rankings
+global stats
+detailed dashboards
+streaks
+achievement systems
+```
+
+Acceptable later stats:
+
+```text
+rounds completed
+shots marked done
+used grace
+final status
+party participation history
+```
+
+The app should not become a stats app.
+
+## Phase 9 — Persistent Countdown Notification Spike
+
+Goal: test whether a live countdown can appear outside the app.
+
+Examples:
+
+```text
+notification shade countdown
+lock-screen timer
+iOS Live Activity
+Dynamic Island
+Android persistent notification
+```
+
+This is platform-sensitive. It should not be promised before testing.
+
+Spike success criteria:
+
+```text
+Can show useful live countdown outside app.
+Works reliably enough on real devices.
+Does not require unacceptable native complexity.
+Does not drain battery badly.
+Does not create annoying UX.
+```
+
+Fallback:
+
+```text
+Shot O'Clock now
+Round starting
+Optional pre-warning
+```
+
+## Phase 10 — Polish + App Store Readiness
+
+Goal: prepare for real public use. This phase is always last — it is the final gate before App Store submission, and everything else above ships before it if it ships at all.
 
 Product polish:
 
@@ -298,93 +387,6 @@ Out of scope:
 - subscriptions
 - public social network
 - paid plans
-
-## Phase 8 — Web / TV Display Mode
-
-Goal: let the party show the timer on a shared screen.
-
-Includes:
-
-- display-only web route
-- big countdown
-- party name
-- join code / QR code
-- Shot O'Clock screen
-- active/out roster
-- final recap screen
-
-Important rule:
-
-> Web/TV display should be read-only first.
-
-Out of scope:
-
-- full web app
-- browser host controls
-- Chromecast/AirPlay native integration
-- custom display themes
-
-## Phase 9 — Stats / Deeper Analytics
-
-Goal: only add stats if they actually improve the app.
-
-Defer:
-
-```text
-lifetime stats
-leaderboards
-rankings
-global stats
-detailed dashboards
-streaks
-achievement systems
-```
-
-Acceptable later stats:
-
-```text
-rounds completed
-shots marked done
-used grace
-final status
-party participation history
-```
-
-The app should not become a stats app.
-
-## Phase 10 — Persistent Countdown Notification Spike
-
-Goal: test whether a live countdown can appear outside the app.
-
-Examples:
-
-```text
-notification shade countdown
-lock-screen timer
-iOS Live Activity
-Dynamic Island
-Android persistent notification
-```
-
-This is platform-sensitive. It should not be promised before testing.
-
-Spike success criteria:
-
-```text
-Can show useful live countdown outside app.
-Works reliably enough on real devices.
-Does not require unacceptable native complexity.
-Does not drain battery badly.
-Does not create annoying UX.
-```
-
-Fallback:
-
-```text
-Shot O'Clock now
-Round starting
-Optional pre-warning
-```
 
 ## Future Architecture Rule
 
@@ -476,10 +478,10 @@ MVP game loop
 → albums
 → assigned admins
 → settings (guest reset + account prefs)
-→ app-store readiness
 → web/TV display
 → stats only if useful
 → persistent timer spike
+→ app-store readiness (final gate)
 ```
 
 ---
