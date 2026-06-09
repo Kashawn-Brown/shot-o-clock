@@ -8,15 +8,16 @@
 // the host's own row never shows a Remove action, and the RPC rejects
 // CANNOT_REMOVE_HOST as a backstop. A player leaves via leave_party. Start is
 // gated on at least one active player. "Start Game" still navigates to the
-// placeholder timer — Phase 7 owns start_game. Join-code copy is inert pending
-// expo-clipboard.
+// placeholder timer — Phase 7 owns start_game. The host can copy the join code
+// to the clipboard (expo-clipboard).
 //
 // Exit (back arrow + player's Leave Party) is role-agnostic by construction: it
 // tries end_party (host) and falls back to leave_party (guest) on NOT_HOST, so
 // it works even before the snapshot resolves.
 
+import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -48,6 +49,25 @@ export default function LobbyScreen(): React.JSX.Element {
   // disables while the RPC is in flight.
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  // Brief "Copied!" confirmation on the join-code button.
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+
+  const handleCopy = useCallback(async () => {
+    const code = session?.join_code;
+    if (!code) return;
+    await Clipboard.setStringAsync(code);
+    setCopied(true);
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(false), 1500);
+  }, [session?.join_code]);
 
   // Exit the party and return home. Role-agnostic so it works even before the
   // snapshot resolves: try end_party (host) and fall back to leave_party (guest)
@@ -145,8 +165,11 @@ export default function LobbyScreen(): React.JSX.Element {
             <View style={styles.codeCard}>
               <Text style={styles.codeLabel}>Join Code</Text>
               <Text style={styles.code}>{session?.join_code}</Text>
-              {/* Inert until expo-clipboard is added (needs user sign-off). */}
-              <Button label="Copy / Share Code" variant="outline" onPress={() => {}} />
+              <Button
+                label={copied ? 'Copied!' : 'Copy / Share Code'}
+                variant="outline"
+                onPress={handleCopy}
+              />
             </View>
           ) : null}
 
