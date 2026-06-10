@@ -162,3 +162,40 @@ player who had voluntarily left a lobby, conflating leaving with being kicked
 shared party album, late joining, out-player notifications, and roster-row
 contents (D019, D021–D023). The copyable join code was deferred to the Phase 6
 lobby where it belongs.
+
+## Phase 6 — Lobby + Realtime Roster
+*June 2026*
+
+Phase 6 turned the lobby from a Phase 3 placeholder — a hardcoded name, a fake
+join code, four invented players — into a live, role-aware waiting room. A read
+of `get_party_state` now feeds the screen the real party, its join code, and the
+actual roster, and the screen works out who is looking at it from the caller's
+own row: host and player share one file, branching on role. That role detection
+and the shaping of the snapshot into a view were split into a pure, import-free
+function so the logic — who's the host, who's "you," who counts as active, which
+rows to drop — could be unit-tested without rendering, leaving the screen to just
+display what it returns. A host sees a copyable join code, a Remove action on
+every other player, and a Start button disabled until at least one active player
+is present; a player sees a waiting state and a Leave button, with no code or
+controls.
+
+Making the roster live was the heart of the phase. Supabase Realtime only emits
+changes for tables explicitly published to it, so a migration added
+`party_players` to the realtime publication, and the lobby now subscribes to its
+party and re-pulls the full authoritative snapshot on every change rather than
+splicing the changed row into what it already holds (D027) — because the server
+read already encodes the row-level-security rules about who may see whom, and
+realtime delivery is gated by those same rules, so patching from raw event
+payloads would quietly miss what a non-host isn't allowed to receive. The refresh
+is silent, so an on-screen roster never flashes a spinner when someone joins.
+Removal is two-sided and permanent by design (D028): the host's own row never
+offers Remove and the function refuses to remove a host regardless, and when the
+host removes someone, that device hears the change, its follow-up read comes back
+"not a member," and it shows a brief "removed from party" notice and routes home
+— so being removed is something the removed person experiences, not just a row
+vanishing from the host's screen. The phase also paid back the join-code copy
+deferred from Phase 5, adding `expo-clipboard` through Expo's installer so the
+version matched the pinned SDK (~8.0.8). It was verified across two devices: the
+roster synced live on a join, the player view showed the waiting state with no
+code, and a host removal popped the alert on the kicked device and sent it home.
+Next is Phase 7 — the server-authoritative timer.
