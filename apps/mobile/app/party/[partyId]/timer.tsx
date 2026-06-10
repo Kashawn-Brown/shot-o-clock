@@ -9,15 +9,25 @@
 // mount and aligns the clock. Still placeholder this task: the host controls and
 // I'm Out (Phase 8/10), and the actual countdown→shot_window transition, which
 // task 2 drives via advance_phase_if_due polling.
+//
+// The back arrow + End Party are a TESTING escape hatch (same pattern as the
+// lobby): try end_party (host) and fall back to leave_party (guest) on NOT_HOST.
+// Note leave_party is lobby-only (rpc-contracts §4.3), so a guest mid-game gets
+// ILLEGAL_TRANSITION here — the host path is the one that fully works. The real
+// in-game host controls land in Phase 10.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { endParty } from '@/features/party/api/endParty';
+import { leaveParty } from '@/features/party/api/leaveParty';
 import { useCountdown } from '@/features/game/useCountdown';
 import { useTimerSession } from '@/features/party/useTimerSession';
+import { rpcErrorMessage } from '@/lib/errors';
 import { formatDuration } from '@/lib/time';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
@@ -25,6 +35,48 @@ export default function TimerScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
   const { status, session, errorMessage } = useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
+
+  const [leaving, setLeaving] = useState(false);
+  const [exitError, setExitError] = useState<string | null>(null);
+
+  // Exit the party and return home. Role-agnostic: try end_party (host), fall
+  // back to leave_party (guest) on NOT_HOST. See the file header for the
+  // guest-mid-game caveat. Testing-only until Phase 10's host controls.
+  const handleExit = useCallback(async () => {
+    if (!partyId || leaving) return;
+
+    setExitError(null);
+    setLeaving(true);
+
+    const ended = await endParty({ partySessionId: partyId });
+    if (ended.ok) {
+      router.replace('/');
+      return;
+    }
+
+    if (ended.error_code === 'NOT_HOST') {
+      const left = await leaveParty({ partySessionId: partyId });
+      if (left.ok) {
+        router.replace('/');
+        return;
+      }
+      setExitError(rpcErrorMessage(left.error_code));
+      setLeaving(false);
+      return;
+    }
+
+    setExitError(rpcErrorMessage(ended.error_code));
+    setLeaving(false);
+  }, [partyId, leaving]);
+
+  // Confirmation gate — exiting ends the party for a host.
+  const confirmExit = useCallback(() => {
+    if (leaving) return;
+    Alert.alert('Leave party?', 'If you are the host, this ends the party for everyone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Leave', style: 'destructive', onPress: handleExit },
+    ]);
+  }, [leaving, handleExit]);
 
   if (status === 'loading') {
     return (
@@ -44,6 +96,12 @@ export default function TimerScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+      <View style={styles.headerBar}>
+        <Pressable onPress={confirmExit} accessibilityRole="button" hitSlop={8} disabled={leaving}>
+          <Text style={styles.back}>←</Text>
+        </Pressable>
+      </View>
+
       <View style={styles.header}>
         <Text style={styles.partyName}>{session?.name}</Text>
         <Text style={styles.subtitle}>Round {session?.current_round_number}</Text>
@@ -83,11 +141,8 @@ export default function TimerScreen(): React.JSX.Element {
           />
         </View>
         <Button label="I'm Out" variant="outline" onPress={() => {}} />
-        <Button
-          label="End Party"
-          variant="outline"
-          onPress={() => router.push(`/party/${partyId}/summary`)}
-        />
+        <ErrorBanner message={exitError} />
+        <Button label="End Party" variant="outline" onPress={confirmExit} disabled={leaving} />
       </View>
     </SafeAreaView>
   );
@@ -104,6 +159,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  back: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.textPrimary,
   },
   header: {
     alignItems: 'center',
