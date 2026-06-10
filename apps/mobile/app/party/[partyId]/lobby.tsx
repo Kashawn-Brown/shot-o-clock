@@ -240,7 +240,7 @@ export default function LobbyScreen(): React.JSX.Element {
               >
                 <Text style={styles.code}>{session?.join_code}</Text>
               </Pressable>
-              <Text style={styles.codeHint}>Tap to copy</Text>
+              <Text style={styles.codeHint} onPress={handleCopy}>Tap to copy</Text>
             </View>
           ) : null}
 
@@ -314,7 +314,7 @@ export default function LobbyScreen(): React.JSX.Element {
 }
 
 // Floats the toast in the middle-lower area, clear of the footer / Start button.
-const TOAST_BOTTOM_OFFSET = 200;
+const TOAST_BOTTOM_OFFSET = 150;
 
 const styles = StyleSheet.create({
   screen: {
