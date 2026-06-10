@@ -36,6 +36,7 @@ import { hostRemovePlayer } from '@/features/party/api/hostRemovePlayer';
 import { leaveParty } from '@/features/party/api/leaveParty';
 import { startGame } from '@/features/party/api/startGame';
 import type { LobbyRosterEntry } from '@/features/party/lobbyView';
+import { routeForPhase } from '@/features/party/reconnectRoute';
 import { useLobby } from '@/features/party/useLobby';
 import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
@@ -90,6 +91,24 @@ export default function LobbyScreen(): React.JSX.Element {
     );
     router.replace('/');
   }, [membershipLost]);
+
+  // When the host starts the game, every device follows the session out of the
+  // lobby — driven by the party_sessions realtime subscription in useLobby. The
+  // host already navigated via handleStart; this is what unsticks the *guests*
+  // from "Waiting for host to start…". Guarded so it never fires over an
+  // intentional exit or a removal (those route home on their own).
+  const sessionStatus = session?.status;
+  const sessionPhase = session?.current_phase;
+  useEffect(() => {
+    if (status !== 'ready' || leaving || membershipLost || !partyId || !sessionStatus) return;
+    if (sessionStatus === 'lobby') return; // still waiting for the host
+    if (sessionStatus === 'ended') {
+      router.replace('/'); // host cancelled from the lobby — go home
+      return;
+    }
+    // active/paused: the game is live — go to the current phase's screen.
+    router.replace(`/party/${partyId}/${routeForPhase(sessionPhase ?? 'countdown')}`);
+  }, [status, sessionStatus, sessionPhase, leaving, membershipLost, partyId]);
 
   // Exit the party and return home. Role-agnostic so it works even before the
   // snapshot resolves: try end_party (host) and fall back to leave_party (guest)
