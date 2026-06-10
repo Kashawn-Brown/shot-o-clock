@@ -239,7 +239,6 @@ export default function LobbyScreen(): React.JSX.Element {
                 hitSlop={8}
               >
                 <Text style={styles.code}>{session?.join_code}</Text>
-                <Text style={styles.copyIcon}>📋</Text>
               </Pressable>
               <Text style={styles.codeHint}>Tap to copy</Text>
             </View>
@@ -314,9 +313,8 @@ export default function LobbyScreen(): React.JSX.Element {
   );
 }
 
-// Clears the host footer (Start button + padding) so the toast floats just above
-// it rather than overlapping.
-const TOAST_BOTTOM_OFFSET = 96;
+// Floats the toast in the middle-lower area, clear of the footer / Start button.
+const TOAST_BOTTOM_OFFSET = 200;
 
 const styles = StyleSheet.create({
   screen: {
@@ -374,9 +372,6 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 4,
     color: COLORS.buttonFilledText,
-  },
-  copyIcon: {
-    fontSize: FONT_SIZE.md,
   },
   codeHint: {
     fontSize: FONT_SIZE.xs,
@@ -449,7 +444,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toastPill: {
-    backgroundColor: COLORS.buttonFilled,
+    // Translucent so the toast reads as a light overlay, not a solid block.
+    backgroundColor: 'rgba(26, 26, 26, 0.75)',
     borderRadius: RADIUS.full,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
