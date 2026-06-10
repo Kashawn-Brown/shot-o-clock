@@ -566,6 +566,7 @@ Supabase Realtime delivers `postgres_changes` only for tables that belong to the
 Published tables:
 
 - `party_players` — added in `20260609120000_realtime_party_players.sql` for the Phase 6 lobby roster sync. Clients subscribe to INSERT/UPDATE row changes filtered by `party_session_id`. RLS on `party_players` (`rls-rules.md` §4) governs which changes each subscriber receives — realtime evaluates the table's SELECT policy per client, so a non-member receives nothing. There are no hard deletes of player rows (leave/remove set `status = 'removed'` via UPDATE), so no `REPLICA IDENTITY FULL` is needed.
+- `party_sessions` — added in `20260610120000_realtime_party_sessions.sql` for the Phase 7 lobby "host started the game" navigation. Clients subscribe to UPDATE row changes filtered by `id`. `start_game` mutates only `party_sessions` (no `party_players` change), so the lobby watches the session row to move every device out of the lobby when `status` goes `lobby → active`. RLS on `party_sessions` (`rls-rules.md` §2) gates delivery per subscriber. UPDATE-only on the primary-key filter, so the default replica identity suffices (no `REPLICA IDENTITY FULL`).
 
 Add a table here when a screen needs to react to its changes live; until then a table stays unpublished and is read on demand.
 
