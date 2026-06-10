@@ -16,6 +16,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
+import { useGameExit } from '@/features/party/useGameExit';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 type Outcome = {
@@ -49,9 +50,18 @@ const OUTCOME_GROUPS: Outcome[] = [
 
 export default function ResultsScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
+  // Shared testing escape hatch so a player is never stranded on results with no
+  // way home (end_party for host, mark_self_out → home for guest). See D032.
+  const { leaving, confirmExit } = useGameExit(partyId);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+      <View style={styles.headerBar}>
+        <Pressable onPress={confirmExit} accessibilityRole="button" hitSlop={8} disabled={leaving}>
+          <Text style={styles.back}>←</Text>
+        </Pressable>
+      </View>
+
       <View style={styles.header}>
         <Text style={styles.title}>Round 3 Results</Text>
         <Text style={styles.subtitle}>Shot #3</Text>
@@ -91,6 +101,16 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  back: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.textPrimary,
   },
   header: {
     alignItems: 'center',

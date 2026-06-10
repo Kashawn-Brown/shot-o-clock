@@ -15,27 +15,25 @@
 // or into the round_complete halt — current_phase changes and the route effect
 // carries every device onto the next screen together.
 //
-// The back arrow + End Party are a TESTING escape hatch (same pattern as the
-// timer): try end_party (host) and fall back to leave_party (guest) on NOT_HOST.
-// The real in-game host controls land in Phase 10.
+// The back arrow is the shared testing escape hatch (useGameExit): end_party for
+// the host, mark_self_out → home for a guest. The real in-game host controls land
+// in Phase 10.
 //
 // Still inert this task: Done / I'm Out. Wiring them to mark_done / mark_self_out
 // (with optimistic feedback and the non-active disabled state) is Phase 8 task 2.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
-import { endParty } from '@/features/party/api/endParty';
-import { leaveParty } from '@/features/party/api/leaveParty';
 import { useCountdown } from '@/features/game/useCountdown';
+import { useGameExit } from '@/features/party/useGameExit';
 import { routeForPhase } from '@/features/party/reconnectRoute';
 import { useTimerSession } from '@/features/party/useTimerSession';
-import { rpcErrorMessage } from '@/lib/errors';
 import { formatDuration } from '@/lib/time';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
@@ -43,9 +41,7 @@ export default function ShotOClockScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
   const { status, session, settings, errorMessage } = useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
-
-  const [leaving, setLeaving] = useState(false);
-  const [exitError, setExitError] = useState<string | null>(null);
+  const { leaving, confirmExit } = useGameExit(partyId);
 
   // Ring fills clockwise as the proportion of the shot window remaining. Total is
   // the configured shot_window_seconds; clamp (in ProgressRing) guards against
@@ -59,9 +55,9 @@ export default function ShotOClockScreen(): React.JSX.Element {
   // Staying on 'shot_window' keeps us here. This is the consumer side of the
   // timer's server-authoritative transition (CLAUDE.md §2.1), mirroring timer.tsx.
   //
-  // Suppressed while `leaving`: end_party flips the phase to 'ended' and the poll
-  // can still catch a transition mid-exit, either of which would re-route us right
-  // after handleExit's router.replace('/'). The intentional exit wins.
+  // Suppressed while `leaving`: the exit flips the phase / the poll can still catch
+  // a transition mid-exit, either of which would re-route us right after
+  // useGameExit's router.replace('/'). The intentional exit wins.
   const currentPhase = session?.current_phase;
   useEffect(() => {
     if (leaving || status !== 'ready' || !partyId || !currentPhase || currentPhase === 'shot_window') {
@@ -69,46 +65,6 @@ export default function ShotOClockScreen(): React.JSX.Element {
     }
     router.replace(`/party/${partyId}/${routeForPhase(currentPhase)}`);
   }, [leaving, status, currentPhase, partyId]);
-
-  // Exit the party and return home. Role-agnostic: try end_party (host), fall
-  // back to leave_party (guest) on NOT_HOST. Testing-only until Phase 10's host
-  // controls. Note leave_party is lobby-only (rpc-contracts §4.3), so a guest
-  // mid-game gets ILLEGAL_TRANSITION here — the host path is the one that works.
-  const handleExit = useCallback(async () => {
-    if (!partyId || leaving) return;
-
-    setExitError(null);
-    setLeaving(true);
-
-    const ended = await endParty({ partySessionId: partyId });
-    if (ended.ok) {
-      router.replace('/');
-      return;
-    }
-
-    if (ended.error_code === 'NOT_HOST') {
-      const left = await leaveParty({ partySessionId: partyId });
-      if (left.ok) {
-        router.replace('/');
-        return;
-      }
-      setExitError(rpcErrorMessage(left.error_code));
-      setLeaving(false);
-      return;
-    }
-
-    setExitError(rpcErrorMessage(ended.error_code));
-    setLeaving(false);
-  }, [partyId, leaving]);
-
-  // Confirmation gate — exiting ends the party for a host.
-  const confirmExit = useCallback(() => {
-    if (leaving) return;
-    Alert.alert('Leave party?', 'If you are the host, this ends the party for everyone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Leave', style: 'destructive', onPress: handleExit },
-    ]);
-  }, [leaving, handleExit]);
 
   if (status === 'loading') {
     return (
@@ -159,7 +115,6 @@ export default function ShotOClockScreen(): React.JSX.Element {
       {/* Inert this task. mark_done / mark_self_out + the non-active disabled
           state are Phase 8 task 2. */}
       <View style={styles.actions}>
-        <ErrorBanner message={exitError} />
         <Pressable onPress={() => {}} style={[styles.action, styles.doneAction]}>
           <Text style={styles.doneLabel}>Done ✓</Text>
         </Pressable>
