@@ -112,17 +112,17 @@ out/
 scratch.*
 notes.local.*
 
-# Personal learning notes — never committed.
-# Claude Code should not write here unless explicitly told to.
-docs/learning/
+# Project docs (specs, planning, learning, etc.) — kept local, not committed
+# going forward. Files remain on disk; older commits still contain them.
+docs/
 
 # Plain-English build narrative — local-only working doc.
 build-log.md
 
-# Local-only project working docs — progress tracker, timeline, and any
-# machine-local CLAUDE overrides. decisions.md is committed (public).
+# Local-only project working docs — progress tracker, decision log, and any
+# machine-local CLAUDE overrides. timeline.md is now committed (public).
 plan.md
-timeline.md
+decisions.md
 CLAUDE.local.md
 
 # ─── Lockfiles for tools we don't use ───

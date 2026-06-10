@@ -144,5 +144,34 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
     };
   }, [partyId, refresh]);
 
+  // Realtime session sync. A party_players change never fires when the host starts
+  // the game (start_game only mutates party_sessions), so the lobby also watches
+  // the session row: an UPDATE (status lobby → active, phase → countdown) triggers
+  // the silent refresh, and the screen navigates off the lobby once session.status
+  // leaves 'lobby'. Requires party_sessions in the supabase_realtime publication
+  // (migration 20260610…; schema.md §15). RLS (rls-rules.md §2) gates delivery, so
+  // only members receive it.
+  useEffect(() => {
+    if (!partyId) return;
+
+    const channel = supabase
+      .channel(`lobby:party_sessions:${partyId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'party_sessions',
+          filter: `id=eq.${partyId}`,
+        },
+        refresh,
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [partyId, refresh]);
+
   return { status, session, settings, view, errorMessage, membershipLost, reload, refresh };
 }

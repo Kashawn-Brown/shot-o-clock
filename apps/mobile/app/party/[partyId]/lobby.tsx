@@ -7,9 +7,9 @@
 // subscription). The host can remove any non-host player (host_remove_player);
 // the host's own row never shows a Remove action, and the RPC rejects
 // CANNOT_REMOVE_HOST as a backstop. A player leaves via leave_party. Start is
-// gated on at least one active player. "Start Game" still navigates to the
-// placeholder timer — Phase 7 owns start_game. The host can copy the join code
-// to the clipboard (expo-clipboard).
+// gated on at least one active player. "Start Game" calls start_game (creating
+// round 1's countdown) and routes the host into the timer on success. The host
+// can copy the join code to the clipboard (expo-clipboard).
 //
 // Exit (back arrow + player's Leave Party) is role-agnostic by construction: it
 // tries end_party (host) and falls back to leave_party (guest) on NOT_HOST, so
@@ -34,7 +34,9 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { endParty } from '@/features/party/api/endParty';
 import { hostRemovePlayer } from '@/features/party/api/hostRemovePlayer';
 import { leaveParty } from '@/features/party/api/leaveParty';
+import { startGame } from '@/features/party/api/startGame';
 import type { LobbyRosterEntry } from '@/features/party/lobbyView';
+import { routeForPhase } from '@/features/party/reconnectRoute';
 import { useLobby } from '@/features/party/useLobby';
 import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
@@ -52,6 +54,10 @@ export default function LobbyScreen(): React.JSX.Element {
 
   const [leaving, setLeaving] = useState(false);
   const [exitError, setExitError] = useState<string | null>(null);
+  // Locks the Start button while start_game is in flight, so a double-tap can't
+  // fire two calls (the RPC is idempotent, but the lock keeps the UI honest).
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   // The id of the player currently being removed, so only that row's action
   // disables while the RPC is in flight.
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -85,6 +91,24 @@ export default function LobbyScreen(): React.JSX.Element {
     );
     router.replace('/');
   }, [membershipLost]);
+
+  // When the host starts the game, every device follows the session out of the
+  // lobby — driven by the party_sessions realtime subscription in useLobby. The
+  // host already navigated via handleStart; this is what unsticks the *guests*
+  // from "Waiting for host to start…". Guarded so it never fires over an
+  // intentional exit or a removal (those route home on their own).
+  const sessionStatus = session?.status;
+  const sessionPhase = session?.current_phase;
+  useEffect(() => {
+    if (status !== 'ready' || leaving || membershipLost || !partyId || !sessionStatus) return;
+    if (sessionStatus === 'lobby') return; // still waiting for the host
+    if (sessionStatus === 'ended') {
+      router.replace('/'); // host cancelled from the lobby — go home
+      return;
+    }
+    // active/paused: the game is live — go to the current phase's screen.
+    router.replace(`/party/${partyId}/${routeForPhase(sessionPhase ?? 'countdown')}`);
+  }, [status, sessionStatus, sessionPhase, leaving, membershipLost, partyId]);
 
   // Exit the party and return home. Role-agnostic so it works even before the
   // snapshot resolves: try end_party (host) and fall back to leave_party (guest)
@@ -124,6 +148,25 @@ export default function LobbyScreen(): React.JSX.Element {
       { text: 'Leave', style: 'destructive', onPress: handleExit },
     ]);
   }, [leaving, handleExit]);
+
+  // Host starts the game: start_game creates round 1's countdown, then we route
+  // into the timer. router.replace (not push) because the lobby is no longer a
+  // valid back target once the game is active (leave_party rejects mid-game).
+  const handleStart = useCallback(async () => {
+    if (!partyId || starting) return;
+
+    setStartError(null);
+    setStarting(true);
+
+    const result = await startGame({ partySessionId: partyId });
+    if (result.ok) {
+      router.replace(`/party/${partyId}/timer`);
+      return;
+    }
+
+    setStartError(rpcErrorMessage(result.error_code));
+    setStarting(false);
+  }, [partyId, starting]);
 
   // Host removes a player. Guarded by a confirmation; on success the silent
   // refresh drops them from the roster immediately (the row is now 'removed',
@@ -228,12 +271,12 @@ export default function LobbyScreen(): React.JSX.Element {
           </ScrollView>
 
           <View style={styles.footer}>
-            <ErrorBanner message={removeError ?? exitError} />
+            <ErrorBanner message={removeError ?? exitError ?? startError} />
             {isHost ? (
               <Button
-                label="Start Game"
-                onPress={() => router.push(`/party/${partyId}/timer`)}
-                disabled={activePlayerCount < 1}
+                label={starting ? 'Starting…' : 'Start Game'}
+                onPress={handleStart}
+                disabled={starting || activePlayerCount < 1}
               />
             ) : (
               <>
