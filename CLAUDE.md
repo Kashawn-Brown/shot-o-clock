@@ -257,12 +257,14 @@ Each chunk still follows §7.1 (one goal, specs, files, acceptance criteria). Th
 
 ## 8. Documentation Discipline & Session Ritual
 
-The docs are part of the codebase. Specs in `docs/specs/` stay authoritative.
-Progress and decisions are tracked in the local working files plan.md / decisions.md / timeline.md.
+The specs in `docs/specs/` stay authoritative for behavior. The whole `docs/` folder is
+local-only (gitignored) — keep it current on disk when behavior changes; it just no longer
+appears in commits. Progress and decisions live in local working files too: plan.md,
+decisions.md, and build-log.md are gitignored, while timeline.md is committed.
 
 ### 8.1. Spec-code sync
 
-- When you change behavior, update the relevant spec in the same commit.
+- When you change behavior, update the relevant spec on disk (docs/ is local-only, so the spec edit won't appear in the commit — keep it current anyway).
 - When you add an RPC, document it in `docs/specs/rpc-contracts.md`.
 - When you change RLS, update `docs/specs/rls-rules.md`.
 - When you change schema, the migration file IS the doc — write clear comments in the migration SQL, and update `docs/specs/schema.md` if column shape changes.
@@ -292,7 +294,7 @@ When wrapping — asked to wrap, or at a phase or batch close — follow the ses
 5. Give a handoff note in chat
 6. At phase close only: generate a PR description (see CLAUDE.local.md for format). Show it in chat after the build-log draft is approved.
 
-All four local files are gitignored — no commit needed, just write to disk.
+plan.md, decisions.md, and build-log.md are gitignored — no commit needed, just write to disk. timeline.md is committed, so its update needs its own commit.
 
 ### 8.5. Build log (build-log.md)
 
