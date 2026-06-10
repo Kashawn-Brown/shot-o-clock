@@ -45,11 +45,18 @@ export default function TimerScreen(): React.JSX.Element {
   // current_phase changes — route to that phase's screen. Staying on 'countdown'
   // keeps us here for round N+1. This is the consumer side of the timer's
   // server-authoritative transition (CLAUDE.md §2.1).
+  //
+  // Suppressed while `leaving`: end_party flips the phase to 'ended' and the poll
+  // can still catch 'shot_window' mid-exit, and either would re-route us (to
+  // summary / shot-oclock) right after handleExit's router.replace('/') — bouncing
+  // us into a party screen instead of home. The intentional exit wins.
   const currentPhase = session?.current_phase;
   useEffect(() => {
-    if (status !== 'ready' || !partyId || !currentPhase || currentPhase === 'countdown') return;
+    if (leaving || status !== 'ready' || !partyId || !currentPhase || currentPhase === 'countdown') {
+      return;
+    }
     router.replace(`/party/${partyId}/${routeForPhase(currentPhase)}`);
-  }, [status, currentPhase, partyId]);
+  }, [leaving, status, currentPhase, partyId]);
 
   // Exit the party and return home. Role-agnostic: try end_party (host), fall
   // back to leave_party (guest) on NOT_HOST. See the file header for the
