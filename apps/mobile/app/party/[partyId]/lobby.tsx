@@ -79,7 +79,8 @@ export default function LobbyScreen(): React.JSX.Element {
     await Clipboard.setStringAsync(code);
     setCopied(true);
     if (copyTimer.current) clearTimeout(copyTimer.current);
-    copyTimer.current = setTimeout(() => setCopied(false), 1500);
+    // Toast lingers ~2s — long enough to read, short enough to feel transient.
+    copyTimer.current = setTimeout(() => setCopied(false), 2000);
   }, [session?.join_code]);
 
   // The host removed us — surface why, then return home. (plan.md Phase 6.)
@@ -228,12 +229,19 @@ export default function LobbyScreen(): React.JSX.Element {
           {isHost ? (
             <View style={styles.codeCard}>
               <Text style={styles.codeLabel}>Join Code</Text>
-              <Text style={styles.code}>{session?.join_code}</Text>
-              <Button
-                label={copied ? 'Copied!' : 'Copy / Share Code'}
-                variant="outline"
+              {/* The code itself is the tap target — the icon + hint make that
+                  obvious without the host having to discover it by accident. */}
+              <Pressable
                 onPress={handleCopy}
-              />
+                accessibilityRole="button"
+                accessibilityLabel="Copy join code"
+                style={styles.codeRow}
+                hitSlop={8}
+              >
+                <Text style={styles.code}>{session?.join_code}</Text>
+                <Text style={styles.copyIcon}>📋</Text>
+              </Pressable>
+              <Text style={styles.codeHint}>Tap to copy</Text>
             </View>
           ) : null}
 
@@ -292,9 +300,23 @@ export default function LobbyScreen(): React.JSX.Element {
           </View>
         </>
       )}
+
+      {/* Brief copy confirmation. Floats above the footer and never blocks taps
+          (pointerEvents none); auto-clears via the handleCopy timer. */}
+      {copied ? (
+        <View style={styles.toast} pointerEvents="none">
+          <View style={styles.toastPill} accessibilityRole="alert">
+            <Text style={styles.toastText}>✓ Join code copied!</Text>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
+
+// Clears the host footer (Start button + padding) so the toast floats just above
+// it rather than overlapping.
+const TOAST_BOTTOM_OFFSET = 96;
 
 const styles = StyleSheet.create({
   screen: {
@@ -342,11 +364,24 @@ const styles = StyleSheet.create({
     color: COLORS.buttonFilledText,
     opacity: 0.7,
   },
+  codeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
   code: {
     fontSize: FONT_SIZE.lg,
     fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 4,
     color: COLORS.buttonFilledText,
+  },
+  copyIcon: {
+    fontSize: FONT_SIZE.md,
+  },
+  codeHint: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.buttonFilledText,
+    opacity: 0.7,
   },
   sectionTitle: {
     fontSize: FONT_SIZE.md,
@@ -405,5 +440,23 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     color: COLORS.textSecondary,
     textAlign: 'center',
+  },
+  toast: {
+    position: 'absolute',
+    bottom: TOAST_BOTTOM_OFFSET,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  toastPill: {
+    backgroundColor: COLORS.buttonFilled,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+  },
+  toastText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.medium,
+    color: COLORS.buttonFilledText,
   },
 });
