@@ -103,7 +103,6 @@ export default function ShotOClockScreen(): React.JSX.Element {
           progress={ringProgress}
           color={COLORS.shotRing}
           trackColor="rgba(255,255,255,0.2)"
-          centerColor={COLORS.shotBackground}
         >
           <View style={styles.ringContent}>
             <Text style={styles.ringLabel}>SHOT WINDOW</Text>

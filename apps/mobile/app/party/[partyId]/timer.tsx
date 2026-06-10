@@ -97,7 +97,6 @@ export default function TimerScreen(): React.JSX.Element {
           progress={ringProgress}
           color={COLORS.buttonFilled}
           trackColor={COLORS.border}
-          centerColor={COLORS.background}
         >
           <View style={styles.ringContent}>
             <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
