@@ -2,13 +2,17 @@
 // aligns the device clock to the server (syncServerTime) so the countdown reads
 // true remaining time across devices.
 //
-// Phase 7 task 1: a one-shot load on mount plus the clock sync. Task 2 adds the
-// advance_phase_if_due poll and the party_sessions realtime subscription that
-// drive and refresh transitions; the shape here is built to take them (reload()
-// already re-pulls the snapshot).
+// Phase 7 task 2: the advance_phase_if_due poll (useAdvancePhase) now drives the
+// transition. When the countdown is due, every device polls; the first past
+// phase_ends_at performs the real transition and the rest get transitioned=false,
+// so the hook silently re-pulls the snapshot on any successful poll to move every
+// device onto the new phase. The screen routes by session.current_phase.
+// (A party_sessions realtime push, so paused/ended changes propagate without a
+// due poll, is left to a later phase.)
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useAdvancePhase } from '@/features/game/useAdvancePhase';
 import { syncServerTime } from '@/features/game/syncServerTime';
 import { getPartyState } from '@/features/party/api/partyState';
 import { rpcErrorMessage } from '@/lib/errors';
@@ -37,9 +41,32 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Bumping this re-runs the load effect — a spinner-showing retry from the
-  // error state, and the hook task 2 will reuse after a transition.
+  // error state.
   const [reloadToken, setReloadToken] = useState(0);
   const reload = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  // Guards setState in the fire-and-forget silent refresh after unmount.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Silent re-pull of the snapshot — no spinner, no error flip. Called by the
+  // advance poll after a due transition so the new phase/round/phase_ends_at land
+  // without flashing the loading state. A transient failure keeps the last good
+  // snapshot rather than blanking the screen.
+  const refresh = useCallback(() => {
+    if (!partyId) return;
+    getPartyState(partyId).then((result) => {
+      if (!mountedRef.current || !result.ok) return;
+      setSession(result.data.session);
+      setSettings(result.data.settings);
+      setCurrentRound(result.data.current_round);
+    });
+  }, [partyId]);
 
   // Align to server time as the screen mounts so the first rendered countdown is
   // skew-corrected. Fire-and-forget: a failure just leaves the offset in place
@@ -76,6 +103,15 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
       active = false;
     };
   }, [partyId, reloadToken]);
+
+  // Poll the server to advance the phase when the countdown is due, then refresh.
+  // The client never owns the transition (CLAUDE.md §2.1) — see useAdvancePhase.
+  useAdvancePhase({
+    partyId,
+    phaseEndsAt: session?.phase_ends_at ?? null,
+    isActive: session?.status === 'active',
+    onAdvance: refresh,
+  });
 
   return { status, session, settings, currentRound, errorMessage, reload };
 }

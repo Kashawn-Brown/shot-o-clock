@@ -17,7 +17,7 @@
 // in-game host controls land in Phase 10.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -26,6 +26,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { endParty } from '@/features/party/api/endParty';
 import { leaveParty } from '@/features/party/api/leaveParty';
 import { useCountdown } from '@/features/game/useCountdown';
+import { routeForPhase } from '@/features/party/reconnectRoute';
 import { useTimerSession } from '@/features/party/useTimerSession';
 import { rpcErrorMessage } from '@/lib/errors';
 import { formatDuration } from '@/lib/time';
@@ -38,6 +39,17 @@ export default function TimerScreen(): React.JSX.Element {
 
   const [leaving, setLeaving] = useState(false);
   const [exitError, setExitError] = useState<string | null>(null);
+
+  // When the server advances the phase (the poll in useTimerSession transitions
+  // countdown → shot_window, or the host ends the party), the snapshot's
+  // current_phase changes — route to that phase's screen. Staying on 'countdown'
+  // keeps us here for round N+1. This is the consumer side of the timer's
+  // server-authoritative transition (CLAUDE.md §2.1).
+  const currentPhase = session?.current_phase;
+  useEffect(() => {
+    if (status !== 'ready' || !partyId || !currentPhase || currentPhase === 'countdown') return;
+    router.replace(`/party/${partyId}/${routeForPhase(currentPhase)}`);
+  }, [status, currentPhase, partyId]);
 
   // Exit the party and return home. Role-agnostic: try end_party (host), fall
   // back to leave_party (guest) on NOT_HOST. See the file header for the
