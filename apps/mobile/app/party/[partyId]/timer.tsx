@@ -23,6 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { ProgressRing } from '@/components/ui/ProgressRing';
 import { endParty } from '@/features/party/api/endParty';
 import { leaveParty } from '@/features/party/api/leaveParty';
 import { useCountdown } from '@/features/game/useCountdown';
@@ -34,8 +35,14 @@ import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens
 
 export default function TimerScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
-  const { status, session, errorMessage } = useTimerSession(partyId);
+  const { status, session, currentRound, errorMessage } = useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
+
+  // Ring fills clockwise as the proportion of the countdown remaining. Total is
+  // the round's interval; clamp guards against host_add_time pushing remaining
+  // past the original interval.
+  const intervalMs = (currentRound?.interval_seconds ?? 0) * 1000;
+  const ringProgress = intervalMs > 0 ? remainingMs / intervalMs : 0;
 
   const [leaving, setLeaving] = useState(false);
   const [exitError, setExitError] = useState<string | null>(null);
@@ -129,14 +136,23 @@ export default function TimerScreen(): React.JSX.Element {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.ringLabel}>NEXT SHOT O&apos;CLOCK IN</Text>
 
-        {/* Real remaining time. The server-driven transition into the shot window
-            is wired in Phase 7 task 2 (advance_phase_if_due polling). */}
-        <View style={styles.ring}>
-          <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
-          <View style={styles.pauseButton}>
-            <Text style={styles.pauseIcon}>❚❚</Text>
+        {/* Real remaining time, draining clockwise. The server-driven transition
+            into the shot window is the advance_phase_if_due poll (useTimerSession). */}
+        <ProgressRing
+          size={RING_SIZE}
+          strokeWidth={10}
+          progress={ringProgress}
+          color={COLORS.buttonFilled}
+          trackColor={COLORS.border}
+          centerColor={COLORS.background}
+        >
+          <View style={styles.ringContent}>
+            <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
+            <View style={styles.pauseButton}>
+              <Text style={styles.pauseIcon}>❚❚</Text>
+            </View>
           </View>
-        </View>
+        </ProgressRing>
 
         <View style={styles.addTimeRow}>
           <Button label="+ Add 30s" variant="outline" onPress={() => {}} style={styles.addTime} />
@@ -212,15 +228,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: COLORS.textSecondary,
   },
-  ring: {
-    width: RING_SIZE,
-    height: RING_SIZE,
-    borderRadius: RING_SIZE / 2,
-    borderWidth: 10,
-    borderColor: COLORS.buttonFilled,
-    borderTopColor: COLORS.border,
+  ringContent: {
     alignItems: 'center',
-    justifyContent: 'center',
     gap: SPACING.sm,
   },
   ringTime: {
