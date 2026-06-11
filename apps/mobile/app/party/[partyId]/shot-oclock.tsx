@@ -62,6 +62,7 @@ export default function ShotOClockScreen(): React.JSX.Element {
   }, [roundId]);
 
   const isActive = me?.status === 'active';
+  const isOut = me?.status === 'out';
   // Only 'done' / 'self_out' are player taps; 'none' / 'missed' aren't acted states.
   const recordedAction =
     myOutcome?.player_action === 'done' || myOutcome?.player_action === 'self_out'
@@ -201,29 +202,30 @@ export default function ShotOClockScreen(): React.JSX.Element {
       </View>
 
       <View style={styles.actions}>
-        <ErrorBanner message={actionError} />
+        {isActive ? (
+          <>
+            <ErrorBanner message={actionError} />
+            <View style={styles.actionRow}>
+              <Pressable
+                onPress={confirmSelfOut}
+                disabled={!canSelfOut}
+                style={[styles.action, styles.outAction, !canSelfOut && !selfOutRecorded && styles.actionDisabled]}
+              >
+                <Text style={styles.outLabel}>{selfOutRecorded ? "You're out" : "I'm Out"}</Text>
+              </Pressable>
 
-        {!isActive ? (
-          <Text style={styles.spectatorNote}>You&apos;re out — you can&apos;t take this shot.</Text>
+              <Pressable
+                onPress={handleDone}
+                disabled={!canDone}
+                style={[styles.action, styles.doneAction, !canDone && !doneRecorded && styles.actionDisabled]}
+              >
+                <Text style={styles.doneLabel}>{doneRecorded ? "You're done ✓" : 'Done ✓'}</Text>
+              </Pressable>
+            </View>
+          </>
+        ) : isOut ? (
+          <Text style={styles.spectatorNote}>You&apos;re out</Text>
         ) : null}
-
-        <View style={styles.actionRow}>
-          <Pressable
-            onPress={confirmSelfOut}
-            disabled={!canSelfOut}
-            style={[styles.action, styles.outAction, !canSelfOut && !selfOutRecorded && styles.actionDisabled]}
-          >
-            <Text style={styles.outLabel}>{selfOutRecorded ? "You're out" : "I'm Out"}</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={handleDone}
-            disabled={!canDone}
-            style={[styles.action, styles.doneAction, !canDone && !doneRecorded && styles.actionDisabled]}
-          >
-            <Text style={styles.doneLabel}>{doneRecorded ? "You're done ✓" : 'Done ✓'}</Text>
-          </Pressable>
-        </View>
       </View>
     </SafeAreaView>
   );
@@ -292,10 +294,12 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
   spectatorNote: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.medium,
     color: COLORS.shotText,
     textAlign: 'center',
-    opacity: 0.7,
+    paddingVertical: SPACING.md,
+    opacity: 0.8,
   },
   actionRow: {
     flexDirection: 'row',
