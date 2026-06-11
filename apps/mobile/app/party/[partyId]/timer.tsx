@@ -287,8 +287,9 @@ export default function TimerScreen(): React.JSX.Element {
 
         {/* Real remaining time, draining clockwise. The server-driven transition
             into the shot window is the advance_phase_if_due poll (useTimerSession).
-            Host controls are integrated onto the ring: a pause/play button at its
-            centre, and +30s / +1m circles floating at the lower corners. */}
+            Host only: the time sits at true centre and the pause/play button is
+            pinned near the bottom of the circle interior; +30s / +1m circles float
+            at the lower corners. A player sees just the centred time. */}
         <View style={styles.ringArea}>
           <ProgressRing
             size={RING_SIZE}
@@ -300,21 +301,21 @@ export default function TimerScreen(): React.JSX.Element {
             <View style={styles.ringContent}>
               <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
               {isHost ? (
-                <Pressable
-                  onPress={handlePauseResume}
-                  disabled={controlBusy}
-                  accessibilityRole="button"
-                  accessibilityLabel={isPaused ? 'Resume timer' : 'Pause timer'}
-                  style={({ pressed }) => [
-                    styles.pauseButton,
-                    pressed && styles.controlPressed,
-                    controlBusy && styles.controlDisabled,
-                  ]}
-                >
-                  <Text style={styles.pauseIcon}>{isPaused ? '▶' : '❚❚'}</Text>
-                </Pressable>
-              ) : isPaused ? (
-                <Text style={styles.pausedLabel}>❚❚ PAUSED</Text>
+                <View style={styles.pauseSlot}>
+                  <Pressable
+                    onPress={handlePauseResume}
+                    disabled={controlBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel={isPaused ? 'Resume timer' : 'Pause timer'}
+                    style={({ pressed }) => [
+                      styles.pauseButton,
+                      pressed && styles.controlPressed,
+                      controlBusy && styles.controlDisabled,
+                    ]}
+                  >
+                    <Text style={styles.pauseIcon}>{isPaused ? '▶' : '❚❚'}</Text>
+                  </Pressable>
+                </View>
               ) : null}
             </View>
           </ProgressRing>
@@ -341,6 +342,18 @@ export default function TimerScreen(): React.JSX.Element {
       </ScrollView>
 
       <View style={styles.footer}>
+        {/* Out player: the "you're out" note + tally sits ABOVE the buttons, which
+            stay in their low position; no I'm Out action. */}
+        {isOut ? (
+          <View style={styles.outNote}>
+            <Text style={styles.outNoteTitle}>You&apos;re out</Text>
+            <Text style={styles.outNoteSub}>
+              You took {me?.total_shots_completed ?? 0}{' '}
+              {me?.total_shots_completed === 1 ? 'shot' : 'shots'}
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.footerRow}>
           {/* Destructive exit: a host ends the party, a player leaves it. Both go
               through the same confirmExit flow (useGameExit, D032). */}
@@ -358,17 +371,9 @@ export default function TimerScreen(): React.JSX.Element {
             style={styles.footerButton}
           />
         </View>
-        {/* Out players have no action — the I'm Out / Skip button is replaced with
-            a plain "you're out" note and their shot tally (matches shot-oclock). */}
-        {isOut ? (
-          <View style={styles.outNote}>
-            <Text style={styles.outNoteTitle}>You&apos;re out</Text>
-            <Text style={styles.outNoteSub}>
-              You took {me?.total_shots_completed ?? 0}{' '}
-              {me?.total_shots_completed === 1 ? 'shot' : 'shots'}
-            </Text>
-          </View>
-        ) : (
+
+        {/* Active player: the I'm Out / Skip action stays below the buttons. */}
+        {!isOut ? (
           <>
             <ErrorBanner message={outError} />
             <Button
@@ -378,14 +383,13 @@ export default function TimerScreen(): React.JSX.Element {
               disabled={!canSelfOut}
             />
           </>
-        )}
+        ) : null}
       </View>
 
       {partyId ? (
         <RosterSheet
           visible={rosterOpen}
           onClose={() => setRosterOpen(false)}
-          partyName={session?.name ?? ''}
           players={players}
           graceMode={settings?.grace_mode ?? 'disabled'}
           currentUserId={me?.user_id ?? null}
@@ -427,7 +431,7 @@ function CircleControl({
   );
 }
 
-const RING_SIZE = 240;
+const RING_SIZE = 280;
 // Quick add-time amounts (seconds). host_add_time bounds input to 1–600.
 const ADD_TIME_SHORT_SECONDS = 30;
 const ADD_TIME_LONG_SECONDS = 60;
@@ -476,34 +480,41 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xl,
     gap: SPACING.xl,
   },
+  // Nudged down so it stays close to the repositioned (lower) ring.
   ringLabel: {
+    marginTop: SPACING.xl,
     fontSize: FONT_SIZE.sm,
     letterSpacing: 1,
     color: COLORS.textSecondary,
   },
   // Square that bounds the ring; the +time circles float at its lower corners.
-  // Nudged down so the ring sits nearer the screen's vertical centre.
   ringArea: {
     width: RING_SIZE,
     height: RING_SIZE,
-    marginTop: SPACING.xxl,
+    marginTop: SPACING.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Fills the ring so the time sits at true centre and the pause button (absolute)
+  // can pin to the bottom of the circle interior.
   ringContent: {
+    width: RING_SIZE,
+    height: RING_SIZE,
     alignItems: 'center',
-    gap: SPACING.sm,
+    justifyContent: 'center',
   },
   ringTime: {
     fontSize: FONT_SIZE.xl,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
   },
-  pausedLabel: {
-    fontSize: FONT_SIZE.sm,
-    fontWeight: FONT_WEIGHT.medium,
-    letterSpacing: 1,
-    color: COLORS.textSecondary,
+  // Host pause/play, pinned near the bottom of the circle interior.
+  pauseSlot: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: SPACING.xl,
+    alignItems: 'center',
   },
   pauseButton: {
     width: 56,
