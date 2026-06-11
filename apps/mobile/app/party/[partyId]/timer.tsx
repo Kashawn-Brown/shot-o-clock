@@ -309,13 +309,14 @@ export default function TimerScreen(): React.JSX.Element {
             trackColor={COLORS.border}
           >
             <View style={styles.ringContent}>
-              {/* A paused player sees PAUSED in place of the (frozen) time; the
-                  host always sees the time plus the pause/play control. */}
+              {/* The time stays centred; a paused player gets a PAUSED label just
+                  below it, the host gets the pause/play control near the bottom. */}
+              <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
               {!isHost && isPaused ? (
-                <Text style={styles.pausedLabel}>❚❚ PAUSED</Text>
-              ) : (
-                <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
-              )}
+                <View style={styles.pausedLabelSlot}>
+                  <Text style={styles.pausedLabel}>❚❚ PAUSED</Text>
+                </View>
+              ) : null}
               {isHost ? (
                 <View style={styles.pauseSlot}>
                   <Pressable
@@ -557,6 +558,15 @@ const styles = StyleSheet.create({
     fontSize: RING_TIME_FONT_SIZE,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
+  },
+  // Sits just below the centred time (which stays put), so PAUSED reads as an
+  // annotation under the clock rather than replacing it.
+  pausedLabelSlot: {
+    position: 'absolute',
+    top: '63%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   pausedLabel: {
     fontSize: FONT_SIZE.md,
