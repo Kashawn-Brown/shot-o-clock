@@ -31,6 +31,7 @@ import { deriveRoundResults, type ResultGroupKey, type ResultRow } from '@/featu
 import { useRoundOutcomes } from '@/features/game/useRoundOutcomes';
 import { useGameExit } from '@/features/party/useGameExit';
 import { useTimerSession } from '@/features/party/useTimerSession';
+import { supabase } from '@/lib/supabase';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 // How long the results linger before the device follows the server into the next
@@ -111,16 +112,49 @@ export default function ResultsScreen(): React.JSX.Element {
     return () => clearTimeout(id);
   }, [autoAdvance, secondsLeft, goToTimer]);
 
-  // If the party ends while we're here (host End Party), follow to the summary.
-  // Realtime propagation of end_party to other devices is Phase 11; this is a cheap
-  // correctness guard for when the snapshot does refresh to 'ended'.
+  // If the party has already ended by the time this screen loads, route home.
+  // (Phase 11 will route to the final summary instead.)
   const currentPhase = session?.current_phase;
   useEffect(() => {
     if (leaving || status !== 'ready' || !partyId) return;
     if (currentPhase === 'ended') {
-      router.replace(`/party/${partyId}/summary`);
+      router.replace('/');
     }
   }, [leaving, status, partyId, currentPhase]);
+
+  // Live end-of-party detection. The halt is terminal, and useTimerSession's
+  // advance poll is a no-op in round_complete, so without this a guest waiting on
+  // the halt screen would never learn the host pressed End Party. Watch the session
+  // row directly: an UPDATE to status = 'ended' routes every device home. RLS
+  // (rls-rules.md §2) gates delivery to members; requires party_sessions in the
+  // realtime publication (migration 20260610…). Phase 11 will route to the summary.
+  useEffect(() => {
+    if (!partyId) return;
+
+    const channel = supabase
+      .channel(`results:party_sessions:${partyId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'party_sessions',
+          filter: `id=eq.${partyId}`,
+        },
+        (payload) => {
+          // The session is the caller's own party row (fully visible to members),
+          // so reading status off the payload is safe here — no RLS-filtered field.
+          if ((payload.new as { status?: string }).status === 'ended') {
+            router.replace('/');
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [partyId]);
 
   if (status === 'loading') {
     return (
@@ -173,10 +207,13 @@ export default function ResultsScreen(): React.JSX.Element {
             {group.rows.map((row: ResultRow) => (
               <View key={row.playerId} style={[styles.playerRow, { borderLeftColor: GROUP_ACCENT[group.key] }]}>
                 <View style={styles.avatar} />
-                <Text style={styles.playerName}>
-                  {row.displayName}
-                  {row.isYou ? ' (You)' : ''}
-                </Text>
+                <View style={styles.playerNameGroup}>
+                  <Text style={styles.playerName}>
+                    {row.displayName}
+                    {row.isYou ? ' (You)' : ''}
+                  </Text>
+                  {row.detail ? <Text style={styles.playerDetail}>{row.detail}</Text> : null}
+                </View>
                 <Text style={styles.shotCount}>🥃 {row.shotCount}</Text>
               </View>
             ))}
@@ -284,10 +321,17 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.border,
   },
-  playerName: {
+  playerNameGroup: {
     flex: 1,
+    gap: 2,
+  },
+  playerName: {
     fontSize: FONT_SIZE.md,
     color: COLORS.textPrimary,
+  },
+  playerDetail: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.textSecondary,
   },
   shotCount: {
     fontSize: FONT_SIZE.sm,

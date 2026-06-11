@@ -25,6 +25,10 @@ export interface ResultRow {
   // total_shots_completed), not this round — the row's "shot count" badge.
   shotCount: number;
   group: ResultGroupKey;
+  // Optional per-row sub-label, used where the group label alone is ambiguous —
+  // chiefly inside Used Grace, to separate a voluntary skip-that-spent-grace from
+  // an automatic miss the server forgave. null when the group label suffices.
+  detail: string | null;
 }
 
 export interface ResultGroup {
@@ -68,6 +72,15 @@ function classify(outcome: OutcomeRow): ResultGroupKey {
   return 'missed';
 }
 
+// Sub-label where the group alone is ambiguous. Inside Used Grace a player either
+// chose to skip (spending grace) or simply missed and the server forgave it — the
+// row should say which. grace_applied is only ever true on that path (a forgiven
+// row is never eliminated), so this returns null for every other group.
+function detailFor(outcome: OutcomeRow): string | null {
+  if (!outcome.grace_applied) return null;
+  return outcome.player_action === 'self_out' ? 'Skipped — grace used' : 'Missed — grace used';
+}
+
 export function deriveRoundResults(
   outcomes: OutcomeRow[],
   players: PlayerRow[],
@@ -88,6 +101,7 @@ export function deriveRoundResults(
         isYou: myPlayerId !== null && player.id === myPlayerId,
         shotCount: player.total_shots_completed,
         group: classify(outcome),
+        detail: detailFor(outcome),
       };
     })
     .filter((row): row is ResultRow => row !== null);

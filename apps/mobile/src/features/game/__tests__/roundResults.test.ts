@@ -263,6 +263,40 @@ describe('deriveRoundResults — structure', () => {
     expect(view.me).toBeNull();
   });
 
+  it('distinguishes a grace-forgiven miss from a grace-spending skip on the row', () => {
+    const players = [makePlayer({ id: 'p-1' }), makePlayer({ id: 'p-2' })];
+    const view = deriveRoundResults(
+      [
+        makeOutcome({
+          party_player_id: 'p-1',
+          player_action: 'missed',
+          final_outcome: 'grace_used',
+          grace_applied: true,
+        }),
+        makeOutcome({
+          party_player_id: 'p-2',
+          player_action: 'self_out',
+          final_outcome: 'self_out',
+          grace_applied: true,
+        }),
+      ],
+      players,
+      null,
+    );
+    const usedGrace = view.groups.find((group) => group.key === 'used_grace');
+    expect(usedGrace?.rows.find((row) => row.playerId === 'p-1')?.detail).toBe('Missed — grace used');
+    expect(usedGrace?.rows.find((row) => row.playerId === 'p-2')?.detail).toBe('Skipped — grace used');
+  });
+
+  it('leaves detail null for rows outside Used Grace', () => {
+    const view = deriveRoundResults(
+      [makeOutcome({ party_player_id: 'p-1', player_action: 'done', final_outcome: 'completed' })],
+      [makePlayer({ id: 'p-1' })],
+      null,
+    );
+    expect(view.groups[0].rows[0].detail).toBeNull();
+  });
+
   it('sorts rows within a group by display name', () => {
     const players = [
       makePlayer({ id: 'p-1', display_name: 'Zoe' }),
