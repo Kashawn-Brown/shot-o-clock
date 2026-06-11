@@ -74,6 +74,15 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   const userIdRef = useRef(userId);
   userIdRef.current = userId;
 
+  // A monotonic per-effect-run counter for the realtime channel topic. React can
+  // re-run the subscribe effect on an offscreen reconnect, and supabase's
+  // removeChannel is async — so reusing a fixed topic risks supabase handing back
+  // the still-subscribed channel, whose .on() after subscribe() throws (the
+  // "cannot add postgres_changes callbacks after subscribe()" crash). A fresh
+  // topic per run sidesteps the collision entirely; the stale channel is torn
+  // down on its own cleanup.
+  const channelSeqRef = useRef(0);
+
   // Bumping this re-runs the load effect — a spinner-showing retry from the
   // error state.
   const [reloadToken, setReloadToken] = useState(0);
@@ -103,6 +112,11 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
       setMe(result.data.players.find((player) => player.user_id === userIdRef.current) ?? null);
     });
   }, [partyId]);
+
+  // Latest silent refresh, read off a ref so the realtime effect keys only on
+  // partyId and never tears down / resubscribes when refresh's identity changes.
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
 
   // Re-pull the caller's outcome for the current round. Keyed on the round id and
   // the caller's id, so it re-reads once when the round advances (and the screen
@@ -185,36 +199,47 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     onAdvance: refresh,
   });
 
-  // Realtime session sync. The advance poll only re-pulls while the timer is
-  // active and due, so a host control that does not move phase_ends_at — pause
-  // (option (a): status → paused, phase_ends_at left intact, §10.1) and resume —
-  // would never reach the other devices through it. Watching the session row
-  // closes that gap: any UPDATE (pause, resume, add time, end party) triggers the
-  // silent re-pull, so every device reflects the host action within realtime
-  // latency. party_sessions is already in the supabase_realtime publication
-  // (migration 20260610…; schema.md §15); RLS (rls-rules.md §2) gates delivery to
-  // members. Mirrors the lobby's session sub (D027/D031).
+  // Realtime sync for the live game state. One channel carries two streams:
+  //   - party_sessions UPDATE: the advance poll only re-pulls while the timer is
+  //     active and due, so a host control that doesn't move phase_ends_at — pause
+  //     (option (a): status → paused, phase_ends_at intact, §10.1) and resume, and
+  //     end_party — would never reach the other devices through it. Watching the
+  //     session row closes that gap.
+  //   - party_players *: a host marking a player out / active / removed mutates
+  //     only party_players, so the roster (and the target's own `me.status`) stays
+  //     live across devices. Mirrors the lobby's subs (D027/D031).
+  // Both tables are in the supabase_realtime publication (schema.md §15); RLS
+  // (rls-rules.md §2/§4) gates delivery to members. Keyed on partyId only — the
+  // handler reads the latest refresh off a ref.
   useEffect(() => {
     if (!partyId) return;
 
+    // Fresh topic per run — see channelSeqRef. Guards the offscreen-reconnect
+    // double-subscribe crash.
+    channelSeqRef.current += 1;
     const channel = supabase
-      .channel(`timer:party_sessions:${partyId}`)
+      .channel(`timer:${partyId}:${channelSeqRef.current}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'party_sessions', filter: `id=eq.${partyId}` },
+        () => refreshRef.current(),
+      )
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*',
           schema: 'public',
-          table: 'party_sessions',
-          filter: `id=eq.${partyId}`,
+          table: 'party_players',
+          filter: `party_session_id=eq.${partyId}`,
         },
-        refresh,
+        () => refreshRef.current(),
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
-  }, [partyId, refresh]);
+  }, [partyId]);
 
   return {
     status,
