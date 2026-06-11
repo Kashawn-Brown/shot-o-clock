@@ -34,6 +34,15 @@ type OutcomeRow = Database['public']['Tables']['round_player_outcomes']['Row'];
 
 type TimerStatus = 'loading' | 'ready' | 'error';
 
+// Process-wide monotonic counter for the realtime channel topic. It MUST be
+// module-scoped, not a per-hook ref: the timer screen remounts every round, so a
+// per-instance counter restarts at 1 and collides with the previous instance's
+// channel of the same topic — whose removeChannel is still async-pending — and
+// supabase hands back that already-subscribed channel, whose .on() then throws
+// ("cannot add postgres_changes callbacks after subscribe()"). A global counter
+// never repeats, so every channel topic is unique for the life of the process.
+let realtimeChannelSeq = 0;
+
 interface UseTimerSessionResult {
   status: TimerStatus;
   session: PartyRow | null;
@@ -73,15 +82,6 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   // change); read the latest off a ref to derive `me` instead.
   const userIdRef = useRef(userId);
   userIdRef.current = userId;
-
-  // A monotonic per-effect-run counter for the realtime channel topic. React can
-  // re-run the subscribe effect on an offscreen reconnect, and supabase's
-  // removeChannel is async — so reusing a fixed topic risks supabase handing back
-  // the still-subscribed channel, whose .on() after subscribe() throws (the
-  // "cannot add postgres_changes callbacks after subscribe()" crash). A fresh
-  // topic per run sidesteps the collision entirely; the stale channel is torn
-  // down on its own cleanup.
-  const channelSeqRef = useRef(0);
 
   // Bumping this re-runs the load effect — a spinner-showing retry from the
   // error state.
@@ -214,11 +214,11 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   useEffect(() => {
     if (!partyId) return;
 
-    // Fresh topic per run — see channelSeqRef. Guards the offscreen-reconnect
-    // double-subscribe crash.
-    channelSeqRef.current += 1;
+    // Globally-unique topic per subscription — see realtimeChannelSeq. Guards the
+    // remount/reconnect double-subscribe crash.
+    realtimeChannelSeq += 1;
     const channel = supabase
-      .channel(`timer:${partyId}:${channelSeqRef.current}`)
+      .channel(`timer:${partyId}:${realtimeChannelSeq}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'party_sessions', filter: `id=eq.${partyId}` },
