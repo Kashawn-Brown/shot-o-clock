@@ -198,6 +198,10 @@ At the end of each build phase, run `npm outdated` and `npm audit`. Surface anyt
 - **Expo Router**: file-based routing is the locked navigation choice. Do not introduce React Navigation alongside it — pick one.
 - **Postgres functions**: prefer `LANGUAGE plpgsql` for control flow, `LANGUAGE sql` for simple expressions. Use `SECURITY DEFINER` only when necessary and document why.
 
+### 6.6. Prefer the right library over a hand-rolled workaround — ask, don't work around
+
+When a well-established library is the obviously correct tool for a task (e.g. SVG drawing, charts, gestures, date math), **ask to install it** rather than silently building a workaround. The ask is one line — *"Can I install X to do Y?"* — and the user answers. Do not pre-emptively hand-roll a fragile substitute to avoid the §10 dependency-confirmation step; that step is a quick yes/no, not a reason to reinvent the wheel. A workaround is only acceptable when the library has been **explicitly denied**. This rule resolves the tension between §10 ("ask before adding a dependency") and "stay current / use the right tool": the resolution is *ask*, not *avoid*. See decisions.md D033 (the react-native-svg progress ring is the case that prompted this).
+
 ---
 
 ## 7. Build Philosophy

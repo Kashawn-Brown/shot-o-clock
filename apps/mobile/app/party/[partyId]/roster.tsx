@@ -5,11 +5,12 @@
 // Phase 3 placeholder: mock roster, inert actions, no realtime. Close dismisses
 // the modal back to wherever it was opened from.
 
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
+import { useGameExit } from '@/features/party/useGameExit';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 const ACTIVE_PLAYERS = [
@@ -20,6 +21,12 @@ const ACTIVE_PLAYERS = [
 const OUT_PLAYERS = [{ name: 'Casey' }, { name: 'Sam' }];
 
 export default function RosterScreen(): React.JSX.Element {
+  const { partyId } = useLocalSearchParams<{ partyId: string }>();
+  // Close dismisses the modal back to the game; Leave Party is the direct exit
+  // home so the roster is never a dead end (end_party for host, mark_self_out →
+  // home for guest). See D032.
+  const { leaving, confirmExit } = useGameExit(partyId);
+
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -61,6 +68,7 @@ export default function RosterScreen(): React.JSX.Element {
       </ScrollView>
 
       <View style={styles.footer}>
+        <Button label="Leave Party" variant="outline" onPress={confirmExit} disabled={leaving} />
         <Button label="Close" variant="outline" onPress={() => router.back()} />
       </View>
     </SafeAreaView>
@@ -159,5 +167,6 @@ const styles = StyleSheet.create({
   },
   footer: {
     padding: SPACING.lg,
+    gap: SPACING.sm,
   },
 });

@@ -59,8 +59,9 @@ export function formatDefaultPartyName(date: Date): string {
 }
 
 // Grace-mode segmented control: display label paired with the enum value the
-// RPC stores, plus a one-line description shown under the selector. Order
-// matches the Figma wireframe.
+// RPC stores, plus a one-line description shown under the selector. Only shown
+// when elimination is on (the whole section is hidden otherwise). The `unlimited`
+// enum value still exists in the schema but is no longer a UI choice.
 export const GRACE_MODE_OPTIONS: readonly {
   label: string;
   value: GraceMode;
@@ -68,12 +69,11 @@ export const GRACE_MODE_OPTIONS: readonly {
 }[] = [
   { label: 'No Grace', value: 'disabled', description: "Miss a shot and you're out" },
   { label: 'Grace', value: 'enabled', description: 'First miss is forgiven, second means out' },
-  {
-    label: 'Unlimited',
-    value: 'unlimited',
-    description: 'Misses are tracked but nobody is eliminated',
-  },
 ];
+
+// Elimination-toggle hint text, switched on the toggle's value.
+export const ELIMINATION_ON_HINT = 'Players who don\'t take their shot are eliminated';
+export const ELIMINATION_OFF_HINT = 'Misses are tracked but nobody is eliminated';
 
 export const DEFAULT_GRACE_MODE: GraceMode = 'disabled';
 

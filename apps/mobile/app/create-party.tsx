@@ -26,6 +26,8 @@ import {
   DEFAULT_INTERVAL_INCREMENT_MINUTES,
   DEFAULT_SHOT_WINDOW_SECONDS,
   DEFAULT_STARTING_INTERVAL_MINUTES,
+  ELIMINATION_OFF_HINT,
+  ELIMINATION_ON_HINT,
   formatDefaultPartyName,
   GRACE_MODE_OPTIONS,
   INTERVAL_INCREMENT_MAX_MINUTES,
@@ -184,7 +186,9 @@ export default function CreatePartyScreen(): React.JSX.Element {
         <View style={styles.toggleRow}>
           <View style={styles.toggleText}>
             <Text style={styles.label}>Elimination Mode</Text>
-            <Text style={styles.hint}>Players who miss are eliminated</Text>
+            <Text style={styles.hint}>
+              {eliminationEnabled ? ELIMINATION_ON_HINT : ELIMINATION_OFF_HINT}
+            </Text>
           </View>
           <Switch value={eliminationEnabled} onValueChange={setEliminationEnabled} />
         </View>

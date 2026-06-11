@@ -3,18 +3,15 @@
 // and the Host Controls section; a player sees only the ring, View Roster, and
 // I'm Out.
 //
-// Phase 7 task 1: the ring shows the REAL countdown, computed from the session's
-// phase_ends_at minus skew-corrected server time (useCountdown) — no client owns
-// the timer (CLAUDE.md §2.1). useTimerSession loads the party snapshot once on
-// mount and aligns the clock. Still placeholder this task: the host controls and
-// I'm Out (Phase 8/10), and the actual countdown→shot_window transition, which
-// task 2 drives via advance_phase_if_due polling.
+// The ring shows the REAL countdown, computed from the session's phase_ends_at
+// minus skew-corrected server time (useCountdown) and draining clockwise — no
+// client owns the timer (CLAUDE.md §2.1). useTimerSession loads the snapshot,
+// aligns the clock, and polls advance_phase_if_due to drive the transition.
+// Still placeholder this task: the host controls and I'm Out (Phase 8/10).
 //
-// The back arrow + End Party are a TESTING escape hatch (same pattern as the
-// lobby): try end_party (host) and fall back to leave_party (guest) on NOT_HOST.
-// Note leave_party is lobby-only (rpc-contracts §4.3), so a guest mid-game gets
-// ILLEGAL_TRANSITION here — the host path is the one that fully works. The real
-// in-game host controls land in Phase 10.
+// The back arrow + End Party are the shared testing escape hatch (useGameExit):
+// end_party for the host, mark_self_out → home for a guest. The real in-game
+// host controls land in Phase 10.
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -23,9 +20,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
-import { endParty } from '@/features/party/api/endParty';
-import { leaveParty } from '@/features/party/api/leaveParty';
+import { ProgressRing } from '@/components/ui/ProgressRing';
+import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { useCountdown } from '@/features/game/useCountdown';
+import { useGameExit } from '@/features/party/useGameExit';
 import { routeForPhase } from '@/features/party/reconnectRoute';
 import { useTimerSession } from '@/features/party/useTimerSession';
 import { rpcErrorMessage } from '@/lib/errors';
@@ -34,11 +32,69 @@ import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens
 
 export default function TimerScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
-  const { status, session, errorMessage } = useTimerSession(partyId);
+  const { status, session, settings, currentRound, me, myOutcome, errorMessage, refreshOutcome } =
+    useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
+  const { leaving, confirmExit } = useGameExit(partyId);
 
-  const [leaving, setLeaving] = useState(false);
-  const [exitError, setExitError] = useState<string | null>(null);
+  // I'm Out during the countdown — mark_self_out is legal in countdown or
+  // shot_window (rpc-contracts §7.3). Opting out here records a self_out for the
+  // current round; the player goes out at round finalization (game-rules §7).
+  const [actingOut, setActingOut] = useState(false);
+  const [outError, setOutError] = useState<string | null>(null);
+  const isActive = me?.status === 'active';
+  const selfOutRecorded = myOutcome?.player_action === 'self_out';
+  // Done can't be recorded during countdown (mark_done is shot_window-only), but
+  // mirror the shot screen's rule for consistency: a recorded Done closes I'm Out.
+  const doneRecorded = myOutcome?.player_action === 'done';
+  const canSelfOut = isActive && !doneRecorded && !selfOutRecorded && !actingOut;
+
+  // With grace still in hand, opting out reads as a skip (it will consume grace,
+  // not eliminate — see D034). With grace spent or off, it's the usual I'm Out.
+  const hasGraceRemaining = settings?.grace_mode === 'enabled' && me?.used_grace === false;
+  const selfOutLabel = selfOutRecorded
+    ? hasGraceRemaining
+      ? 'Skipped'
+      : "You're out"
+    : hasGraceRemaining
+      ? 'Skip this shot'
+      : "I'm Out";
+
+  const handleSelfOut = useCallback(async () => {
+    if (!partyId || !canSelfOut) return;
+    setOutError(null);
+    setActingOut(true);
+
+    const result = await markSelfOut({ partySessionId: partyId });
+    setActingOut(false);
+
+    if (result.ok) {
+      refreshOutcome();
+      return;
+    }
+    setOutError(rpcErrorMessage(result.error_code));
+    refreshOutcome();
+  }, [partyId, canSelfOut, refreshOutcome]);
+
+  // Confirmation gate — opting out is irreversible (only the host can reinstate,
+  // game-rules §7), same pattern as End Party / Remove Player.
+  const confirmSelfOut = useCallback(() => {
+    if (!canSelfOut) return;
+    Alert.alert(
+      "I'm Out?",
+      "You'll sit out the rest of this round and can't undo it — only the host can bring you back in.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: "I'm Out", style: 'destructive', onPress: handleSelfOut },
+      ],
+    );
+  }, [canSelfOut, handleSelfOut]);
+
+  // Ring fills clockwise as the proportion of the countdown remaining. Total is
+  // the round's interval; clamp (in ProgressRing) guards against host_add_time
+  // pushing remaining past the original interval.
+  const intervalMs = (currentRound?.interval_seconds ?? 0) * 1000;
+  const ringProgress = intervalMs > 0 ? remainingMs / intervalMs : 0;
 
   // When the server advances the phase (the poll in useTimerSession transitions
   // countdown → shot_window, or the host ends the party), the snapshot's
@@ -46,10 +102,9 @@ export default function TimerScreen(): React.JSX.Element {
   // keeps us here for round N+1. This is the consumer side of the timer's
   // server-authoritative transition (CLAUDE.md §2.1).
   //
-  // Suppressed while `leaving`: end_party flips the phase to 'ended' and the poll
-  // can still catch 'shot_window' mid-exit, and either would re-route us (to
-  // summary / shot-oclock) right after handleExit's router.replace('/') — bouncing
-  // us into a party screen instead of home. The intentional exit wins.
+  // Suppressed while `leaving`: the exit flips the phase (end_party → 'ended') and
+  // the poll can still catch 'shot_window' mid-exit, either of which would re-route
+  // us right after useGameExit's router.replace('/'). The intentional exit wins.
   const currentPhase = session?.current_phase;
   useEffect(() => {
     if (leaving || status !== 'ready' || !partyId || !currentPhase || currentPhase === 'countdown') {
@@ -57,45 +112,6 @@ export default function TimerScreen(): React.JSX.Element {
     }
     router.replace(`/party/${partyId}/${routeForPhase(currentPhase)}`);
   }, [leaving, status, currentPhase, partyId]);
-
-  // Exit the party and return home. Role-agnostic: try end_party (host), fall
-  // back to leave_party (guest) on NOT_HOST. See the file header for the
-  // guest-mid-game caveat. Testing-only until Phase 10's host controls.
-  const handleExit = useCallback(async () => {
-    if (!partyId || leaving) return;
-
-    setExitError(null);
-    setLeaving(true);
-
-    const ended = await endParty({ partySessionId: partyId });
-    if (ended.ok) {
-      router.replace('/');
-      return;
-    }
-
-    if (ended.error_code === 'NOT_HOST') {
-      const left = await leaveParty({ partySessionId: partyId });
-      if (left.ok) {
-        router.replace('/');
-        return;
-      }
-      setExitError(rpcErrorMessage(left.error_code));
-      setLeaving(false);
-      return;
-    }
-
-    setExitError(rpcErrorMessage(ended.error_code));
-    setLeaving(false);
-  }, [partyId, leaving]);
-
-  // Confirmation gate — exiting ends the party for a host.
-  const confirmExit = useCallback(() => {
-    if (leaving) return;
-    Alert.alert('Leave party?', 'If you are the host, this ends the party for everyone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Leave', style: 'destructive', onPress: handleExit },
-    ]);
-  }, [leaving, handleExit]);
 
   if (status === 'loading') {
     return (
@@ -129,14 +145,22 @@ export default function TimerScreen(): React.JSX.Element {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.ringLabel}>NEXT SHOT O&apos;CLOCK IN</Text>
 
-        {/* Real remaining time. The server-driven transition into the shot window
-            is wired in Phase 7 task 2 (advance_phase_if_due polling). */}
-        <View style={styles.ring}>
-          <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
-          <View style={styles.pauseButton}>
-            <Text style={styles.pauseIcon}>❚❚</Text>
+        {/* Real remaining time, draining clockwise. The server-driven transition
+            into the shot window is the advance_phase_if_due poll (useTimerSession). */}
+        <ProgressRing
+          size={RING_SIZE}
+          strokeWidth={10}
+          progress={ringProgress}
+          color={COLORS.buttonFilled}
+          trackColor={COLORS.border}
+        >
+          <View style={styles.ringContent}>
+            <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
+            <View style={styles.pauseButton}>
+              <Text style={styles.pauseIcon}>❚❚</Text>
+            </View>
           </View>
-        </View>
+        </ProgressRing>
 
         <View style={styles.addTimeRow}>
           <Button label="+ Add 30s" variant="outline" onPress={() => {}} style={styles.addTime} />
@@ -152,15 +176,15 @@ export default function TimerScreen(): React.JSX.Element {
             onPress={() => router.push(`/party/${partyId}/roster`)}
             style={styles.footerButton}
           />
-          <Button
-            label="Host Controls"
-            variant="outline"
-            onPress={() => {}}
-            style={styles.footerButton}
-          />
+          <Button label="Host Controls" variant="outline" onPress={() => {}} style={styles.footerButton} />
         </View>
-        <Button label="I'm Out" variant="outline" onPress={() => {}} />
-        <ErrorBanner message={exitError} />
+        <ErrorBanner message={outError} />
+        <Button
+          label={selfOutLabel}
+          variant="outline"
+          onPress={confirmSelfOut}
+          disabled={!canSelfOut}
+        />
         <Button label="End Party" variant="outline" onPress={confirmExit} disabled={leaving} />
       </View>
     </SafeAreaView>
@@ -212,15 +236,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: COLORS.textSecondary,
   },
-  ring: {
-    width: RING_SIZE,
-    height: RING_SIZE,
-    borderRadius: RING_SIZE / 2,
-    borderWidth: 10,
-    borderColor: COLORS.buttonFilled,
-    borderTopColor: COLORS.border,
+  ringContent: {
     alignItems: 'center',
-    justifyContent: 'center',
     gap: SPACING.sm,
   },
   ringTime: {
