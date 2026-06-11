@@ -31,11 +31,36 @@ import { formatDuration } from '@/lib/time';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 export default function TimerScreen(): React.JSX.Element {
-  const { partyId } = useLocalSearchParams<{ partyId: string }>();
+  // lastRound* are handed over by the Round Results screen when it sends us here,
+  // so we can offer a button back to the round that just finished.
+  const { partyId, lastRoundId, lastRoundNumber } = useLocalSearchParams<{
+    partyId: string;
+    lastRoundId?: string;
+    lastRoundNumber?: string;
+  }>();
   const { status, session, settings, currentRound, me, myOutcome, errorMessage, refreshOutcome } =
     useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
   const { leaving, confirmExit } = useGameExit(partyId);
+
+  // "Round N Results" button: only when the handed-over round is genuinely the one
+  // just before this countdown (current_round_number - 1). This self-updates each
+  // cycle — the timer remounts per round with a fresh lastRound* — and stays hidden
+  // on round 1 and on a reconnect that never passed through results.
+  const lastRoundNum = lastRoundNumber ? Number(lastRoundNumber) : null;
+  const showLastResults =
+    !!lastRoundId &&
+    lastRoundNum !== null &&
+    session?.current_round_number != null &&
+    lastRoundNum === session.current_round_number - 1;
+
+  const viewLastResults = useCallback(() => {
+    if (!partyId || !lastRoundId) return;
+    router.push({
+      pathname: '/party/[partyId]/results',
+      params: { partyId, roundId: lastRoundId, roundNumber: lastRoundNumber ?? '', review: '1' },
+    });
+  }, [partyId, lastRoundId, lastRoundNumber]);
 
   // I'm Out during the countdown — mark_self_out is legal in countdown or
   // shot_window (rpc-contracts §7.3). Opting out here records a self_out for the
@@ -142,6 +167,12 @@ export default function TimerScreen(): React.JSX.Element {
         <Text style={styles.subtitle}>Round {session?.current_round_number}</Text>
       </View>
 
+      {showLastResults ? (
+        <Pressable onPress={viewLastResults} accessibilityRole="button" style={styles.lastResults} hitSlop={8}>
+          <Text style={styles.lastResultsText}>← Round {lastRoundNumber} Results</Text>
+        </Pressable>
+      ) : null}
+
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.ringLabel}>NEXT SHOT O&apos;CLOCK IN</Text>
 
@@ -216,6 +247,16 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     paddingVertical: SPACING.md,
+  },
+  lastResults: {
+    alignSelf: 'center',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+  },
+  lastResultsText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    textDecorationLine: 'underline',
   },
   partyName: {
     fontSize: FONT_SIZE.md,

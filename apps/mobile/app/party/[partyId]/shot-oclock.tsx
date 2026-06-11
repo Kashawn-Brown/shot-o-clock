@@ -22,7 +22,7 @@
 // in-game host controls land in Phase 10.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,7 +33,6 @@ import { markDone } from '@/features/party/api/markDone';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { useCountdown } from '@/features/game/useCountdown';
 import { useGameExit } from '@/features/party/useGameExit';
-import { routeForPhase } from '@/features/party/reconnectRoute';
 import { useTimerSession } from '@/features/party/useTimerSession';
 import { rpcErrorMessage } from '@/lib/errors';
 import { formatDuration } from '@/lib/time';
@@ -157,11 +156,36 @@ export default function ShotOClockScreen(): React.JSX.Element {
   // a transition mid-exit, either of which would re-route us right after
   // useGameExit's router.replace('/'). The intentional exit wins.
   const currentPhase = session?.current_phase;
+
+  // Remember the round that was live during the shot window, so when the window
+  // closes we can hand its id to the Round Results screen. By then the snapshot has
+  // already auto-advanced to round N+1 (D014) and currentRound points at the new
+  // round — the ref still holds the round that just finished.
+  const completedRoundRef = useRef<{ id: string; number: number } | null>(null);
+  useEffect(() => {
+    if (currentPhase === 'shot_window' && currentRound?.id) {
+      completedRoundRef.current = { id: currentRound.id, number: currentRound.round_number };
+    }
+  }, [currentPhase, currentRound?.id, currentRound?.round_number]);
+
   useEffect(() => {
     if (leaving || status !== 'ready' || !partyId || !currentPhase || currentPhase === 'shot_window') {
       return;
     }
-    router.replace(`/party/${partyId}/${routeForPhase(currentPhase)}`);
+    // The party ended during the window → summary. Otherwise the round just
+    // finished — auto-advanced to countdown, or rested in the round_complete halt —
+    // so show its results, handing over the round that was live in the window.
+    if (currentPhase === 'ended') {
+      router.replace({ pathname: '/party/[partyId]/summary', params: { partyId } });
+      return;
+    }
+    const completed = completedRoundRef.current;
+    router.replace({
+      pathname: '/party/[partyId]/results',
+      params: completed
+        ? { partyId, roundId: completed.id, roundNumber: String(completed.number) }
+        : { partyId },
+    });
   }, [leaving, status, currentPhase, partyId]);
 
   if (status === 'loading') {
