@@ -22,7 +22,7 @@
 // in-game host controls land in Phase 10.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,9 +31,9 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { markDone } from '@/features/party/api/markDone';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
+import { selfOutCopy } from '@/features/game/selfOutCopy';
 import { useCountdown } from '@/features/game/useCountdown';
 import { useGameExit } from '@/features/party/useGameExit';
-import { routeForPhase } from '@/features/party/reconnectRoute';
 import { useTimerSession } from '@/features/party/useTimerSession';
 import { rpcErrorMessage } from '@/lib/errors';
 import { formatDuration } from '@/lib/time';
@@ -72,16 +72,20 @@ export default function ShotOClockScreen(): React.JSX.Element {
   const doneRecorded = myAction === 'done';
   const selfOutRecorded = myAction === 'self_out';
 
-  // With grace still in hand, opting out reads as a skip (it will consume grace,
-  // not eliminate — see D034). With grace spent or off, it's the usual I'm Out.
-  const hasGraceRemaining = settings?.grace_mode === 'enabled' && me?.used_grace === false;
-  const selfOutLabel = selfOutRecorded
-    ? hasGraceRemaining
-      ? 'Skipped'
-      : "You're out"
-    : hasGraceRemaining
-      ? 'Skip this shot'
-      : "I'm Out";
+  // Button + confirmation copy track what opting out will actually do this round
+  // (D034 grace-aware skip): "Skip" when elimination is off, "Skip this shot" with
+  // grace in hand, else "I'm Out". See selfOutCopy.
+  const {
+    label: selfOutLabel,
+    confirmTitle,
+    confirmMessage,
+    confirmButton,
+  } = selfOutCopy({
+    eliminationEnabled: settings?.elimination_enabled,
+    graceMode: settings?.grace_mode,
+    usedGrace: me?.used_grace,
+    selfOutRecorded,
+  });
 
   const canDone = isActive && !doneRecorded && !selfOutRecorded && !acting;
   // Once Done is recorded, I'm Out is closed for the round (product call — a
@@ -127,19 +131,15 @@ export default function ShotOClockScreen(): React.JSX.Element {
     refreshOutcome();
   }, [partyId, canSelfOut, refreshOutcome]);
 
-  // Confirmation gate — opting out is irreversible (only the host can reinstate,
-  // game-rules §7), same pattern as End Party / Remove Player.
+  // Confirmation gate — opting out is irreversible within the round (game-rules §7);
+  // the message reflects the actual consequence (grace / elimination-off / out).
   const confirmSelfOut = useCallback(() => {
     if (!canSelfOut) return;
-    Alert.alert(
-      "I'm Out?",
-      "You'll sit out the rest of this round and can't undo it — only the host can bring you back in.",
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: "I'm Out", style: 'destructive', onPress: handleSelfOut },
-      ],
-    );
-  }, [canSelfOut, handleSelfOut]);
+    Alert.alert(confirmTitle, confirmMessage, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: confirmButton, style: 'destructive', onPress: handleSelfOut },
+    ]);
+  }, [canSelfOut, handleSelfOut, confirmTitle, confirmMessage, confirmButton]);
 
   // Ring fills clockwise as the proportion of the shot window remaining. Total is
   // the configured shot_window_seconds; clamp (in ProgressRing) guards against
@@ -157,11 +157,36 @@ export default function ShotOClockScreen(): React.JSX.Element {
   // a transition mid-exit, either of which would re-route us right after
   // useGameExit's router.replace('/'). The intentional exit wins.
   const currentPhase = session?.current_phase;
+
+  // Remember the round that was live during the shot window, so when the window
+  // closes we can hand its id to the Round Results screen. By then the snapshot has
+  // already auto-advanced to round N+1 (D014) and currentRound points at the new
+  // round — the ref still holds the round that just finished.
+  const completedRoundRef = useRef<{ id: string; number: number } | null>(null);
+  useEffect(() => {
+    if (currentPhase === 'shot_window' && currentRound?.id) {
+      completedRoundRef.current = { id: currentRound.id, number: currentRound.round_number };
+    }
+  }, [currentPhase, currentRound?.id, currentRound?.round_number]);
+
   useEffect(() => {
     if (leaving || status !== 'ready' || !partyId || !currentPhase || currentPhase === 'shot_window') {
       return;
     }
-    router.replace(`/party/${partyId}/${routeForPhase(currentPhase)}`);
+    // The party ended during the window → summary. Otherwise the round just
+    // finished — auto-advanced to countdown, or rested in the round_complete halt —
+    // so show its results, handing over the round that was live in the window.
+    if (currentPhase === 'ended') {
+      router.replace({ pathname: '/party/[partyId]/summary', params: { partyId } });
+      return;
+    }
+    const completed = completedRoundRef.current;
+    router.replace({
+      pathname: '/party/[partyId]/results',
+      params: completed
+        ? { partyId, roundId: completed.id, roundNumber: String(completed.number) }
+        : { partyId },
+    });
   }, [leaving, status, currentPhase, partyId]);
 
   if (status === 'loading') {

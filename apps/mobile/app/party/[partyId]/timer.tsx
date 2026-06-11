@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
+import { selfOutCopy } from '@/features/game/selfOutCopy';
 import { useCountdown } from '@/features/game/useCountdown';
 import { useGameExit } from '@/features/party/useGameExit';
 import { routeForPhase } from '@/features/party/reconnectRoute';
@@ -31,11 +32,36 @@ import { formatDuration } from '@/lib/time';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 export default function TimerScreen(): React.JSX.Element {
-  const { partyId } = useLocalSearchParams<{ partyId: string }>();
+  // lastRound* are handed over by the Round Results screen when it sends us here,
+  // so we can offer a button back to the round that just finished.
+  const { partyId, lastRoundId, lastRoundNumber } = useLocalSearchParams<{
+    partyId: string;
+    lastRoundId?: string;
+    lastRoundNumber?: string;
+  }>();
   const { status, session, settings, currentRound, me, myOutcome, errorMessage, refreshOutcome } =
     useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
   const { leaving, confirmExit } = useGameExit(partyId);
+
+  // "Round N Results" button: only when the handed-over round is genuinely the one
+  // just before this countdown (current_round_number - 1). This self-updates each
+  // cycle — the timer remounts per round with a fresh lastRound* — and stays hidden
+  // on round 1 and on a reconnect that never passed through results.
+  const lastRoundNum = lastRoundNumber ? Number(lastRoundNumber) : null;
+  const showLastResults =
+    !!lastRoundId &&
+    lastRoundNum !== null &&
+    session?.current_round_number != null &&
+    lastRoundNum === session.current_round_number - 1;
+
+  const viewLastResults = useCallback(() => {
+    if (!partyId || !lastRoundId) return;
+    router.push({
+      pathname: '/party/[partyId]/results',
+      params: { partyId, roundId: lastRoundId, roundNumber: lastRoundNumber ?? '', review: '1' },
+    });
+  }, [partyId, lastRoundId, lastRoundNumber]);
 
   // I'm Out during the countdown — mark_self_out is legal in countdown or
   // shot_window (rpc-contracts §7.3). Opting out here records a self_out for the
@@ -49,16 +75,20 @@ export default function TimerScreen(): React.JSX.Element {
   const doneRecorded = myOutcome?.player_action === 'done';
   const canSelfOut = isActive && !doneRecorded && !selfOutRecorded && !actingOut;
 
-  // With grace still in hand, opting out reads as a skip (it will consume grace,
-  // not eliminate — see D034). With grace spent or off, it's the usual I'm Out.
-  const hasGraceRemaining = settings?.grace_mode === 'enabled' && me?.used_grace === false;
-  const selfOutLabel = selfOutRecorded
-    ? hasGraceRemaining
-      ? 'Skipped'
-      : "You're out"
-    : hasGraceRemaining
-      ? 'Skip this shot'
-      : "I'm Out";
+  // Button + confirmation copy track what opting out will actually do this round
+  // (D034 grace-aware skip): "Skip" when elimination is off, "Skip this shot" with
+  // grace in hand, else "I'm Out". See selfOutCopy.
+  const {
+    label: selfOutLabel,
+    confirmTitle,
+    confirmMessage,
+    confirmButton,
+  } = selfOutCopy({
+    eliminationEnabled: settings?.elimination_enabled,
+    graceMode: settings?.grace_mode,
+    usedGrace: me?.used_grace,
+    selfOutRecorded,
+  });
 
   const handleSelfOut = useCallback(async () => {
     if (!partyId || !canSelfOut) return;
@@ -76,19 +106,15 @@ export default function TimerScreen(): React.JSX.Element {
     refreshOutcome();
   }, [partyId, canSelfOut, refreshOutcome]);
 
-  // Confirmation gate — opting out is irreversible (only the host can reinstate,
-  // game-rules §7), same pattern as End Party / Remove Player.
+  // Confirmation gate — opting out is irreversible within the round (game-rules §7);
+  // the message reflects the actual consequence (grace / elimination-off / out).
   const confirmSelfOut = useCallback(() => {
     if (!canSelfOut) return;
-    Alert.alert(
-      "I'm Out?",
-      "You'll sit out the rest of this round and can't undo it — only the host can bring you back in.",
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: "I'm Out", style: 'destructive', onPress: handleSelfOut },
-      ],
-    );
-  }, [canSelfOut, handleSelfOut]);
+    Alert.alert(confirmTitle, confirmMessage, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: confirmButton, style: 'destructive', onPress: handleSelfOut },
+    ]);
+  }, [canSelfOut, handleSelfOut, confirmTitle, confirmMessage, confirmButton]);
 
   // Ring fills clockwise as the proportion of the countdown remaining. Total is
   // the round's interval; clamp (in ProgressRing) guards against host_add_time
@@ -141,6 +167,12 @@ export default function TimerScreen(): React.JSX.Element {
         <Text style={styles.partyName}>{session?.name}</Text>
         <Text style={styles.subtitle}>Round {session?.current_round_number}</Text>
       </View>
+
+      {showLastResults ? (
+        <Pressable onPress={viewLastResults} accessibilityRole="button" style={styles.lastResults} hitSlop={8}>
+          <Text style={styles.lastResultsText}>← Round {lastRoundNumber} Results</Text>
+        </Pressable>
+      ) : null}
 
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.ringLabel}>NEXT SHOT O&apos;CLOCK IN</Text>
@@ -216,6 +248,16 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     paddingVertical: SPACING.md,
+  },
+  lastResults: {
+    alignSelf: 'center',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+  },
+  lastResultsText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    textDecorationLine: 'underline',
   },
   partyName: {
     fontSize: FONT_SIZE.md,

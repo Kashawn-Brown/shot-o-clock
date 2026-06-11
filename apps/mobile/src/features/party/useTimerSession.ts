@@ -38,6 +38,9 @@ interface UseTimerSessionResult {
   session: PartyRow | null;
   settings: SettingsRow | null;
   currentRound: RoundRow | null;
+  // The full (RLS-filtered) roster from the snapshot — needed by the Round Results
+  // screen to join player names + shot counts onto outcome rows. [] until loaded.
+  players: PlayerRow[];
   // The caller's own party_players row, derived from the snapshot's player list
   // (always visible to them, rls-rules.md §4.2). null until the snapshot loads.
   me: PlayerRow | null;
@@ -56,6 +59,7 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   const [session, setSession] = useState<PartyRow | null>(null);
   const [settings, setSettings] = useState<SettingsRow | null>(null);
   const [currentRound, setCurrentRound] = useState<RoundRow | null>(null);
+  const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [me, setMe] = useState<PlayerRow | null>(null);
   const [myOutcome, setMyOutcome] = useState<OutcomeRow | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -90,6 +94,7 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
       setSession(result.data.session);
       setSettings(result.data.settings);
       setCurrentRound(result.data.current_round);
+      setPlayers(result.data.players);
       setMe(result.data.players.find((player) => player.user_id === userIdRef.current) ?? null);
     });
   }, [partyId]);
@@ -151,6 +156,7 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
         setSession(result.data.session);
         setSettings(result.data.settings);
         setCurrentRound(result.data.current_round);
+        setPlayers(result.data.players);
         setMe(result.data.players.find((player) => player.user_id === userId) ?? null);
         setStatus('ready');
         return;
@@ -179,6 +185,7 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     session,
     settings,
     currentRound,
+    players,
     me,
     myOutcome,
     errorMessage,

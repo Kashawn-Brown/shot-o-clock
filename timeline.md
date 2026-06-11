@@ -3,27 +3,7 @@
 ## Current Status
 *Last updated: 2026-06-11*
 
-Phase 8, "Shot Window + Player Actions," is complete and verified on device. The
-Shot O'Clock moment is now playable: both the countdown and the shot-window rings
-show the real server-authoritative time draining clockwise (a react-native-svg ring
-animated smoothly through a single `strokeDashoffset`, D033), and during the shot
-window a player taps Done (`mark_done`) or I'm Out (`mark_self_out`) with optimistic
-feedback. The caller's own roster row and their outcome for the current round are
-exposed from the session hook — `me` derived from the existing snapshot at no extra
-cost, `myOutcome` read once per round — and together they drive the button states:
-Done is disabled for non-active players and once you've opted out, with the server
-backstopping `SELF_OUT_IS_STICKY` so a force-close-and-reconnect can't bypass it, and
-I'm Out sits behind a confirmation gate. Out players see a plain "You're out" message
-instead of dead buttons. When a player still holds grace (grace mode enabled, grace
-unused) the button reads "Skip this shot" / "Skipped" on both screens. One gap is
-carried deliberately: that Skip label is correct, but the skip *behavior* — a grace
-player consuming their grace and returning to active next round rather than being
-eliminated — is not yet built; `mark_self_out` still permanently outs the player, and
-the fix lives in Phase 9's `finalize_round_outcomes` work (D034). Along the way every
-in-game screen gained a shared, always-works exit-to-home (D032), and the ring
-prompted a standing rule to ask before hand-rolling around a missing library rather
-than building a fragile workaround (D033). Next is Phase 9 — grace logic and round
-results, which lands the D034 skip behavior and the realtime round-results views.
+Phase 9, "Grace Logic + Round Results," is complete and device-verified across all three grace modes. The headline fix made "I'm Out" a grace-aware skip rather than an automatic elimination: the server's round-finalizer now runs a voluntary self-out through the same elimination/grace ladder a miss does, so a player who skips with elimination off, with unlimited grace, or with their one grace still in hand returns to active next round (the grace case spending that grace), and only an unabsorbable skip eliminates — which also fixed an all-skip round that used to freeze the game in the "no active players" halt. On top of that sits the between-rounds experience: when a shot window closes, every device now lands on a Round Results screen that lingers for ten seconds before following the server into the next countdown (which is already running), grouping players into Took the Shot / Used Grace / Skipped / Missed / Out from a realtime outcome feed, with the viewer's own result pulled into a hero card. The same screen doubles as the terminal halt when everyone is out, where the host can End Party — and an end-party there now routes the other devices home rather than stranding them. The Skip/I'm Out button and its confirmation now also speak the real consequence (skip vs. consume-grace vs. permanent out) through a shared, tested copy helper. Next is Phase 10 — the host controls panel.
 
 ---
 
@@ -233,3 +213,8 @@ timer's testing escape hatch no longer bounces the host back into the party on e
 The referee / assigned-monitor system was also shelved entirely during the session
 (D029) — social accountability in a friend group is enough, and the permission tier it
 would need isn't worth the build.
+
+## Phase 8 — Shot Window + Player Actions
+*June 2026*
+
+Phase 8 made the Shot O'Clock moment playable. Both the between-shots countdown and the full-screen shot window show the real server-authoritative time draining clockwise through a single react-native-svg progress ring (animated through one `strokeDashoffset`), and during the window a player taps Done (`mark_done`) or I'm Out (`mark_self_out`) with optimistic feedback that reconciles against the server. The session hook was taught to expose the caller's own roster row and their outcome for the current round at no extra query cost, and those drive the button states: Done is disabled for non-active players and once a self-out is recorded, with the server backstopping `SELF_OUT_IS_STICKY` so a force-close-and-reconnect can't tap Done after opting out, and I'm Out sits behind a confirmation gate. Out players see a plain "You're out" message rather than dead buttons. The phase deliberately shipped one piece ahead of its behavior, carried into Phase 9: when a player still held grace the button read "Skip this shot," but the underlying skip semantics weren't built yet — `mark_self_out` still permanently outed the player — so the label was correct ahead of the server fix (D034). Along the way every in-game screen gained a shared, always-works exit-to-home for testing (D032), and the progress ring prompted a standing rule to ask before hand-rolling around a missing library rather than building a fragile workaround (D033).
