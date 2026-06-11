@@ -26,6 +26,7 @@ import {
   DEFAULT_INTERVAL_INCREMENT_MINUTES,
   DEFAULT_SHOT_WINDOW_SECONDS,
   DEFAULT_STARTING_INTERVAL_MINUTES,
+  ELIMINATION_OFF_GRACE_HINT,
   formatDefaultPartyName,
   GRACE_MODE_OPTIONS,
   INTERVAL_INCREMENT_MAX_MINUTES,
@@ -114,8 +115,11 @@ export default function CreatePartyScreen(): React.JSX.Element {
     displayName,
   ]);
 
-  const graceHint =
-    GRACE_MODE_OPTIONS.find((option) => option.value === graceMode)?.description ?? '';
+  // With elimination on, the hint reflects the selected grace option; with it off
+  // there's no grace choice, so explain that misses are tracked without elimination.
+  const graceHint = eliminationEnabled
+    ? (GRACE_MODE_OPTIONS.find((option) => option.value === graceMode)?.description ?? '')
+    : ELIMINATION_OFF_GRACE_HINT;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
@@ -189,11 +193,11 @@ export default function CreatePartyScreen(): React.JSX.Element {
           <Switch value={eliminationEnabled} onValueChange={setEliminationEnabled} />
         </View>
 
-        {/* Grace mode only matters with elimination on — hide it otherwise
-            (plan.md Phase 5). */}
-        {eliminationEnabled && (
-          <View style={styles.field}>
-            <Text style={styles.label}>Grace Mode</Text>
+        {/* The grace selector only matters with elimination on; with it off the
+            block stays but shows just the explanatory hint (no choice to make). */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Grace Mode</Text>
+          {eliminationEnabled && (
             <View style={styles.segment}>
               {GRACE_MODE_OPTIONS.map((option) => {
                 const active = graceMode === option.value;
@@ -212,9 +216,9 @@ export default function CreatePartyScreen(): React.JSX.Element {
                 );
               })}
             </View>
-            <Text style={styles.hint}>{graceHint}</Text>
-          </View>
-        )}
+          )}
+          <Text style={styles.hint}>{graceHint}</Text>
+        </View>
 
         <ErrorBanner message={errorMessage} />
 
