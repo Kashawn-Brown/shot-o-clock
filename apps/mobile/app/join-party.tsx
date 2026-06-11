@@ -19,6 +19,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { DISPLAY_NAME_MAX_LENGTH, isValidDisplayName } from '@/features/auth/api/displayName';
 import { useDisplayName } from '@/features/auth/useDisplayName';
 import { joinParty } from '@/features/party/api/joinParty';
+import { clearLeftPartyId } from '@/features/party/leftParty';
 import {
   JOIN_CODE_LENGTH,
   isValidJoinCode,
@@ -69,6 +70,9 @@ export default function JoinPartyScreen(): React.JSX.Element {
     const response = await joinParty(result.params);
 
     if (response.ok) {
+      // Deliberately (re)entering a party clears any intentionally-left marker —
+      // including the case of rejoining the very party they left (leftParty).
+      void clearLeftPartyId();
       // replace (not push) so Back from the lobby doesn't return to the join
       // form for a party we're already in. Both a fresh join and a reconnect
       // (§3.6) land in the lobby for MVP.

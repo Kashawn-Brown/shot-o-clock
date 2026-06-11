@@ -4,7 +4,8 @@
 //
 // Why this exists / the rule it enforces:
 //   - Host  → end_party (ends the party for everyone), then route home.
-//   - Guest → mark_self_out (best effort, records them out), then route home.
+//   - Guest → mark this party intentionally-left (suppresses the launch
+//     reconnect, see leftParty), mark_self_out (best effort), then route home.
 //   - NEVER leave_party here. leave_party is lobby-only (rpc-contracts §4.3); a
 //     guest calling it mid-game gets ILLEGAL_TRANSITION and is left stranded with
 //     no way home. That bug recurred repeatedly in testing — this hook is the
@@ -24,6 +25,7 @@ import { Alert } from 'react-native';
 
 import { endParty } from '@/features/party/api/endParty';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
+import { setLeftPartyId } from '@/features/party/leftParty';
 
 interface ConfirmExitOptions {
   /** The caller's role, when known, so the confirmation copy is role-correct: a
@@ -83,11 +85,13 @@ export function useGameExit(partyId: string | undefined): UseGameExitResult {
     }
 
     // Not the host (NOT_HOST), or the session is already gone (SESSION_NOT_FOUND).
-    // Record a best-effort self-out so the roster reflects the guest leaving, then
-    // go home regardless of the result. Intentionally ignores the result: on
-    // round_complete mark_self_out returns ILLEGAL_TRANSITION (rpc-contracts §7.3)
-    // — not a failure to surface, just not applicable. A guest must never be
-    // stranded mid-game, so we route home either way.
+    // A guest leaving stays a party member (mark_self_out records them Out but
+    // doesn't remove them), so the launch reconnect would pull them straight back
+    // in — mark this party as intentionally-left first so useActiveParty suppresses
+    // that reconnect. Then record a best-effort self-out (ignored on round_complete,
+    // where it returns ILLEGAL_TRANSITION, rpc-contracts §7.3) and go home. A guest
+    // must never be stranded, so we route home regardless of either result.
+    await setLeftPartyId(partyId);
     await markSelfOut({ partySessionId: partyId });
     router.replace('/');
   }, [partyId, leaving]);
