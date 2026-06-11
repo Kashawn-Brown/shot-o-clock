@@ -110,6 +110,14 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     });
   }, [roundId, myPlayerId]);
 
+  // Clear the outcome the instant the round changes, before the async re-fetch
+  // lands — otherwise the previous round's self_out/done would keep the buttons
+  // disabled into the new round. An out player stays disabled regardless: that is
+  // driven by `me.status`, not the outcome.
+  useEffect(() => {
+    setMyOutcome(null);
+  }, [roundId]);
+
   useEffect(() => {
     refreshOutcome();
   }, [refreshOutcome]);
