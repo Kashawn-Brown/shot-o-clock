@@ -15,7 +15,7 @@
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
@@ -44,7 +44,10 @@ export default function TimerScreen(): React.JSX.Element {
   const [outError, setOutError] = useState<string | null>(null);
   const isActive = me?.status === 'active';
   const selfOutRecorded = myOutcome?.player_action === 'self_out';
-  const canSelfOut = isActive && !selfOutRecorded && !actingOut;
+  // Done can't be recorded during countdown (mark_done is shot_window-only), but
+  // mirror the shot screen's rule for consistency: a recorded Done closes I'm Out.
+  const doneRecorded = myOutcome?.player_action === 'done';
+  const canSelfOut = isActive && !doneRecorded && !selfOutRecorded && !actingOut;
 
   const handleSelfOut = useCallback(async () => {
     if (!partyId || !canSelfOut) return;
@@ -61,6 +64,20 @@ export default function TimerScreen(): React.JSX.Element {
     setOutError(rpcErrorMessage(result.error_code));
     refreshOutcome();
   }, [partyId, canSelfOut, refreshOutcome]);
+
+  // Confirmation gate — opting out is irreversible (only the host can reinstate,
+  // game-rules §7), same pattern as End Party / Remove Player.
+  const confirmSelfOut = useCallback(() => {
+    if (!canSelfOut) return;
+    Alert.alert(
+      "I'm Out?",
+      "You'll sit out the rest of this round and can't undo it — only the host can bring you back in.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: "I'm Out", style: 'destructive', onPress: handleSelfOut },
+      ],
+    );
+  }, [canSelfOut, handleSelfOut]);
 
   // Ring fills clockwise as the proportion of the countdown remaining. Total is
   // the round's interval; clamp (in ProgressRing) guards against host_add_time
@@ -154,7 +171,7 @@ export default function TimerScreen(): React.JSX.Element {
         <Button
           label={selfOutRecorded ? "You're out" : "I'm Out"}
           variant="outline"
-          onPress={handleSelfOut}
+          onPress={confirmSelfOut}
           disabled={!canSelfOut}
         />
         <Button label="End Party" variant="outline" onPress={confirmExit} disabled={leaving} />

@@ -23,7 +23,7 @@
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -72,7 +72,10 @@ export default function ShotOClockScreen(): React.JSX.Element {
   const selfOutRecorded = myAction === 'self_out';
 
   const canDone = isActive && !doneRecorded && !selfOutRecorded && !acting;
-  const canSelfOut = isActive && !selfOutRecorded && !acting;
+  // Once Done is recorded, I'm Out is closed for the round (product call — a
+  // confirmed shot can't be walked back from the UI, even though the server would
+  // allow self_out to override it).
+  const canSelfOut = isActive && !doneRecorded && !selfOutRecorded && !acting;
 
   const handleDone = useCallback(async () => {
     if (!partyId || !canDone) return;
@@ -111,6 +114,20 @@ export default function ShotOClockScreen(): React.JSX.Element {
     setActionError(rpcErrorMessage(result.error_code));
     refreshOutcome();
   }, [partyId, canSelfOut, refreshOutcome]);
+
+  // Confirmation gate — opting out is irreversible (only the host can reinstate,
+  // game-rules §7), same pattern as End Party / Remove Player.
+  const confirmSelfOut = useCallback(() => {
+    if (!canSelfOut) return;
+    Alert.alert(
+      "I'm Out?",
+      "You'll sit out the rest of this round and can't undo it — only the host can bring you back in.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: "I'm Out", style: 'destructive', onPress: handleSelfOut },
+      ],
+    );
+  }, [canSelfOut, handleSelfOut]);
 
   // Ring fills clockwise as the proportion of the shot window remaining. Total is
   // the configured shot_window_seconds; clamp (in ProgressRing) guards against
@@ -196,7 +213,7 @@ export default function ShotOClockScreen(): React.JSX.Element {
         </Pressable>
 
         <Pressable
-          onPress={handleSelfOut}
+          onPress={confirmSelfOut}
           disabled={!canSelfOut}
           style={[styles.action, styles.outAction, !canSelfOut && !selfOutRecorded && styles.actionDisabled]}
         >
