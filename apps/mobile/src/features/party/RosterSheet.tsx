@@ -1,32 +1,41 @@
-// RosterSheet — the in-game roster, opened from the timer screen. A bottom sheet
-// (React Native Modal, no extra dependency) over the live get_party_state roster
-// carried by useTimerSession. Read-only for players; for the host each row also
-// carries the player-target controls:
-//   - active player → Mark Out (host_mark_player_out, §11.2) + Remove
-//     (host_remove_player, §11.3)
-//   - out player    → Reinstate (host_mark_player_active, §11.1 — restores grace
-//     if they were out by missed_after_grace, and can un-stick the zero-active
-//     halt)
-// The host's own row never shows actions: a host can't mark out or remove
-// themselves (they leave by ending the party).
+// RosterSheet — the in-game roster, opened from the timer screen. A draggable
+// bottom sheet over the live get_party_state roster carried by useTimerSession.
+// It opens at half height, drags up to (near) full screen, and drags down to
+// dismiss — built on PanResponder + Animated so it needs no extra dependency and
+// no GestureHandlerRootView.
 //
-// No drag-to-dismiss handle — RN's Modal has no built-in pan-to-close and a fake
-// handle would be a lie (bug 1). Dismissal is the Close button, the header ✕, the
-// backdrop tap, and Android back (onRequestClose).
+// Layout is sectioned (Active / Out); a row is just the player's name and shot
+// count — the section already says active vs out. Read-only for players. For the
+// host each row carries minimal text actions:
+//   - active → Mark Out (host_mark_player_out, §11.2) · Remove (host_remove_player,
+//     §11.3, behind a confirm — removal is permanent, D028)
+//   - out    → Reinstate (host_mark_player_active, §11.1 — restores grace if they
+//     were out by missed_after_grace, can un-stick the zero-active halt)
+// The host's own row never shows actions (can't mark out / remove yourself).
 //
 // Each action takes a per-row in-flight lock and surfaces failures through the
-// shared ErrorBanner (§5.7). On success the sheet calls onApplied so the host's
-// own roster re-pulls immediately; the realtime party_players sub propagates the
-// change to every other device.
+// shared ErrorBanner (§5.7). On success onApplied re-pulls the host's snapshot;
+// the realtime party_players sub propagates to every other device.
 
-import { useCallback, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  Animated,
+  Modal,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { hostMarkPlayerActive } from '@/features/party/api/hostMarkPlayerActive';
 import { hostMarkPlayerOut } from '@/features/party/api/hostMarkPlayerOut';
 import { hostRemovePlayer } from '@/features/party/api/hostRemovePlayer';
-import { deriveTimerRoster } from '@/features/party/timerRoster';
+import { deriveTimerRoster, type TimerRosterEntry } from '@/features/party/timerRoster';
 import { rpcErrorMessage } from '@/lib/errors';
 import type { RpcResult } from '@/types/api';
 import type { Database } from '@/types/db.generated';
@@ -36,6 +45,9 @@ type PlayerRow = Database['public']['Tables']['party_players']['Row'];
 
 // Dim behind the sheet — a one-off overlay, no semantic token for it.
 const BACKDROP_COLOR = 'rgba(0, 0, 0, 0.4)';
+// Sheet covers most of the screen at full height; opens at half.
+const SHEET_SCREEN_FRACTION = 0.92;
+const SLIDE_DURATION_MS = 220;
 
 type RosterSheetProps = {
   visible: boolean;
@@ -57,10 +69,96 @@ export function RosterSheet({
   isHost,
   onApplied,
 }: RosterSheetProps): React.JSX.Element {
+  const { height } = useWindowDimensions();
+  const sheetHeight = Math.round(height * SHEET_SCREEN_FRACTION);
+  const halfY = Math.round(sheetHeight * 0.5); // translateY for the half-open rest
+
+  // translateY: 0 = full screen, sheetHeight = fully hidden. Animated manually,
+  // so the Modal uses animationType="none".
+  const translateY = useRef(new Animated.Value(sheetHeight)).current;
+  // Latest position, read in the pan handlers (which are created once).
+  const lastY = useRef(sheetHeight);
+  const dragStart = useRef(sheetHeight);
+  // Snap metrics, refreshed each render so the once-created PanResponder sees the
+  // current screen height.
+  const metrics = useRef({ sheetHeight, halfY });
+  metrics.current = { sheetHeight, halfY };
+
+  useEffect(() => {
+    const id = translateY.addListener(({ value }) => {
+      lastY.current = value;
+    });
+    return () => translateY.removeListener(id);
+  }, [translateY]);
+
+  const animateTo = useCallback(
+    (toValue: number, onDone?: () => void) => {
+      Animated.timing(translateY, {
+        toValue,
+        duration: SLIDE_DURATION_MS,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished && onDone) onDone();
+      });
+    },
+    [translateY],
+  );
+
+  // Mounted as long as `visible`; close slides down first, then unmounts.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const close = useCallback(() => {
+    animateTo(metrics.current.sheetHeight, () => onCloseRef.current());
+  }, [animateTo]);
+
+  // The pan handlers are created once but call the latest close/animateTo via refs.
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  const animateToRef = useRef(animateTo);
+  animateToRef.current = animateTo;
+
+  // Slide up to half whenever the sheet becomes visible.
+  useEffect(() => {
+    if (visible) {
+      translateY.setValue(metrics.current.sheetHeight);
+      animateTo(metrics.current.halfY);
+    }
+  }, [visible, translateY, animateTo]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > 4,
+        onPanResponderGrant: () => {
+          dragStart.current = lastY.current;
+        },
+        onPanResponderMove: (_event, gesture) => {
+          const { sheetHeight: maxY } = metrics.current;
+          const next = Math.min(Math.max(dragStart.current + gesture.dy, 0), maxY);
+          translateY.setValue(next);
+        },
+        onPanResponderRelease: (_event, gesture) => {
+          const { sheetHeight: maxY, halfY: half } = metrics.current;
+          const current = Math.min(Math.max(dragStart.current + gesture.dy, 0), maxY);
+          // A strong downward fling, or dragged well past the half rest, dismisses.
+          if (gesture.vy > 1.2 || current > half + maxY * 0.18) {
+            closeRef.current();
+            return;
+          }
+          // Otherwise snap to whichever rest is nearer: full (0) or half.
+          animateToRef.current(current < half * 0.5 ? 0 : half);
+        },
+      }),
+    [translateY],
+  );
+
   const roster = deriveTimerRoster(players, currentUserId);
+  const active = roster.filter((entry) => entry.status === 'active');
+  const out = roster.filter((entry) => entry.status === 'out');
 
   // The player id whose action is in flight, or null. Locks just that row's
-  // buttons so a double-tap can't fire two host_* calls at the target.
+  // actions so a double-tap can't fire two host_* calls at the target.
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,21 +181,14 @@ export function RosterSheet({
   );
 
   const handleMarkOut = useCallback(
-    (playerId: string) => {
-      void run(playerId, () => hostMarkPlayerOut({ partyPlayerId: playerId }));
-    },
+    (playerId: string) => void run(playerId, () => hostMarkPlayerOut({ partyPlayerId: playerId })),
     [run],
   );
-
   const handleReinstate = useCallback(
-    (playerId: string) => {
-      void run(playerId, () => hostMarkPlayerActive({ partyPlayerId: playerId }));
-    },
+    (playerId: string) =>
+      void run(playerId, () => hostMarkPlayerActive({ partyPlayerId: playerId })),
     [run],
   );
-
-  // Removal is permanent — the player can't rejoin this party (D028) — so it sits
-  // behind a confirmation gate.
   const handleRemove = useCallback(
     (playerId: string, displayName: string) => {
       Alert.alert(
@@ -116,212 +207,204 @@ export function RosterSheet({
     [run],
   );
 
+  const renderRow = (entry: TimerRosterEntry): React.JSX.Element => {
+    const locked = busyId !== null;
+    const showActions = isHost && !entry.isSelf;
+
+    return (
+      <View key={entry.id} style={styles.row}>
+        <View style={styles.rowMain}>
+          <Text style={styles.rowName} numberOfLines={1}>
+            {entry.displayName}
+            {entry.isSelf ? ' (You)' : ''}
+            {entry.isHost ? ' · Host' : ''}
+          </Text>
+          <Text style={styles.rowShots}>
+            {entry.shotsCompleted} {entry.shotsCompleted === 1 ? 'shot' : 'shots'}
+          </Text>
+        </View>
+
+        {showActions ? (
+          <View style={styles.rowActions}>
+            {entry.status === 'active' ? (
+              <>
+                <TextAction label="Mark Out" onPress={() => handleMarkOut(entry.id)} disabled={locked} />
+                <TextAction
+                  label="Remove"
+                  danger
+                  onPress={() => handleRemove(entry.id, entry.displayName)}
+                  disabled={locked}
+                />
+              </>
+            ) : (
+              <TextAction label="Reinstate" onPress={() => handleReinstate(entry.id)} disabled={locked} />
+            )}
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      {/* Tap the dim backdrop to dismiss; the sheet swallows the press. */}
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button">
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.header}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={close}>
+      <View style={styles.root}>
+        <Pressable style={styles.backdrop} onPress={close} accessibilityRole="button" />
+
+        <Animated.View style={[styles.sheet, { height: sheetHeight, transform: [{ translateY }] }]}>
+          {/* Drag target: the grab handle + title. Pans the whole sheet. */}
+          <View style={styles.grabArea} {...panResponder.panHandlers}>
+            <View style={styles.handle} />
             <Text style={styles.title}>Roster</Text>
-            <Pressable onPress={onClose} accessibilityRole="button" hitSlop={8}>
-              <Text style={styles.close}>✕</Text>
-            </Pressable>
           </View>
 
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-            {roster.map((entry) => {
-              const locked = busyId !== null;
-              const showActions = isHost && !entry.isSelf;
+            {active.length > 0 ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>ACTIVE</Text>
+                {active.map(renderRow)}
+              </View>
+            ) : null}
 
-              return (
-                <View key={entry.id} style={styles.row}>
-                  <View style={styles.rowTop}>
-                    <View style={styles.nameCol}>
-                      <Text style={styles.name}>
-                        {entry.displayName}
-                        {entry.isSelf ? ' (You)' : ''}
-                        {entry.isHost ? ' · Host' : ''}
-                      </Text>
-                      <Text style={styles.meta}>
-                        {entry.status === 'active' ? 'Active' : 'Out'} · {entry.shotsCompleted}{' '}
-                        {entry.shotsCompleted === 1 ? 'shot' : 'shots'}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.statusDot,
-                        entry.status === 'active' ? styles.dotActive : styles.dotOut,
-                      ]}
-                    />
-                  </View>
+            {out.length > 0 ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>OUT</Text>
+                {out.map(renderRow)}
+              </View>
+            ) : null}
 
-                  {showActions ? (
-                    <View style={styles.actions}>
-                      {entry.status === 'active' ? (
-                        <>
-                          <ActionChip
-                            label="Mark Out"
-                            onPress={() => handleMarkOut(entry.id)}
-                            disabled={locked}
-                          />
-                          <ActionChip
-                            label="Remove"
-                            variant="danger"
-                            onPress={() => handleRemove(entry.id, entry.displayName)}
-                            disabled={locked}
-                          />
-                        </>
-                      ) : (
-                        <ActionChip
-                          label="Reinstate"
-                          onPress={() => handleReinstate(entry.id)}
-                          disabled={locked}
-                        />
-                      )}
-                    </View>
-                  ) : null}
-                </View>
-              );
-            })}
+            {roster.length === 0 ? <Text style={styles.empty}>No players yet.</Text> : null}
           </ScrollView>
 
           <ErrorBanner message={error} />
-        </Pressable>
-      </Pressable>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }
 
-// Compact inline action button — the shared Button primitive is sized for
-// full-width primary actions, too large for a roster row.
-function ActionChip({
+// Minimal tappable text action — intentionally lighter than the Button primitive,
+// which is sized for full-width primary actions.
+function TextAction({
   label,
   onPress,
-  variant = 'neutral',
+  danger = false,
   disabled = false,
 }: {
   label: string;
   onPress: () => void;
-  variant?: 'neutral' | 'danger';
+  danger?: boolean;
   disabled?: boolean;
 }): React.JSX.Element {
-  const isDanger = variant === 'danger';
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [
-        styles.chip,
-        isDanger && styles.chipDanger,
-        pressed && styles.chipPressed,
-        disabled && styles.chipDisabled,
-      ]}
+      hitSlop={6}
+      style={({ pressed }) => [pressed && styles.actionPressed, disabled && styles.actionDisabled]}
     >
-      <Text style={[styles.chipLabel, isDanger && styles.chipLabelDanger]}>{label}</Text>
+      <Text style={[styles.actionText, danger && styles.actionTextDanger]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
+  root: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: BACKDROP_COLOR,
   },
   sheet: {
     backgroundColor: COLORS.background,
     borderTopLeftRadius: RADIUS.lg,
     borderTopRightRadius: RADIUS.lg,
-    padding: SPACING.lg,
-    paddingBottom: SPACING.xl,
-    gap: SPACING.md,
-    maxHeight: '80%',
   },
-  header: {
-    flexDirection: 'row',
+  grabArea: {
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.md,
+    gap: SPACING.sm,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.border,
   },
   title: {
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
   },
-  close: {
-    fontSize: FONT_SIZE.md,
-    color: COLORS.textSecondary,
-  },
   list: {
-    flexGrow: 0,
+    flex: 1,
   },
   listContent: {
-    gap: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.xl,
+    gap: SPACING.lg,
+  },
+  section: {
+    gap: SPACING.xs,
+  },
+  sectionLabel: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: FONT_WEIGHT.bold,
+    letterSpacing: 1,
+    color: COLORS.textSecondary,
+    paddingBottom: SPACING.xs,
   },
   row: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    gap: SPACING.sm,
-  },
-  rowTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    gap: SPACING.md,
   },
-  nameCol: {
+  rowMain: {
     flex: 1,
-    gap: SPACING.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
   },
-  name: {
+  rowName: {
+    flex: 1,
     fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.medium,
     color: COLORS.textPrimary,
   },
-  meta: {
+  rowShots: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.textSecondary,
   },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: RADIUS.full,
-    marginLeft: SPACING.md,
-  },
-  dotActive: {
-    backgroundColor: COLORS.success,
-  },
-  dotOut: {
-    backgroundColor: COLORS.danger,
-  },
-  actions: {
+  rowActions: {
     flexDirection: 'row',
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
-  chip: {
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1,
-    borderColor: COLORS.buttonOutlineBorder,
-  },
-  chipDanger: {
-    borderColor: COLORS.danger,
-  },
-  chipPressed: {
-    opacity: 0.7,
-  },
-  chipDisabled: {
-    opacity: 0.4,
-  },
-  chipLabel: {
+  actionText: {
     fontSize: FONT_SIZE.sm,
     fontWeight: FONT_WEIGHT.medium,
-    color: COLORS.buttonOutlineText,
+    color: COLORS.textPrimary,
   },
-  chipLabelDanger: {
+  actionTextDanger: {
     color: COLORS.danger,
+  },
+  actionPressed: {
+    opacity: 0.5,
+  },
+  actionDisabled: {
+    opacity: 0.4,
+  },
+  empty: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    paddingVertical: SPACING.lg,
   },
 });
