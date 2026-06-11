@@ -1,30 +1,29 @@
 # Timeline
 
 ## Current Status
-*Last updated: 2026-06-10*
+*Last updated: 2026-06-11*
 
-Phase 7, "Server-Authoritative Timer," is complete and verified across two devices.
-The countdown is now fully alive: when the host taps Start Game, `start_game`
-creates round one and starts the server's countdown, and every device — including
-guests still sitting in the lobby — navigates into the timer and shows the same
-remaining time, computed from the session's `phase_ends_at` minus a server-corrected
-clock rather than the device clock (each phone measures its offset from the
-`get_server_time` RPC using the round-trip midpoint, D030). No client owns the timer
-(CLAUDE.md §2.1): the screen only renders `phaseEndsAt − serverNow()` on a display
-tick, and the real transition is the server's — each device polls
-`advance_phase_if_due` every ~2 seconds once its own clock passes zero, the first
-past the deadline performs the single database transition, and the losing-race
-devices re-pull state on any due poll so they leave the expired countdown together
-(D031). At zero every device routes to the Shot O'Clock screen. Two gaps surfaced in
-testing and were fixed: the lobby now also subscribes to its `party_sessions` row —
-`start_game` mutates only the session, so the roster subscription never fired —
-which is what unsticks guests from "Waiting for host to start…", backed by a
-migration publishing `party_sessions` to realtime; and the timer's testing escape
-hatch no longer bounces the host back into the party on exit. Known gaps left to
-their own phases: host controls show on the player device (Phase 10), and End Party
-doesn't yet propagate to other devices (Phase 11). Next is Phase 8 — the full-screen
-Shot O'Clock window and the player Done / I'm Out actions (`mark_done` /
-`mark_self_out`).
+Phase 8, "Shot Window + Player Actions," is complete and verified on device. The
+Shot O'Clock moment is now playable: both the countdown and the shot-window rings
+show the real server-authoritative time draining clockwise (a react-native-svg ring
+animated smoothly through a single `strokeDashoffset`, D033), and during the shot
+window a player taps Done (`mark_done`) or I'm Out (`mark_self_out`) with optimistic
+feedback. The caller's own roster row and their outcome for the current round are
+exposed from the session hook — `me` derived from the existing snapshot at no extra
+cost, `myOutcome` read once per round — and together they drive the button states:
+Done is disabled for non-active players and once you've opted out, with the server
+backstopping `SELF_OUT_IS_STICKY` so a force-close-and-reconnect can't bypass it, and
+I'm Out sits behind a confirmation gate. Out players see a plain "You're out" message
+instead of dead buttons. When a player still holds grace (grace mode enabled, grace
+unused) the button reads "Skip this shot" / "Skipped" on both screens. One gap is
+carried deliberately: that Skip label is correct, but the skip *behavior* — a grace
+player consuming their grace and returning to active next round rather than being
+eliminated — is not yet built; `mark_self_out` still permanently outs the player, and
+the fix lives in Phase 9's `finalize_round_outcomes` work (D034). Along the way every
+in-game screen gained a shared, always-works exit-to-home (D032), and the ring
+prompted a standing rule to ask before hand-rolling around a missing library rather
+than building a fragile workaround (D033). Next is Phase 9 — grace logic and round
+results, which lands the D034 skip behavior and the realtime round-results views.
 
 ---
 
@@ -199,3 +198,38 @@ version matched the pinned SDK (~8.0.8). It was verified across two devices: the
 roster synced live on a join, the player view showed the waiting state with no
 code, and a host removal popped the alert on the kicked device and sent it home.
 Next is Phase 7 — the server-authoritative timer.
+
+## Phase 7 — Server-Authoritative Timer
+*June 2026*
+
+Phase 7 made the countdown real and, more importantly, made it the server's rather
+than the phone's. The work opened with the clock: a drinking-game timer is worthless
+if two phones disagree on how long is left, and device clocks drift, so `serverNow()`
+— the single function every countdown reads — was taught to correct for that drift by
+measuring its offset from the server once on mount via the `get_server_time` RPC,
+assuming the server stamped its reply at the midpoint of the round trip so most of the
+network latency cancels (D030). On top of that sits a hook that renders only
+`phase_ends_at − serverNow()` on a quarter-second display tick and never owns or
+advances anything — the locked rule that the timer is the server's (CLAUDE.md §2.1).
+The host's Start Game button was wired to `start_game`, creating round one's countdown
+and replacing the lobby with the timer, and the timer screen got a loader that pours
+the real party — name, round number, deadline — into the countdown, retiring the
+hardcoded placeholder.
+
+The second half made the countdown actually go somewhere at zero. Because nothing on
+the client may advance a phase, the transition is driven by polling: each device calls
+`advance_phase_if_due` every couple of seconds once its corrected clock passes the
+deadline, the first caller past zero performs the single real transition, and everyone
+else is told nothing changed. The non-obvious part is that a device must re-pull
+authoritative state after any successful poll, not only the one that won the race —
+otherwise the losing phones sit forever on a countdown reading zero while one device
+alone walks on (D031); at zero every device routes itself to the Shot O'Clock screen
+by the session's phase. Two gaps surfaced on real hardware and were fixed: a guest
+sitting in the lobby never followed the host into the game, because starting a game
+touches only the session row and the lobby was only listening for roster changes — so
+the lobby now also subscribes to its `party_sessions` row (a migration published it to
+realtime), which is what unsticks guests from "Waiting for host to start…"; and the
+timer's testing escape hatch no longer bounces the host back into the party on exit.
+The referee / assigned-monitor system was also shelved entirely during the session
+(D029) — social accountability in a friend group is enough, and the permission tier it
+would need isn't worth the build.
