@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   },
   action: {
     flex: 1,
-    minHeight: 96,
+    minHeight: 128,
     paddingVertical: SPACING.lg,
     borderRadius: RADIUS.md,
     alignItems: 'center',
