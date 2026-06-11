@@ -1,16 +1,17 @@
 // Timer — the between-shots countdown. Single file that adapts for host vs
-// player: the host gets a Host Controls button opening the controls sheet
-// (pause/resume, add time); a player sees only the ring, Roster, and I'm Out.
+// player. The bottom row carries a destructive exit (End Party for the host,
+// Leave Party for a player), a Roster button opening the roster sheet (host gets
+// per-player Mark Out / Reinstate / Remove there; a player sees it read-only),
+// and the I'm Out / Skip action below.
 //
 // The ring shows the REAL countdown, computed from the session's phase_ends_at
 // minus skew-corrected server time (useCountdown) and draining clockwise — no
 // client owns the timer (CLAUDE.md §2.1). useTimerSession loads the snapshot,
 // aligns the clock, polls advance_phase_if_due to drive the transition, and
-// subscribes to the session row so a host pause/resume reflects on every device.
-// While paused the ring freezes at paused_remaining_seconds (option (a), §10.1).
+// subscribes to the session + roster rows so host actions reflect on every device.
 //
-// The back arrow + End Party are the shared testing escape hatch (useGameExit):
-// end_party for the host, mark_self_out → home for a guest. The real in-game
+// The back arrow + End/Leave Party are the shared escape hatch (useGameExit):
+// end_party for the host, mark_self_out → home for a guest (D032). The real
 // End Party → Final Summary routing lands in Phase 11.
 
 import { router, useLocalSearchParams } from 'expo-router';
@@ -21,7 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
-import { HostControlsSheet } from '@/features/party/HostControlsSheet';
+import { RosterSheet } from '@/features/party/RosterSheet';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { selfOutCopy } from '@/features/game/selfOutCopy';
 import { useCountdown } from '@/features/game/useCountdown';
@@ -48,23 +49,26 @@ export default function TimerScreen(): React.JSX.Element {
     me,
     myOutcome,
     errorMessage,
+    players,
     refreshOutcome,
     refreshSession,
   } = useTimerSession(partyId);
   const { remainingMs: liveRemainingMs } = useCountdown(session?.phase_ends_at ?? null);
   const { leaving, confirmExit } = useGameExit(partyId);
 
-  // Host-only control surface. The RPCs backstop with NOT_HOST, so this gate is
-  // defence in depth, not the only guard (PartyPlayer.permissionRole, §2.4).
+  // The caller's role drives the host-only roster controls (Mark Out / Reinstate /
+  // Remove live in the Roster sheet) and the destructive bottom-left button: a
+  // host ends the party, a player leaves it. RPCs backstop with NOT_HOST, so the
+  // gate is defence in depth (PartyPlayer.permissionRole, §2.4).
   const isHost = me?.permission_role === 'host';
   const isPaused = session?.status === 'paused';
-  const [controlsOpen, setControlsOpen] = useState(false);
+  const [rosterOpen, setRosterOpen] = useState(false);
 
   // While paused the server freezes the timer under option (a): status → paused,
   // phase_ends_at left intact (§10.1). So the live countdown would keep draining
-  // a stale deadline — show the frozen paused_remaining_seconds instead, on every
-  // device (the realtime session sub re-pulls the paused status). useCountdown
-  // stays pure; we just pick which value to display.
+  // a stale deadline — show the frozen paused_remaining_seconds instead. (No pause
+  // control on this screen yet, but the realtime session sub can still deliver a
+  // paused state.) useCountdown stays pure; we just pick which value to display.
   const remainingMs = isPaused
     ? (session?.paused_remaining_seconds ?? 0) * 1000
     : liveRemainingMs;
@@ -213,8 +217,6 @@ export default function TimerScreen(): React.JSX.Element {
         >
           <View style={styles.ringContent}>
             <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
-            {/* Pause/resume + add time now live in the Host Controls sheet; the
-                ring just reflects the frozen state. */}
             {isPaused ? <Text style={styles.pausedLabel}>❚❚ PAUSED</Text> : null}
           </View>
         </ProgressRing>
@@ -222,20 +224,21 @@ export default function TimerScreen(): React.JSX.Element {
 
       <View style={styles.footer}>
         <View style={styles.footerRow}>
+          {/* Destructive exit: a host ends the party, a player leaves it. Both go
+              through the same confirmExit flow (useGameExit, D032). */}
+          <Button
+            label={isHost ? 'End Party' : 'Leave Party'}
+            variant="outline"
+            onPress={confirmExit}
+            disabled={leaving}
+            style={[styles.footerButton, styles.destructiveButton]}
+          />
           <Button
             label="Roster"
             variant="outline"
-            onPress={() => router.push(`/party/${partyId}/roster`)}
+            onPress={() => setRosterOpen(true)}
             style={styles.footerButton}
           />
-          {isHost ? (
-            <Button
-              label="Host Controls"
-              variant="outline"
-              onPress={() => setControlsOpen(true)}
-              style={styles.footerButton}
-            />
-          ) : null}
         </View>
         <ErrorBanner message={outError} />
         <Button
@@ -244,22 +247,16 @@ export default function TimerScreen(): React.JSX.Element {
           onPress={confirmSelfOut}
           disabled={!canSelfOut}
         />
-        {/* Host's End Party now lives in the Host Controls sheet; a guest keeps
-            this footer button as their escape-hatch exit (useGameExit). */}
-        {!isHost ? (
-          <Button label="End Party" variant="outline" onPress={confirmExit} disabled={leaving} />
-        ) : null}
       </View>
 
-      {isHost && partyId ? (
-        <HostControlsSheet
-          visible={controlsOpen}
-          onClose={() => setControlsOpen(false)}
-          isPaused={!!isPaused}
-          partySessionId={partyId}
+      {partyId ? (
+        <RosterSheet
+          visible={rosterOpen}
+          onClose={() => setRosterOpen(false)}
+          players={players}
+          currentUserId={me?.user_id ?? null}
+          isHost={isHost}
           onApplied={refreshSession}
-          onEndParty={confirmExit}
-          endingParty={leaving}
         />
       ) : null}
     </SafeAreaView>
@@ -346,5 +343,10 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
+  },
+  // Danger-tinted border marks the destructive exit (End / Leave Party) without a
+  // third Button variant; the label keeps the default outline color.
+  destructiveButton: {
+    borderColor: COLORS.danger,
   },
 });
