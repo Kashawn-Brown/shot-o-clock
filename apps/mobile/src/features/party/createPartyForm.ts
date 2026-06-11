@@ -72,7 +72,7 @@ export const GRACE_MODE_OPTIONS: readonly {
 ];
 
 // Elimination-toggle hint text, switched on the toggle's value.
-export const ELIMINATION_ON_HINT = 'Players who miss are eliminated';
+export const ELIMINATION_ON_HINT = 'Players who don\'t take their shot are eliminated';
 export const ELIMINATION_OFF_HINT = 'Misses are tracked but nobody is eliminated';
 
 export const DEFAULT_GRACE_MODE: GraceMode = 'disabled';
