@@ -41,6 +41,11 @@ type HostControlsSheetProps = {
   partySessionId: string;
   /** Re-pull the session after a successful action (parent's silent refresh). */
   onApplied: () => void;
+  /** End the party — the host's useGameExit confirmExit (confirm → end_party →
+   *  route home, D032). Owned by the screen so the exit path stays single. */
+  onEndParty: () => void;
+  /** useGameExit `leaving` — disables End Party while the exit is in flight. */
+  endingParty: boolean;
 };
 
 export function HostControlsSheet({
@@ -49,6 +54,8 @@ export function HostControlsSheet({
   isPaused,
   partySessionId,
   onApplied,
+  onEndParty,
+  endingParty,
 }: HostControlsSheetProps): React.JSX.Element {
   // One action in flight at a time — disables every control so a double-tap can't
   // stack an add_time or race a pause against a resume.
@@ -126,6 +133,18 @@ export function HostControlsSheet({
 
           <ErrorBanner message={error} />
 
+          {/* End Party sits below a divider, apart from the timer controls —
+              it ends the game for everyone, not just nudges the clock. The
+              confirmation gate lives in confirmExit (useGameExit). */}
+          <View style={styles.divider} />
+          <Button
+            label="End Party"
+            variant="outline"
+            onPress={onEndParty}
+            disabled={busy || endingParty}
+            style={styles.endParty}
+          />
+
           <Button label="Close" variant="outline" onPress={onClose} disabled={busy} />
         </Pressable>
       </Pressable>
@@ -166,5 +185,15 @@ const styles = StyleSheet.create({
   },
   addTime: {
     flex: 1,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: SPACING.xs,
+  },
+  // Danger-tinted border marks End Party as the destructive control without
+  // needing a third Button variant; the label keeps the default outline color.
+  endParty: {
+    borderColor: COLORS.danger,
   },
 });

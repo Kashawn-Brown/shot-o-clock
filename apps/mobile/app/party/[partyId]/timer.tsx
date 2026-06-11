@@ -244,7 +244,11 @@ export default function TimerScreen(): React.JSX.Element {
           onPress={confirmSelfOut}
           disabled={!canSelfOut}
         />
-        <Button label="End Party" variant="outline" onPress={confirmExit} disabled={leaving} />
+        {/* Host's End Party now lives in the Host Controls sheet; a guest keeps
+            this footer button as their escape-hatch exit (useGameExit). */}
+        {!isHost ? (
+          <Button label="End Party" variant="outline" onPress={confirmExit} disabled={leaving} />
+        ) : null}
       </View>
 
       {isHost && partyId ? (
@@ -254,6 +258,8 @@ export default function TimerScreen(): React.JSX.Element {
           isPaused={!!isPaused}
           partySessionId={partyId}
           onApplied={refreshSession}
+          onEndParty={confirmExit}
+          endingParty={leaving}
         />
       ) : null}
     </SafeAreaView>
