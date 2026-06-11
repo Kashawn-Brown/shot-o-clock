@@ -62,6 +62,7 @@ export default function TimerScreen(): React.JSX.Element {
     me,
     myOutcome,
     errorMessage,
+    membershipLost,
     players,
     refreshOutcome,
     refreshSession,
@@ -150,6 +151,7 @@ export default function TimerScreen(): React.JSX.Element {
   const [actingOut, setActingOut] = useState(false);
   const [outError, setOutError] = useState<string | null>(null);
   const isActive = me?.status === 'active';
+  const isOut = me?.status === 'out';
   const selfOutRecorded = myOutcome?.player_action === 'self_out';
   // Done can't be recorded during countdown (mark_done is shot_window-only), but
   // mirror the shot screen's rule for consistency: a recorded Done closes I'm Out.
@@ -214,11 +216,29 @@ export default function TimerScreen(): React.JSX.Element {
   // us right after useGameExit's router.replace('/'). The intentional exit wins.
   const currentPhase = session?.current_phase;
   useEffect(() => {
-    if (leaving || status !== 'ready' || !partyId || !currentPhase || currentPhase === 'countdown') {
+    if (
+      leaving ||
+      membershipLost ||
+      status !== 'ready' ||
+      !partyId ||
+      !currentPhase ||
+      currentPhase === 'countdown'
+    ) {
       return;
     }
     router.replace(`/party/${partyId}/${routeForPhase(currentPhase)}`);
-  }, [leaving, status, currentPhase, partyId]);
+  }, [leaving, membershipLost, status, currentPhase, partyId]);
+
+  // The host removed us mid-game — surface why, then return home. Same message as
+  // the lobby (useLobby membershipLost). Driven by the realtime party_players sub.
+  useEffect(() => {
+    if (!membershipLost) return;
+    Alert.alert(
+      'Removed from party',
+      "The host removed you from this party. You won't be able to rejoin.",
+    );
+    router.replace('/');
+  }, [membershipLost]);
 
   if (status === 'loading') {
     return (
@@ -247,18 +267,20 @@ export default function TimerScreen(): React.JSX.Element {
         >
           <Text style={styles.back}>←</Text>
         </Pressable>
+
+        {/* Quick jump back to the round that just finished — top-right of the
+            header, hidden on round 1 / a reconnect that skipped results. */}
+        {showLastResults ? (
+          <Pressable onPress={viewLastResults} accessibilityRole="button" hitSlop={8}>
+            <Text style={styles.lastResultsText}>Round {lastRoundNumber} Results</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.header}>
         <Text style={styles.partyName}>{session?.name}</Text>
         <Text style={styles.subtitle}>Round {session?.current_round_number}</Text>
       </View>
-
-      {showLastResults ? (
-        <Pressable onPress={viewLastResults} accessibilityRole="button" style={styles.lastResults} hitSlop={8}>
-          <Text style={styles.lastResultsText}>← Round {lastRoundNumber} Results</Text>
-        </Pressable>
-      ) : null}
 
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.ringLabel}>NEXT SHOT O&apos;CLOCK IN</Text>
@@ -330,26 +352,42 @@ export default function TimerScreen(): React.JSX.Element {
             style={[styles.footerButton, styles.destructiveButton]}
           />
           <Button
-            label="Roster"
+            label="Players"
             variant="outline"
             onPress={() => setRosterOpen(true)}
             style={styles.footerButton}
           />
         </View>
-        <ErrorBanner message={outError} />
-        <Button
-          label={selfOutLabel}
-          variant="outline"
-          onPress={confirmSelfOut}
-          disabled={!canSelfOut}
-        />
+        {/* Out players have no action — the I'm Out / Skip button is replaced with
+            a plain "you're out" note and their shot tally (matches shot-oclock). */}
+        {isOut ? (
+          <View style={styles.outNote}>
+            <Text style={styles.outNoteTitle}>You&apos;re out</Text>
+            <Text style={styles.outNoteSub}>
+              You took {me?.total_shots_completed ?? 0}{' '}
+              {me?.total_shots_completed === 1 ? 'shot' : 'shots'}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <ErrorBanner message={outError} />
+            <Button
+              label={selfOutLabel}
+              variant="outline"
+              onPress={confirmSelfOut}
+              disabled={!canSelfOut}
+            />
+          </>
+        )}
       </View>
 
       {partyId ? (
         <RosterSheet
           visible={rosterOpen}
           onClose={() => setRosterOpen(false)}
+          partyName={session?.name ?? ''}
           players={players}
+          graceMode={settings?.grace_mode ?? 'disabled'}
           currentUserId={me?.user_id ?? null}
           isHost={isHost}
           onApplied={refreshSession}
@@ -407,6 +445,7 @@ const styles = StyleSheet.create({
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
@@ -417,11 +456,6 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     paddingVertical: SPACING.md,
-  },
-  lastResults: {
-    alignSelf: 'center',
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.md,
   },
   lastResultsText: {
     fontSize: FONT_SIZE.sm,
@@ -448,9 +482,11 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   // Square that bounds the ring; the +time circles float at its lower corners.
+  // Nudged down so the ring sits nearer the screen's vertical centre.
   ringArea: {
     width: RING_SIZE,
     height: RING_SIZE,
+    marginTop: SPACING.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -470,20 +506,22 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   pauseButton: {
-    width: 44,
-    height: 44,
+    width: 56,
+    height: 56,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pauseIcon: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.md,
     color: COLORS.textPrimary,
   },
+  // The +time circles sit below and outside the ring's lower corners — negative
+  // offsets push them clear of the ring arc so they never overlap it.
   circle: {
     position: 'absolute',
-    bottom: 0,
+    bottom: -SPACING.md,
     width: 56,
     height: 56,
     borderRadius: RADIUS.full,
@@ -494,10 +532,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addLeft: {
-    left: 0,
+    left: -SPACING.lg,
   },
   addRight: {
-    right: 0,
+    right: -SPACING.lg,
   },
   circleLabel: {
     fontSize: FONT_SIZE.sm,
@@ -513,6 +551,21 @@ const styles = StyleSheet.create({
   footer: {
     padding: SPACING.lg,
     gap: SPACING.sm,
+  },
+  // Replaces the I'm Out button for an out player: a plain note + their tally.
+  outNote: {
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  outNoteTitle: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.textSecondary,
+  },
+  outNoteSub: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
   },
   footerRow: {
     flexDirection: 'row',

@@ -31,6 +31,7 @@ import {
   View,
 } from 'react-native';
 
+import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { hostMarkPlayerActive } from '@/features/party/api/hostMarkPlayerActive';
 import { hostMarkPlayerOut } from '@/features/party/api/hostMarkPlayerOut';
@@ -42,6 +43,7 @@ import type { Database } from '@/types/db.generated';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 type PlayerRow = Database['public']['Tables']['party_players']['Row'];
+type GraceMode = Database['public']['Enums']['grace_mode'];
 
 // Dim behind the sheet — a one-off overlay, no semantic token for it.
 const BACKDROP_COLOR = 'rgba(0, 0, 0, 0.4)';
@@ -52,7 +54,11 @@ const SLIDE_DURATION_MS = 220;
 type RosterSheetProps = {
   visible: boolean;
   onClose: () => void;
+  /** Party name, shown in the sheet's centred summary. */
+  partyName: string;
   players: PlayerRow[];
+  /** Party grace setting — derives each player's remaining-grace tag. */
+  graceMode: GraceMode;
   /** The caller's auth id — flags their own row so host controls hide on it. */
   currentUserId: string | null;
   /** Whether the caller holds the host role — gates the per-row controls. */
@@ -64,7 +70,9 @@ type RosterSheetProps = {
 export function RosterSheet({
   visible,
   onClose,
+  partyName,
   players,
+  graceMode,
   currentUserId,
   isHost,
   onApplied,
@@ -159,7 +167,7 @@ export function RosterSheet({
     [translateY],
   );
 
-  const roster = deriveTimerRoster(players, currentUserId);
+  const roster = deriveTimerRoster(players, currentUserId, graceMode);
   const active = roster.filter((entry) => entry.status === 'active');
   const out = roster.filter((entry) => entry.status === 'out');
 
@@ -216,23 +224,32 @@ export function RosterSheet({
   const renderRow = (entry: TimerRosterEntry): React.JSX.Element => {
     const locked = busyId !== null;
     const showActions = isHost && !entry.isSelf;
+    const isOut = entry.status === 'out';
 
     return (
-      <View key={entry.id} style={styles.row}>
-        <View style={styles.rowMain}>
-          <Text style={styles.rowName} numberOfLines={1}>
+      <View key={entry.id} style={[styles.row, isOut && styles.outRow]}>
+        <View style={styles.avatar} />
+
+        <View style={styles.info}>
+          <Text style={styles.name} numberOfLines={1}>
             {entry.displayName}
-            {entry.isSelf ? ' (You)' : ''}
-            {entry.isHost ? ' · Host' : ''}
           </Text>
-          <Text style={styles.rowShots}>
-            {entry.shotsCompleted} {entry.shotsCompleted === 1 ? 'shot' : 'shots'}
-          </Text>
+          <View style={styles.tags}>
+            {entry.isHost ? <Text style={styles.hostPill}>Host</Text> : null}
+            {entry.isSelf && !entry.isHost ? <Text style={styles.youTag}>You</Text> : null}
+            {/* Grace only matters while a player is still in — don't tag an out row. */}
+            {!isOut && entry.graceAvailable ? <Text style={styles.graceTag}>Grace</Text> : null}
+            <Text style={styles.shotsTag}>
+              {entry.shotsCompleted} {entry.shotsCompleted === 1 ? 'shot' : 'shots'}
+            </Text>
+          </View>
         </View>
 
         {showActions ? (
-          <View style={styles.rowActions}>
-            {entry.status === 'active' ? (
+          <View style={styles.actions}>
+            {isOut ? (
+              <TextAction label="Reinstate" onPress={() => handleReinstate(entry.id)} disabled={locked} />
+            ) : (
               <>
                 <TextAction label="Mark Out" onPress={() => handleMarkOut(entry.id)} disabled={locked} />
                 <TextAction
@@ -242,8 +259,6 @@ export function RosterSheet({
                   disabled={locked}
                 />
               </>
-            ) : (
-              <TextAction label="Reinstate" onPress={() => handleReinstate(entry.id)} disabled={locked} />
             )}
           </View>
         ) : null}
@@ -257,39 +272,49 @@ export function RosterSheet({
         <Pressable style={styles.backdrop} onPress={close} accessibilityRole="button" />
 
         <Animated.View style={[styles.sheet, { height: sheetHeight, transform: [{ translateY }] }]}>
-          {/* Drag target: the grab handle + title. Pans the whole sheet. */}
-          <View style={styles.grabArea} {...panResponder.panHandlers}>
+          {/* Drag zone: handle, title, and the centred party summary all pan. */}
+          <View style={styles.dragZone} {...panResponder.panHandlers}>
             <View style={styles.handle} />
-            <Text style={styles.title}>Roster</Text>
+            <Text style={styles.title}>Players</Text>
+            <View style={styles.summary}>
+              <Text style={styles.partyName}>{partyName}</Text>
+              <Text style={styles.counts}>
+                {active.length} Active · {out.length} Out
+              </Text>
+            </View>
           </View>
 
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
             {active.length > 0 ? (
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>ACTIVE</Text>
+              <>
+                <Text style={[styles.sectionTitle, styles.activeTitle]}>● Active ({active.length})</Text>
                 {active.map(renderRow)}
-              </View>
+              </>
             ) : null}
 
             {out.length > 0 ? (
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>OUT</Text>
+              <>
+                <Text style={[styles.sectionTitle, styles.outTitle]}>● Out ({out.length})</Text>
                 {out.map(renderRow)}
-              </View>
+              </>
             ) : null}
 
             {roster.length === 0 ? <Text style={styles.empty}>No players yet.</Text> : null}
           </ScrollView>
 
           <ErrorBanner message={error} />
+
+          <View style={styles.footer}>
+            <Button label="Close" variant="outline" onPress={close} />
+          </View>
         </Animated.View>
       </View>
     </Modal>
   );
 }
 
-// Minimal tappable text action — intentionally lighter than the Button primitive,
-// which is sized for full-width primary actions.
+// Minimal underlined text action — lighter than the Button primitive, which is
+// sized for full-width primary actions.
 function TextAction({
   label,
   onPress,
@@ -329,19 +354,33 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: RADIUS.lg,
     borderTopRightRadius: RADIUS.lg,
   },
-  grabArea: {
-    alignItems: 'center',
+  dragZone: {
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.md,
     gap: SPACING.sm,
   },
   handle: {
+    alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.border,
   },
   title: {
+    paddingHorizontal: SPACING.lg,
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.textPrimary,
+  },
+  summary: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  partyName: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+  },
+  counts: {
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
@@ -351,52 +390,81 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xl,
-    gap: SPACING.lg,
+    paddingBottom: SPACING.lg,
+    gap: SPACING.sm,
   },
-  section: {
-    gap: SPACING.xs,
-  },
-  sectionLabel: {
-    fontSize: FONT_SIZE.xs,
+  sectionTitle: {
+    fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.bold,
-    letterSpacing: 1,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.xs,
+  },
+  activeTitle: {
+    color: COLORS.success,
+  },
+  outTitle: {
     color: COLORS.textSecondary,
-    paddingBottom: SPACING.xs,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
     gap: SPACING.md,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
   },
-  rowMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: SPACING.md,
+  outRow: {
+    opacity: 0.6,
   },
-  rowName: {
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.border,
+  },
+  info: {
     flex: 1,
+    gap: SPACING.xs,
+  },
+  name: {
     fontSize: FONT_SIZE.md,
     color: COLORS.textPrimary,
   },
-  rowShots: {
-    fontSize: FONT_SIZE.sm,
+  tags: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  hostPill: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.textSecondary,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+  },
+  youTag: {
+    fontSize: FONT_SIZE.xs,
     color: COLORS.textSecondary,
   },
-  rowActions: {
+  graceTag: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.warning,
+  },
+  shotsTag: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.textSecondary,
+  },
+  actions: {
     flexDirection: 'row',
     gap: SPACING.md,
   },
   actionText: {
     fontSize: FONT_SIZE.sm,
-    fontWeight: FONT_WEIGHT.medium,
-    color: COLORS.textPrimary,
+    color: COLORS.textSecondary,
+    textDecorationLine: 'underline',
   },
   actionTextDanger: {
     color: COLORS.danger,
@@ -406,6 +474,9 @@ const styles = StyleSheet.create({
   },
   actionDisabled: {
     opacity: 0.4,
+  },
+  footer: {
+    padding: SPACING.lg,
   },
   empty: {
     fontSize: FONT_SIZE.sm,
