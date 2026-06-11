@@ -23,6 +23,7 @@ import { useAdvancePhase } from '@/features/game/useAdvancePhase';
 import { syncServerTime } from '@/features/game/syncServerTime';
 import { getPartyState } from '@/features/party/api/partyState';
 import { rpcErrorMessage } from '@/lib/errors';
+import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/db.generated';
 
 type PartyRow = Database['public']['Tables']['party_sessions']['Row'];
@@ -51,6 +52,10 @@ interface UseTimerSessionResult {
   reload: () => void;
   // Re-pull myOutcome (e.g. right after the player taps Done / I'm Out).
   refreshOutcome: () => void;
+  // Silently re-pull the session snapshot (e.g. right after a host control —
+  // pause / resume / add time — so the host's own screen updates without waiting
+  // on the realtime round-trip). No spinner, no error flip.
+  refreshSession: () => void;
 }
 
 export function useTimerSession(partyId: string | undefined): UseTimerSessionResult {
@@ -180,6 +185,37 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     onAdvance: refresh,
   });
 
+  // Realtime session sync. The advance poll only re-pulls while the timer is
+  // active and due, so a host control that does not move phase_ends_at — pause
+  // (option (a): status → paused, phase_ends_at left intact, §10.1) and resume —
+  // would never reach the other devices through it. Watching the session row
+  // closes that gap: any UPDATE (pause, resume, add time, end party) triggers the
+  // silent re-pull, so every device reflects the host action within realtime
+  // latency. party_sessions is already in the supabase_realtime publication
+  // (migration 20260610…; schema.md §15); RLS (rls-rules.md §2) gates delivery to
+  // members. Mirrors the lobby's session sub (D027/D031).
+  useEffect(() => {
+    if (!partyId) return;
+
+    const channel = supabase
+      .channel(`timer:party_sessions:${partyId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'party_sessions',
+          filter: `id=eq.${partyId}`,
+        },
+        refresh,
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [partyId, refresh]);
+
   return {
     status,
     session,
@@ -191,5 +227,6 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     errorMessage,
     reload,
     refreshOutcome,
+    refreshSession: refresh,
   };
 }

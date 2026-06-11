@@ -1,17 +1,17 @@
 // Timer — the between-shots countdown. Single file that adapts for host vs
-// player: the host gets the pause button inside the ring, Add 30s / Add 1 min,
-// and the Host Controls section; a player sees only the ring, View Roster, and
-// I'm Out.
+// player: the host gets a Host Controls button opening the controls sheet
+// (pause/resume, add time); a player sees only the ring, Roster, and I'm Out.
 //
 // The ring shows the REAL countdown, computed from the session's phase_ends_at
 // minus skew-corrected server time (useCountdown) and draining clockwise — no
 // client owns the timer (CLAUDE.md §2.1). useTimerSession loads the snapshot,
-// aligns the clock, and polls advance_phase_if_due to drive the transition.
-// Still placeholder this task: the host controls and I'm Out (Phase 8/10).
+// aligns the clock, polls advance_phase_if_due to drive the transition, and
+// subscribes to the session row so a host pause/resume reflects on every device.
+// While paused the ring freezes at paused_remaining_seconds (option (a), §10.1).
 //
 // The back arrow + End Party are the shared testing escape hatch (useGameExit):
 // end_party for the host, mark_self_out → home for a guest. The real in-game
-// host controls land in Phase 10.
+// End Party → Final Summary routing lands in Phase 11.
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
+import { HostControlsSheet } from '@/features/party/HostControlsSheet';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { selfOutCopy } from '@/features/game/selfOutCopy';
 import { useCountdown } from '@/features/game/useCountdown';
@@ -29,7 +30,7 @@ import { routeForPhase } from '@/features/party/reconnectRoute';
 import { useTimerSession } from '@/features/party/useTimerSession';
 import { rpcErrorMessage } from '@/lib/errors';
 import { formatDuration } from '@/lib/time';
-import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
+import { COLORS, FONT_SIZE, FONT_WEIGHT, SPACING } from '@/styles/tokens';
 
 export default function TimerScreen(): React.JSX.Element {
   // lastRound* are handed over by the Round Results screen when it sends us here,
@@ -39,10 +40,34 @@ export default function TimerScreen(): React.JSX.Element {
     lastRoundId?: string;
     lastRoundNumber?: string;
   }>();
-  const { status, session, settings, currentRound, me, myOutcome, errorMessage, refreshOutcome } =
-    useTimerSession(partyId);
-  const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
+  const {
+    status,
+    session,
+    settings,
+    currentRound,
+    me,
+    myOutcome,
+    errorMessage,
+    refreshOutcome,
+    refreshSession,
+  } = useTimerSession(partyId);
+  const { remainingMs: liveRemainingMs } = useCountdown(session?.phase_ends_at ?? null);
   const { leaving, confirmExit } = useGameExit(partyId);
+
+  // Host-only control surface. The RPCs backstop with NOT_HOST, so this gate is
+  // defence in depth, not the only guard (PartyPlayer.permissionRole, §2.4).
+  const isHost = me?.permission_role === 'host';
+  const isPaused = session?.status === 'paused';
+  const [controlsOpen, setControlsOpen] = useState(false);
+
+  // While paused the server freezes the timer under option (a): status → paused,
+  // phase_ends_at left intact (§10.1). So the live countdown would keep draining
+  // a stale deadline — show the frozen paused_remaining_seconds instead, on every
+  // device (the realtime session sub re-pulls the paused status). useCountdown
+  // stays pure; we just pick which value to display.
+  const remainingMs = isPaused
+    ? (session?.paused_remaining_seconds ?? 0) * 1000
+    : liveRemainingMs;
 
   // "Round N Results" button: only when the handed-over round is genuinely the one
   // just before this countdown (current_round_number - 1). This self-updates each
@@ -188,16 +213,11 @@ export default function TimerScreen(): React.JSX.Element {
         >
           <View style={styles.ringContent}>
             <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
-            <View style={styles.pauseButton}>
-              <Text style={styles.pauseIcon}>❚❚</Text>
-            </View>
+            {/* Pause/resume + add time now live in the Host Controls sheet; the
+                ring just reflects the frozen state. */}
+            {isPaused ? <Text style={styles.pausedLabel}>❚❚ PAUSED</Text> : null}
           </View>
         </ProgressRing>
-
-        <View style={styles.addTimeRow}>
-          <Button label="+ Add 30s" variant="outline" onPress={() => {}} style={styles.addTime} />
-          <Button label="+ Add 1 min" variant="outline" onPress={() => {}} style={styles.addTime} />
-        </View>
       </ScrollView>
 
       <View style={styles.footer}>
@@ -208,7 +228,14 @@ export default function TimerScreen(): React.JSX.Element {
             onPress={() => router.push(`/party/${partyId}/roster`)}
             style={styles.footerButton}
           />
-          <Button label="Host Controls" variant="outline" onPress={() => {}} style={styles.footerButton} />
+          {isHost ? (
+            <Button
+              label="Host Controls"
+              variant="outline"
+              onPress={() => setControlsOpen(true)}
+              style={styles.footerButton}
+            />
+          ) : null}
         </View>
         <ErrorBanner message={outError} />
         <Button
@@ -219,6 +246,16 @@ export default function TimerScreen(): React.JSX.Element {
         />
         <Button label="End Party" variant="outline" onPress={confirmExit} disabled={leaving} />
       </View>
+
+      {isHost && partyId ? (
+        <HostControlsSheet
+          visible={controlsOpen}
+          onClose={() => setControlsOpen(false)}
+          isPaused={!!isPaused}
+          partySessionId={partyId}
+          onApplied={refreshSession}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -287,25 +324,11 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
   },
-  pauseButton: {
-    width: 44,
-    height: 44,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pauseIcon: {
+  pausedLabel: {
     fontSize: FONT_SIZE.sm,
-    color: COLORS.textPrimary,
-  },
-  addTimeRow: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-  },
-  addTime: {
-    flex: 1,
+    fontWeight: FONT_WEIGHT.medium,
+    letterSpacing: 1,
+    color: COLORS.textSecondary,
   },
   footer: {
     padding: SPACING.lg,
