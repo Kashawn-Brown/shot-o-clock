@@ -2,6 +2,39 @@ import { deriveTimerRoster } from '@/features/party/timerRoster';
 import type { Database } from '@/types/db.generated';
 
 type PlayerRow = Database['public']['Tables']['party_players']['Row'];
+type OutcomeRow = Database['public']['Tables']['round_player_outcomes']['Row'];
+
+// A self_out outcome for `partyPlayerId` — only player_action + party_player_id are
+// read by the derivation; the rest are filled to keep the row fully typed.
+function selfOutOutcome(partyPlayerId: string): OutcomeRow {
+  return {
+    created_at: '2026-06-11T00:00:00Z',
+    eliminated_this_round: false,
+    final_outcome: 'pending',
+    finalized_at: null,
+    finalized_by_player_id: null,
+    grace_applied: false,
+    grace_applied_at: null,
+    id: `o-${partyPlayerId}`,
+    notes: null,
+    pardoned: false,
+    pardoned_at: null,
+    pardoned_by_player_id: null,
+    party_player_id: partyPlayerId,
+    party_session_id: 's-1',
+    player_action: 'self_out',
+    player_marked_self_out_at: '2026-06-11T00:00:05Z',
+    player_tapped_done_at: null,
+    referee_player_id: null,
+    referee_verdict: 'not_required',
+    referee_verdict_at: null,
+    round_id: 'r-1',
+    round_number: 1,
+    status_after_round: null,
+    status_before_round: 'active',
+    updated_at: '2026-06-11T00:00:05Z',
+  };
+}
 
 // Fully-typed row with defaults; tests override only what they exercise. Listing
 // every column makes a schema change that adds a required field fail to compile.
@@ -90,6 +123,13 @@ describe('deriveTimerRoster', () => {
   it('flags no row as self when there is no authenticated user', () => {
     const rows = deriveTimerRoster([host, player], null, 'disabled');
     expect(rows.every((r) => r.isSelf === false)).toBe(true);
+  });
+
+  it('shows a still-active player who self_out this round as Out', () => {
+    const rows = deriveTimerRoster([host, player], 'u-host', 'disabled', [selfOutOutcome('p-guest')]);
+    expect(rows.find((r) => r.id === 'p-guest')?.status).toBe('out');
+    // The host (no self_out outcome) stays active.
+    expect(rows.find((r) => r.id === 'p-host')?.status).toBe('active');
   });
 
   it('derives grace availability from mode and used_grace', () => {

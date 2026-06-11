@@ -10,6 +10,7 @@
 import type { Database } from '@/types/db.generated';
 
 type PlayerRow = Database['public']['Tables']['party_players']['Row'];
+type OutcomeRow = Database['public']['Tables']['round_player_outcomes']['Row'];
 type PlayerStatus = Database['public']['Enums']['player_status'];
 type GraceMode = Database['public']['Enums']['grace_mode'];
 
@@ -38,22 +39,42 @@ function isVisible(player: PlayerRow): boolean {
  * caller's auth id, used to flag their own row so the host's controls can hide on
  * it (a host can't mark out / remove themselves; §11.2/§11.3). `graceMode` is the
  * party setting, used to derive each player's remaining-grace flag.
+ *
+ * `currentRoundOutcomes` lets the roster show a still-`active` player who has
+ * self_out this round as Out *now*, rather than waiting for finalization to flip
+ * their party_players.status — so a mid-game Leave Party (which records a self_out)
+ * reflects promptly on every device.
  */
 export function deriveTimerRoster(
   players: PlayerRow[],
   userId: string | null,
   graceMode: GraceMode,
+  currentRoundOutcomes: OutcomeRow[] = [],
 ): TimerRosterEntry[] {
-  return players.filter(isVisible).map((player) => ({
-    id: player.id,
-    displayName: player.display_name,
-    // isVisible guarantees active/out, but the filter doesn't narrow the field —
-    // assert the two-state subtype the UI switches on.
-    status: player.status as RosterEntryStatus,
-    shotsCompleted: player.total_shots_completed,
-    isHost: player.permission_role === 'host',
-    isSelf: userId !== null && player.user_id === userId,
-    graceAvailable:
-      graceMode === 'unlimited' || (graceMode === 'enabled' && !player.used_grace),
-  }));
+  const selfOutPlayerIds = new Set(
+    currentRoundOutcomes
+      .filter((outcome) => outcome.player_action === 'self_out')
+      .map((outcome) => outcome.party_player_id),
+  );
+
+  return players.filter(isVisible).map((player) => {
+    // isVisible guarantees active/out; treat an active player who self_out this
+    // round as Out for display. The filter doesn't narrow the field, so assert the
+    // two-state subtype the UI switches on.
+    const displayStatus: RosterEntryStatus =
+      player.status === 'active' && selfOutPlayerIds.has(player.id)
+        ? 'out'
+        : (player.status as RosterEntryStatus);
+
+    return {
+      id: player.id,
+      displayName: player.display_name,
+      status: displayStatus,
+      shotsCompleted: player.total_shots_completed,
+      isHost: player.permission_role === 'host',
+      isSelf: userId !== null && player.user_id === userId,
+      graceAvailable:
+        graceMode === 'unlimited' || (graceMode === 'enabled' && !player.used_grace),
+    };
+  });
 }

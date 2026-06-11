@@ -57,6 +57,10 @@ interface UseTimerSessionResult {
   // The caller's outcome row for the current round, or null if they haven't acted
   // yet. Drives the Done/I'm Out button states. Re-read per round and on demand.
   myOutcome: OutcomeRow | null;
+  // Every outcome row for the current round — lets the roster show a player who
+  // self_out this round as Out before finalization changes their status. [] until
+  // loaded / between rounds.
+  roundOutcomes: OutcomeRow[];
   errorMessage: string | null;
   // Flips true when a realtime refresh finds the caller is no longer a member —
   // the host removed them (get_party_state → SESSION_NOT_FOUND, or their own row
@@ -80,6 +84,9 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [me, setMe] = useState<PlayerRow | null>(null);
   const [myOutcome, setMyOutcome] = useState<OutcomeRow | null>(null);
+  // All outcomes for the current round, so the roster can show a player who has
+  // self_out this round as Out promptly — before finalization flips their status.
+  const [roundOutcomes, setRoundOutcomes] = useState<OutcomeRow[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [membershipLost, setMembershipLost] = useState(false);
 
@@ -147,16 +154,27 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   const roundIdRef = useRef(roundId);
   roundIdRef.current = roundId;
   const refreshOutcome = useCallback(() => {
-    if (!roundId || !myPlayerId) {
+    if (!roundId) {
       setMyOutcome(null);
+      setRoundOutcomes([]);
       return;
     }
     getRoundOutcomes(roundId).then((result) => {
       if (!mountedRef.current || !result.ok) return;
       if (roundIdRef.current !== roundId) return; // round advanced mid-fetch — drop
-      setMyOutcome(result.data.outcomes.find((o) => o.party_player_id === myPlayerId) ?? null);
+      setRoundOutcomes(result.data.outcomes);
+      setMyOutcome(
+        myPlayerId
+          ? (result.data.outcomes.find((o) => o.party_player_id === myPlayerId) ?? null)
+          : null,
+      );
     });
   }, [roundId, myPlayerId]);
+
+  // Latest refreshOutcome, read off a ref so the realtime effect (keyed on
+  // partyId) can call it without depending on the round/player ids.
+  const refreshOutcomeRef = useRef(refreshOutcome);
+  refreshOutcomeRef.current = refreshOutcome;
 
   // Clear the outcome the instant the round changes, before the async re-fetch
   // lands — otherwise the previous round's self_out/done would keep the buttons
@@ -164,6 +182,7 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   // driven by `me.status`, not the outcome.
   useEffect(() => {
     setMyOutcome(null);
+    setRoundOutcomes([]);
   }, [roundId]);
 
   useEffect(() => {
@@ -226,9 +245,13 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   //   - party_players *: a host marking a player out / active / removed mutates
   //     only party_players, so the roster (and the target's own `me.status`) stays
   //     live across devices. Mirrors the lobby's subs (D027/D031).
-  // Both tables are in the supabase_realtime publication (schema.md §15); RLS
+  //   - round_player_outcomes *: a player tapping Done / I'm Out (and leaving via
+  //     mark_self_out) writes only an outcome row — no party_players change — so
+  //     without this the other devices' rosters wouldn't reflect a self_out until
+  //     finalization. Re-pulls the round's outcomes (refreshOutcome).
+  // All three tables are in the supabase_realtime publication (schema.md §15); RLS
   // (rls-rules.md §2/§4) gates delivery to members. Keyed on partyId only — the
-  // handler reads the latest refresh off a ref.
+  // handlers read the latest refreshers off refs.
   useEffect(() => {
     if (!partyId) return;
 
@@ -252,6 +275,16 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
         },
         () => refreshRef.current(),
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'round_player_outcomes',
+          filter: `party_session_id=eq.${partyId}`,
+        },
+        () => refreshOutcomeRef.current(),
+      )
       .subscribe();
 
     return () => {
@@ -267,6 +300,7 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     players,
     me,
     myOutcome,
+    roundOutcomes,
     errorMessage,
     membershipLost,
     reload,
