@@ -183,18 +183,21 @@ export default function ShotOClockScreen(): React.JSX.Element {
       <View style={styles.center}>
         <Text style={styles.title}>SHOT{'\n'}O&apos;CLOCK</Text>
 
-        <ProgressRing
-          size={RING_SIZE}
-          strokeWidth={8}
-          progress={ringProgress}
-          color={COLORS.shotRing}
-          trackColor="rgba(255,255,255,0.2)"
-        >
-          <View style={styles.ringContent}>
-            <Text style={styles.ringLabel}>SHOT WINDOW</Text>
-            <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
-          </View>
-        </ProgressRing>
+        <View style={styles.ringGroup}>
+          <ProgressRing
+            size={RING_SIZE}
+            strokeWidth={8}
+            progress={ringProgress}
+            color={COLORS.shotRing}
+            trackColor="rgba(255,255,255,0.2)"
+          >
+            <View style={styles.ringContent}>
+              <Text style={styles.ringLabel}>SHOT WINDOW</Text>
+              <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
+            </View>
+          </ProgressRing>
+          <Text style={styles.ringCaption}>Time to take your shot</Text>
+        </View>
       </View>
 
       <View style={styles.actions}>
@@ -204,21 +207,23 @@ export default function ShotOClockScreen(): React.JSX.Element {
           <Text style={styles.spectatorNote}>You&apos;re out — you can&apos;t take this shot.</Text>
         ) : null}
 
-        <Pressable
-          onPress={handleDone}
-          disabled={!canDone}
-          style={[styles.action, styles.doneAction, !canDone && !doneRecorded && styles.actionDisabled]}
-        >
-          <Text style={styles.doneLabel}>{doneRecorded ? "You're done ✓" : 'Done ✓'}</Text>
-        </Pressable>
+        <View style={styles.actionRow}>
+          <Pressable
+            onPress={confirmSelfOut}
+            disabled={!canSelfOut}
+            style={[styles.action, styles.outAction, !canSelfOut && !selfOutRecorded && styles.actionDisabled]}
+          >
+            <Text style={styles.outLabel}>{selfOutRecorded ? "You're out" : "I'm Out"}</Text>
+          </Pressable>
 
-        <Pressable
-          onPress={confirmSelfOut}
-          disabled={!canSelfOut}
-          style={[styles.action, styles.outAction, !canSelfOut && !selfOutRecorded && styles.actionDisabled]}
-        >
-          <Text style={styles.outLabel}>{selfOutRecorded ? "You're out" : "I'm Out"}</Text>
-        </Pressable>
+          <Pressable
+            onPress={handleDone}
+            disabled={!canDone}
+            style={[styles.action, styles.doneAction, !canDone && !doneRecorded && styles.actionDisabled]}
+          >
+            <Text style={styles.doneLabel}>{doneRecorded ? "You're done ✓" : 'Done ✓'}</Text>
+          </Pressable>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -259,9 +264,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 2,
   },
+  ringGroup: {
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
   ringContent: {
     alignItems: 'center',
     gap: SPACING.xs,
+  },
+  ringCaption: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.shotText,
+    opacity: 0.7,
   },
   ringLabel: {
     fontSize: FONT_SIZE.xs,
@@ -283,10 +297,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.7,
   },
+  actionRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
   action: {
-    paddingVertical: SPACING.md,
+    flex: 1,
+    minHeight: 96,
+    paddingVertical: SPACING.lg,
     borderRadius: RADIUS.md,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   actionDisabled: {
     opacity: 0.4,
