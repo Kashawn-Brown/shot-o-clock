@@ -54,8 +54,6 @@ const SLIDE_DURATION_MS = 220;
 type RosterSheetProps = {
   visible: boolean;
   onClose: () => void;
-  /** Party name, shown in the sheet's centred summary. */
-  partyName: string;
   players: PlayerRow[];
   /** Party grace setting — derives each player's remaining-grace tag. */
   graceMode: GraceMode;
@@ -70,7 +68,6 @@ type RosterSheetProps = {
 export function RosterSheet({
   visible,
   onClose,
-  partyName,
   players,
   graceMode,
   currentUserId,
@@ -272,16 +269,10 @@ export function RosterSheet({
         <Pressable style={styles.backdrop} onPress={close} accessibilityRole="button" />
 
         <Animated.View style={[styles.sheet, { height: sheetHeight, transform: [{ translateY }] }]}>
-          {/* Drag zone: handle, title, and the centred party summary all pan. */}
+          {/* Drag zone: handle + centred title. The whole strip pans the sheet. */}
           <View style={styles.dragZone} {...panResponder.panHandlers}>
             <View style={styles.handle} />
             <Text style={styles.title}>Players</Text>
-            <View style={styles.summary}>
-              <Text style={styles.partyName}>{partyName}</Text>
-              <Text style={styles.counts}>
-                {active.length} Active · {out.length} Out
-              </Text>
-            </View>
           </View>
 
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
@@ -355,32 +346,18 @@ const styles = StyleSheet.create({
     borderTopRightRadius: RADIUS.lg,
   },
   dragZone: {
+    alignItems: 'center',
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.md,
     gap: SPACING.sm,
   },
   handle: {
-    alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.border,
   },
   title: {
-    paddingHorizontal: SPACING.lg,
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.bold,
-    color: COLORS.textPrimary,
-  },
-  summary: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  partyName: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.textSecondary,
-  },
-  counts: {
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
