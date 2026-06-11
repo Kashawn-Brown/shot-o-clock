@@ -31,6 +31,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { markDone } from '@/features/party/api/markDone';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
+import { selfOutCopy } from '@/features/game/selfOutCopy';
 import { useCountdown } from '@/features/game/useCountdown';
 import { useGameExit } from '@/features/party/useGameExit';
 import { useTimerSession } from '@/features/party/useTimerSession';
@@ -71,16 +72,20 @@ export default function ShotOClockScreen(): React.JSX.Element {
   const doneRecorded = myAction === 'done';
   const selfOutRecorded = myAction === 'self_out';
 
-  // With grace still in hand, opting out reads as a skip (it will consume grace,
-  // not eliminate — see D034). With grace spent or off, it's the usual I'm Out.
-  const hasGraceRemaining = settings?.grace_mode === 'enabled' && me?.used_grace === false;
-  const selfOutLabel = selfOutRecorded
-    ? hasGraceRemaining
-      ? 'Skipped'
-      : "You're out"
-    : hasGraceRemaining
-      ? 'Skip this shot'
-      : "I'm Out";
+  // Button + confirmation copy track what opting out will actually do this round
+  // (D034 grace-aware skip): "Skip" when elimination is off, "Skip this shot" with
+  // grace in hand, else "I'm Out". See selfOutCopy.
+  const {
+    label: selfOutLabel,
+    confirmTitle,
+    confirmMessage,
+    confirmButton,
+  } = selfOutCopy({
+    eliminationEnabled: settings?.elimination_enabled,
+    graceMode: settings?.grace_mode,
+    usedGrace: me?.used_grace,
+    selfOutRecorded,
+  });
 
   const canDone = isActive && !doneRecorded && !selfOutRecorded && !acting;
   // Once Done is recorded, I'm Out is closed for the round (product call — a
@@ -126,19 +131,15 @@ export default function ShotOClockScreen(): React.JSX.Element {
     refreshOutcome();
   }, [partyId, canSelfOut, refreshOutcome]);
 
-  // Confirmation gate — opting out is irreversible (only the host can reinstate,
-  // game-rules §7), same pattern as End Party / Remove Player.
+  // Confirmation gate — opting out is irreversible within the round (game-rules §7);
+  // the message reflects the actual consequence (grace / elimination-off / out).
   const confirmSelfOut = useCallback(() => {
     if (!canSelfOut) return;
-    Alert.alert(
-      "I'm Out?",
-      "You'll sit out the rest of this round and can't undo it — only the host can bring you back in.",
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: "I'm Out", style: 'destructive', onPress: handleSelfOut },
-      ],
-    );
-  }, [canSelfOut, handleSelfOut]);
+    Alert.alert(confirmTitle, confirmMessage, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: confirmButton, style: 'destructive', onPress: handleSelfOut },
+    ]);
+  }, [canSelfOut, handleSelfOut, confirmTitle, confirmMessage, confirmButton]);
 
   // Ring fills clockwise as the proportion of the shot window remaining. Total is
   // the configured shot_window_seconds; clamp (in ProgressRing) guards against
