@@ -32,7 +32,7 @@ import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens
 
 export default function TimerScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
-  const { status, session, currentRound, me, myOutcome, errorMessage, refreshOutcome } =
+  const { status, session, settings, currentRound, me, myOutcome, errorMessage, refreshOutcome } =
     useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
   const { leaving, confirmExit } = useGameExit(partyId);
@@ -48,6 +48,17 @@ export default function TimerScreen(): React.JSX.Element {
   // mirror the shot screen's rule for consistency: a recorded Done closes I'm Out.
   const doneRecorded = myOutcome?.player_action === 'done';
   const canSelfOut = isActive && !doneRecorded && !selfOutRecorded && !actingOut;
+
+  // With grace still in hand, opting out reads as a skip (it will consume grace,
+  // not eliminate — see D034). With grace spent or off, it's the usual I'm Out.
+  const hasGraceRemaining = settings?.grace_mode === 'enabled' && me?.used_grace === false;
+  const selfOutLabel = selfOutRecorded
+    ? hasGraceRemaining
+      ? 'Skipped'
+      : "You're out"
+    : hasGraceRemaining
+      ? 'Skip this shot'
+      : "I'm Out";
 
   const handleSelfOut = useCallback(async () => {
     if (!partyId || !canSelfOut) return;
@@ -169,7 +180,7 @@ export default function TimerScreen(): React.JSX.Element {
         </View>
         <ErrorBanner message={outError} />
         <Button
-          label={selfOutRecorded ? "You're out" : "I'm Out"}
+          label={selfOutLabel}
           variant="outline"
           onPress={confirmSelfOut}
           disabled={!canSelfOut}
