@@ -175,7 +175,7 @@ export default function ResultsScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.headerBar}>
-        <Pressable onPress={confirmExit} accessibilityRole="button" hitSlop={8} disabled={leaving}>
+        <Pressable onPress={() => confirmExit()} accessibilityRole="button" hitSlop={8} disabled={leaving}>
           <Text style={styles.back}>←</Text>
         </Pressable>
       </View>

@@ -16,13 +16,26 @@
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { RosterSheet } from '@/features/party/RosterSheet';
+import { hostAddTime } from '@/features/party/api/hostAddTime';
+import { hostPauseTimer } from '@/features/party/api/hostPauseTimer';
+import { hostResumeTimer } from '@/features/party/api/hostResumeTimer';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { selfOutCopy } from '@/features/game/selfOutCopy';
 import { useCountdown } from '@/features/game/useCountdown';
@@ -31,7 +44,7 @@ import { routeForPhase } from '@/features/party/reconnectRoute';
 import { useTimerSession } from '@/features/party/useTimerSession';
 import { rpcErrorMessage } from '@/lib/errors';
 import { formatDuration } from '@/lib/time';
-import { COLORS, FONT_SIZE, FONT_WEIGHT, SPACING } from '@/styles/tokens';
+import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 export default function TimerScreen(): React.JSX.Element {
   // lastRound* are handed over by the Round Results screen when it sends us here,
@@ -66,12 +79,51 @@ export default function TimerScreen(): React.JSX.Element {
 
   // While paused the server freezes the timer under option (a): status → paused,
   // phase_ends_at left intact (§10.1). So the live countdown would keep draining
-  // a stale deadline — show the frozen paused_remaining_seconds instead. (No pause
-  // control on this screen yet, but the realtime session sub can still deliver a
-  // paused state.) useCountdown stays pure; we just pick which value to display.
+  // a stale deadline — show the frozen paused_remaining_seconds instead, on every
+  // device (the realtime session sub delivers the paused status). useCountdown
+  // stays pure; we just pick which value to display.
   const remainingMs = isPaused
     ? (session?.paused_remaining_seconds ?? 0) * 1000
     : liveRemainingMs;
+
+  // Host timer controls (pause/resume, add time) — integrated onto the ring, not a
+  // sheet. One in-flight lock across them; add_time isn't idempotent, so the lock
+  // is what stops a double-tap stacking two extensions (hostAddTime.ts). Errors
+  // surface in a small banner under the ring. On success refreshSession re-pulls so
+  // the host's screen updates without waiting on the realtime round-trip.
+  const [controlBusy, setControlBusy] = useState(false);
+  const [controlError, setControlError] = useState<string | null>(null);
+
+  const handlePauseResume = useCallback(async () => {
+    if (!partyId || controlBusy) return;
+    setControlError(null);
+    setControlBusy(true);
+    const result = isPaused
+      ? await hostResumeTimer({ partySessionId: partyId })
+      : await hostPauseTimer({ partySessionId: partyId });
+    setControlBusy(false);
+    if (result.ok) {
+      refreshSession();
+      return;
+    }
+    setControlError(rpcErrorMessage(result.error_code));
+  }, [partyId, controlBusy, isPaused, refreshSession]);
+
+  const handleAddTime = useCallback(
+    async (seconds: number) => {
+      if (!partyId || controlBusy) return;
+      setControlError(null);
+      setControlBusy(true);
+      const result = await hostAddTime({ partySessionId: partyId, seconds });
+      setControlBusy(false);
+      if (result.ok) {
+        refreshSession();
+        return;
+      }
+      setControlError(rpcErrorMessage(result.error_code));
+    },
+    [partyId, controlBusy, refreshSession],
+  );
 
   // "Round N Results" button: only when the handed-over round is genuinely the one
   // just before this countdown (current_round_number - 1). This self-updates each
@@ -187,7 +239,12 @@ export default function TimerScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.headerBar}>
-        <Pressable onPress={confirmExit} accessibilityRole="button" hitSlop={8} disabled={leaving}>
+        <Pressable
+          onPress={() => confirmExit({ isHost })}
+          accessibilityRole="button"
+          hitSlop={8}
+          disabled={leaving}
+        >
           <Text style={styles.back}>←</Text>
         </Pressable>
       </View>
@@ -207,19 +264,58 @@ export default function TimerScreen(): React.JSX.Element {
         <Text style={styles.ringLabel}>NEXT SHOT O&apos;CLOCK IN</Text>
 
         {/* Real remaining time, draining clockwise. The server-driven transition
-            into the shot window is the advance_phase_if_due poll (useTimerSession). */}
-        <ProgressRing
-          size={RING_SIZE}
-          strokeWidth={10}
-          progress={ringProgress}
-          color={COLORS.buttonFilled}
-          trackColor={COLORS.border}
-        >
-          <View style={styles.ringContent}>
-            <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
-            {isPaused ? <Text style={styles.pausedLabel}>❚❚ PAUSED</Text> : null}
-          </View>
-        </ProgressRing>
+            into the shot window is the advance_phase_if_due poll (useTimerSession).
+            Host controls are integrated onto the ring: a pause/play button at its
+            centre, and +30s / +1m circles floating at the lower corners. */}
+        <View style={styles.ringArea}>
+          <ProgressRing
+            size={RING_SIZE}
+            strokeWidth={10}
+            progress={ringProgress}
+            color={COLORS.buttonFilled}
+            trackColor={COLORS.border}
+          >
+            <View style={styles.ringContent}>
+              <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
+              {isHost ? (
+                <Pressable
+                  onPress={handlePauseResume}
+                  disabled={controlBusy}
+                  accessibilityRole="button"
+                  accessibilityLabel={isPaused ? 'Resume timer' : 'Pause timer'}
+                  style={({ pressed }) => [
+                    styles.pauseButton,
+                    pressed && styles.controlPressed,
+                    controlBusy && styles.controlDisabled,
+                  ]}
+                >
+                  <Text style={styles.pauseIcon}>{isPaused ? '▶' : '❚❚'}</Text>
+                </Pressable>
+              ) : isPaused ? (
+                <Text style={styles.pausedLabel}>❚❚ PAUSED</Text>
+              ) : null}
+            </View>
+          </ProgressRing>
+
+          {isHost ? (
+            <>
+              <CircleControl
+                label="+30s"
+                onPress={() => void handleAddTime(ADD_TIME_SHORT_SECONDS)}
+                disabled={controlBusy}
+                style={styles.addLeft}
+              />
+              <CircleControl
+                label="+1m"
+                onPress={() => void handleAddTime(ADD_TIME_LONG_SECONDS)}
+                disabled={controlBusy}
+                style={styles.addRight}
+              />
+            </>
+          ) : null}
+        </View>
+
+        {isHost ? <ErrorBanner message={controlError} /> : null}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -229,7 +325,7 @@ export default function TimerScreen(): React.JSX.Element {
           <Button
             label={isHost ? 'End Party' : 'Leave Party'}
             variant="outline"
-            onPress={confirmExit}
+            onPress={() => confirmExit({ isHost })}
             disabled={leaving}
             style={[styles.footerButton, styles.destructiveButton]}
           />
@@ -263,7 +359,40 @@ export default function TimerScreen(): React.JSX.Element {
   );
 }
 
+// Small circular floating control for the +time buttons at the ring's corners.
+function CircleControl({
+  label,
+  onPress,
+  disabled,
+  style,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled: boolean;
+  style: StyleProp<ViewStyle>;
+}): React.JSX.Element {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      hitSlop={8}
+      style={({ pressed }) => [
+        styles.circle,
+        style,
+        pressed && styles.controlPressed,
+        disabled && styles.controlDisabled,
+      ]}
+    >
+      <Text style={styles.circleLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const RING_SIZE = 240;
+// Quick add-time amounts (seconds). host_add_time bounds input to 1–600.
+const ADD_TIME_SHORT_SECONDS = 30;
+const ADD_TIME_LONG_SECONDS = 60;
 
 const styles = StyleSheet.create({
   screen: {
@@ -318,6 +447,13 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: COLORS.textSecondary,
   },
+  // Square that bounds the ring; the +time circles float at its lower corners.
+  ringArea: {
+    width: RING_SIZE,
+    height: RING_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   ringContent: {
     alignItems: 'center',
     gap: SPACING.sm,
@@ -332,6 +468,47 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHT.medium,
     letterSpacing: 1,
     color: COLORS.textSecondary,
+  },
+  pauseButton: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pauseIcon: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textPrimary,
+  },
+  circle: {
+    position: 'absolute',
+    bottom: 0,
+    width: 56,
+    height: 56,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addLeft: {
+    left: 0,
+  },
+  addRight: {
+    right: 0,
+  },
+  circleLabel: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.medium,
+    color: COLORS.textPrimary,
+  },
+  controlPressed: {
+    opacity: 0.6,
+  },
+  controlDisabled: {
+    opacity: 0.4,
   },
   footer: {
     padding: SPACING.lg,

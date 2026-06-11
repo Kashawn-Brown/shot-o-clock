@@ -25,11 +25,47 @@ import { Alert } from 'react-native';
 import { endParty } from '@/features/party/api/endParty';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
 
+interface ConfirmExitOptions {
+  /** The caller's role, when known, so the confirmation copy is role-correct: a
+   *  host is ending the game for everyone, a player is only leaving. Omitted on
+   *  screens that don't resolve the role — those fall back to neutral copy. */
+  isHost?: boolean;
+}
+
 interface UseGameExitResult {
   /** True while the exit is in flight — bind to disabled state and suppress phase-routing effects. */
   leaving: boolean;
   /** Show the confirmation dialog; on confirm, exits the party and routes home. */
-  confirmExit: () => void;
+  confirmExit: (options?: ConfirmExitOptions) => void;
+}
+
+// Role-correct confirmation copy. The exit BEHAVIOR is still decided server-side
+// (endParty → NOT_HOST falls back to self-out); isHost only shapes the wording.
+function exitCopy(isHost: boolean | undefined): {
+  title: string;
+  message: string;
+  confirmLabel: string;
+} {
+  if (isHost === true) {
+    return {
+      title: 'End party?',
+      message: 'This ends the game for everyone and returns you home.',
+      confirmLabel: 'End Party',
+    };
+  }
+  if (isHost === false) {
+    return {
+      title: 'Leave party?',
+      message: 'You will leave the game and return home.',
+      confirmLabel: 'Leave Party',
+    };
+  }
+  // Role unknown — neutral wording that fits either path.
+  return {
+    title: 'Leave party?',
+    message: 'If you are the host, this ends the party for everyone.',
+    confirmLabel: 'Leave',
+  };
 }
 
 export function useGameExit(partyId: string | undefined): UseGameExitResult {
@@ -56,13 +92,17 @@ export function useGameExit(partyId: string | undefined): UseGameExitResult {
     router.replace('/');
   }, [partyId, leaving]);
 
-  const confirmExit = useCallback(() => {
-    if (leaving) return;
-    Alert.alert('Leave party?', 'If you are the host, this ends the party for everyone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Leave', style: 'destructive', onPress: handleExit },
-    ]);
-  }, [leaving, handleExit]);
+  const confirmExit = useCallback(
+    (options?: ConfirmExitOptions) => {
+      if (leaving) return;
+      const { title, message, confirmLabel } = exitCopy(options?.isHost);
+      Alert.alert(title, message, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: confirmLabel, style: 'destructive', onPress: handleExit },
+      ]);
+    },
+    [leaving, handleExit],
+  );
 
   return { leaving, confirmExit };
 }
