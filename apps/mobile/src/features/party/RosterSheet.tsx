@@ -76,20 +76,18 @@ export function RosterSheet({
   // translateY: 0 = full screen, sheetHeight = fully hidden. Animated manually,
   // so the Modal uses animationType="none".
   const translateY = useRef(new Animated.Value(sheetHeight)).current;
-  // Latest position, read in the pan handlers (which are created once).
-  const lastY = useRef(sheetHeight);
+  // The last COMMITTED rest position (sheetHeight = hidden, halfY = half-open,
+  // 0 = full), set explicitly at every rest transition below. We deliberately do
+  // NOT derive it from a translateY.addListener: with useNativeDriver the JS
+  // listener fires unreliably, so after a close it was left stale at sheetHeight,
+  // and the next grant captured the bottom — dragging slammed the sheet down on
+  // reopen. The pan delta is cumulative from grant, so rest + dy is all we need.
+  const restY = useRef(sheetHeight);
   const dragStart = useRef(sheetHeight);
   // Snap metrics, refreshed each render so the once-created PanResponder sees the
   // current screen height.
   const metrics = useRef({ sheetHeight, halfY });
   metrics.current = { sheetHeight, halfY };
-
-  useEffect(() => {
-    const id = translateY.addListener(({ value }) => {
-      lastY.current = value;
-    });
-    return () => translateY.removeListener(id);
-  }, [translateY]);
 
   const animateTo = useCallback(
     (toValue: number, onDone?: () => void) => {
@@ -108,6 +106,7 @@ export function RosterSheet({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const close = useCallback(() => {
+    restY.current = metrics.current.sheetHeight;
     animateTo(metrics.current.sheetHeight, () => onCloseRef.current());
   }, [animateTo]);
 
@@ -117,10 +116,12 @@ export function RosterSheet({
   const animateToRef = useRef(animateTo);
   animateToRef.current = animateTo;
 
-  // Slide up to half whenever the sheet becomes visible.
+  // Slide up to half whenever the sheet becomes visible. Reset position state
+  // first so a reopen always starts from a known hidden rest, never a stale one.
   useEffect(() => {
     if (visible) {
       translateY.setValue(metrics.current.sheetHeight);
+      restY.current = metrics.current.halfY;
       animateTo(metrics.current.halfY);
     }
   }, [visible, translateY, animateTo]);
@@ -131,7 +132,9 @@ export function RosterSheet({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > 4,
         onPanResponderGrant: () => {
-          dragStart.current = lastY.current;
+          // Anchor the drag to the last committed rest, not a listener-derived
+          // value — that is what makes reopen reliable.
+          dragStart.current = restY.current;
         },
         onPanResponderMove: (_event, gesture) => {
           const { sheetHeight: maxY } = metrics.current;
@@ -146,8 +149,11 @@ export function RosterSheet({
             closeRef.current();
             return;
           }
-          // Otherwise snap to whichever rest is nearer: full (0) or half.
-          animateToRef.current(current < half * 0.5 ? 0 : half);
+          // Otherwise snap to whichever rest is nearer: full (0) or half, and
+          // commit it so the next grant anchors correctly.
+          const target = current < half * 0.5 ? 0 : half;
+          restY.current = target;
+          animateToRef.current(target);
         },
       }),
     [translateY],
