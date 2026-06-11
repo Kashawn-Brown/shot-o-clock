@@ -72,6 +72,17 @@ export default function ShotOClockScreen(): React.JSX.Element {
   const doneRecorded = myAction === 'done';
   const selfOutRecorded = myAction === 'self_out';
 
+  // With grace still in hand, opting out reads as a skip (it will consume grace,
+  // not eliminate — see D034). With grace spent or off, it's the usual I'm Out.
+  const hasGraceRemaining = settings?.grace_mode === 'enabled' && me?.used_grace === false;
+  const selfOutLabel = selfOutRecorded
+    ? hasGraceRemaining
+      ? 'Skipped'
+      : "You're out"
+    : hasGraceRemaining
+      ? 'Skip this shot'
+      : "I'm Out";
+
   const canDone = isActive && !doneRecorded && !selfOutRecorded && !acting;
   // Once Done is recorded, I'm Out is closed for the round (product call — a
   // confirmed shot can't be walked back from the UI, even though the server would
@@ -211,7 +222,7 @@ export default function ShotOClockScreen(): React.JSX.Element {
                 disabled={!canSelfOut}
                 style={[styles.action, styles.outAction, !canSelfOut && !selfOutRecorded && styles.actionDisabled]}
               >
-                <Text style={styles.outLabel}>{selfOutRecorded ? "You're out" : "I'm Out"}</Text>
+                <Text style={styles.outLabel}>{selfOutLabel}</Text>
               </Pressable>
 
               <Pressable
