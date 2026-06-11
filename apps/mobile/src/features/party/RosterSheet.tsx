@@ -43,6 +43,7 @@ import type { Database } from '@/types/db.generated';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 type PlayerRow = Database['public']['Tables']['party_players']['Row'];
+type OutcomeRow = Database['public']['Tables']['round_player_outcomes']['Row'];
 type GraceMode = Database['public']['Enums']['grace_mode'];
 
 // Dim behind the sheet — a one-off overlay, no semantic token for it.
@@ -55,6 +56,8 @@ type RosterSheetProps = {
   visible: boolean;
   onClose: () => void;
   players: PlayerRow[];
+  /** Current-round outcomes — a self_out this round shows the player as Out now. */
+  currentRoundOutcomes: OutcomeRow[];
   /** Party grace setting — derives each player's remaining-grace tag. */
   graceMode: GraceMode;
   /** The caller's auth id — flags their own row so host controls hide on it. */
@@ -69,6 +72,7 @@ export function RosterSheet({
   visible,
   onClose,
   players,
+  currentRoundOutcomes,
   graceMode,
   currentUserId,
   isHost,
@@ -164,7 +168,7 @@ export function RosterSheet({
     [translateY],
   );
 
-  const roster = deriveTimerRoster(players, currentUserId, graceMode);
+  const roster = deriveTimerRoster(players, currentUserId, graceMode, currentRoundOutcomes);
   const active = roster.filter((entry) => entry.status === 'active');
   const out = roster.filter((entry) => entry.status === 'out');
 

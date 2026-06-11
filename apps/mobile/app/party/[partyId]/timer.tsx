@@ -19,6 +19,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -61,6 +62,7 @@ export default function TimerScreen(): React.JSX.Element {
     currentRound,
     me,
     myOutcome,
+    roundOutcomes,
     errorMessage,
     membershipLost,
     players,
@@ -77,6 +79,8 @@ export default function TimerScreen(): React.JSX.Element {
   const isHost = me?.permission_role === 'host';
   const isPaused = session?.status === 'paused';
   const [rosterOpen, setRosterOpen] = useState(false);
+  // Host taps the party name to reveal the join code for sharing mid-game.
+  const [joinCodeOpen, setJoinCodeOpen] = useState(false);
 
   // While paused the server freezes the timer under option (a): status → paused,
   // phase_ends_at left intact (§10.1). So the live countdown would keep draining
@@ -278,7 +282,13 @@ export default function TimerScreen(): React.JSX.Element {
       </View>
 
       <View style={styles.header}>
-        <Text style={styles.partyName}>{session?.name}</Text>
+        {isHost ? (
+          <Pressable onPress={() => setJoinCodeOpen(true)} accessibilityRole="button" hitSlop={8}>
+            <Text style={[styles.partyName, styles.partyNameTappable]}>{session?.name}</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.partyName}>{session?.name}</Text>
+        )}
         <Text style={styles.subtitle}>Round {session?.current_round_number}</Text>
       </View>
 
@@ -299,7 +309,13 @@ export default function TimerScreen(): React.JSX.Element {
             trackColor={COLORS.border}
           >
             <View style={styles.ringContent}>
-              <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
+              {/* A paused player sees PAUSED in place of the (frozen) time; the
+                  host always sees the time plus the pause/play control. */}
+              {!isHost && isPaused ? (
+                <Text style={styles.pausedLabel}>❚❚ PAUSED</Text>
+              ) : (
+                <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
+              )}
               {isHost ? (
                 <View style={styles.pauseSlot}>
                   <Pressable
@@ -391,11 +407,31 @@ export default function TimerScreen(): React.JSX.Element {
           visible={rosterOpen}
           onClose={() => setRosterOpen(false)}
           players={players}
+          currentRoundOutcomes={roundOutcomes}
           graceMode={settings?.grace_mode ?? 'disabled'}
           currentUserId={me?.user_id ?? null}
           isHost={isHost}
           onApplied={refreshSession}
         />
+      ) : null}
+
+      {/* Host-only join-code popover. Tapping the dim backdrop (anywhere outside
+          the card) dismisses; the card swallows its own taps. */}
+      {isHost ? (
+        <Modal
+          visible={joinCodeOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setJoinCodeOpen(false)}
+        >
+          <Pressable style={styles.popoverBackdrop} onPress={() => setJoinCodeOpen(false)}>
+            <Pressable style={styles.popoverCard} onPress={() => {}}>
+              <Text style={styles.popoverLabel}>JOIN CODE</Text>
+              <Text style={styles.popoverCode}>{session?.join_code}</Text>
+              <Text style={styles.popoverHint}>Share this code so others can join.</Text>
+            </Pressable>
+          </Pressable>
+        </Modal>
       ) : null}
     </SafeAreaView>
   );
@@ -431,7 +467,16 @@ function CircleControl({
   );
 }
 
-const RING_SIZE = 280;
+// ─── Timer layout knobs ───────────────────────────────────────────────────────
+// Tune the ring and host controls here — all in px. Each is consumed by the
+// `styles` block below (and `size={RING_SIZE}` on the ProgressRing). Adjust freely.
+const RING_SIZE = 280; // ring diameter
+const RING_TIME_FONT_SIZE = 60; // the M:SS time text inside the ring
+const PAUSE_BUTTON_SIZE = 64; // host pause/play button (centre-bottom of the ring)
+const ADD_TIME_BUTTON_SIZE = 64; // host +30s / +1m circles
+const ADD_TIME_BUTTON_OFFSET = 44; // how far the +time circles sit outside the ring's sides
+// ──────────────────────────────────────────────────────────────────────────────
+
 // Quick add-time amounts (seconds). host_add_time bounds input to 1–600.
 const ADD_TIME_SHORT_SECONDS = 30;
 const ADD_TIME_LONG_SECONDS = 60;
@@ -471,6 +516,11 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
   },
+  // Host's tappable party name (opens the join-code popover) — underlined to read
+  // as interactive.
+  partyNameTappable: {
+    textDecorationLine: 'underline',
+  },
   subtitle: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.textSecondary,
@@ -504,9 +554,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ringTime: {
-    fontSize: FONT_SIZE.xl,
+    fontSize: RING_TIME_FONT_SIZE,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
+  },
+  pausedLabel: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.medium,
+    letterSpacing: 1,
+    color: COLORS.textSecondary,
   },
   // Host pause/play, pinned near the bottom of the circle interior.
   pauseSlot: {
@@ -517,8 +573,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pauseButton: {
-    width: 56,
-    height: 56,
+    width: PAUSE_BUTTON_SIZE,
+    height: PAUSE_BUTTON_SIZE,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.surface,
     alignItems: 'center',
@@ -529,12 +585,12 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   // The +time circles sit below and outside the ring's lower corners — negative
-  // offsets push them clear of the ring arc so they never overlap it.
+  // offsets (ADD_TIME_BUTTON_OFFSET) push them clear of the ring arc.
   circle: {
     position: 'absolute',
     bottom: -SPACING.md,
-    width: 56,
-    height: 56,
+    width: ADD_TIME_BUTTON_SIZE,
+    height: ADD_TIME_BUTTON_SIZE,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
@@ -543,10 +599,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addLeft: {
-    left: -SPACING.lg,
+    left: -ADD_TIME_BUTTON_OFFSET,
   },
   addRight: {
-    right: -SPACING.lg,
+    right: -ADD_TIME_BUTTON_OFFSET,
   },
   circleLabel: {
     fontSize: FONT_SIZE.sm,
@@ -589,5 +645,36 @@ const styles = StyleSheet.create({
   // third Button variant; the label keeps the default outline color.
   destructiveButton: {
     borderColor: COLORS.danger,
+  },
+  // Join-code popover (host). Backdrop fills the screen and centres the card near
+  // the top, under the tapped party name.
+  popoverBackdrop: {
+    flex: 1,
+    alignItems: 'center',
+    paddingTop: SPACING.xxl * 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  popoverCard: {
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  popoverLabel: {
+    fontSize: FONT_SIZE.xs,
+    letterSpacing: 1,
+    color: COLORS.textSecondary,
+  },
+  popoverCode: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: FONT_WEIGHT.bold,
+    letterSpacing: 2,
+    color: COLORS.textPrimary,
+  },
+  popoverHint: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
   },
 });
