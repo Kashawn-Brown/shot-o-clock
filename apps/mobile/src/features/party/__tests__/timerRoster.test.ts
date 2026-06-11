@@ -52,7 +52,7 @@ const player = makePlayer({
 
 describe('deriveTimerRoster', () => {
   it('maps name, status, shots, and host/self flags', () => {
-    const rows = deriveTimerRoster([host, player], 'u-guest');
+    const rows = deriveTimerRoster([host, player], 'u-guest', 'disabled');
     expect(rows).toEqual([
       {
         id: 'p-host',
@@ -61,6 +61,7 @@ describe('deriveTimerRoster', () => {
         shotsCompleted: 0,
         isHost: true,
         isSelf: false,
+        graceAvailable: false,
       },
       {
         id: 'p-guest',
@@ -69,6 +70,7 @@ describe('deriveTimerRoster', () => {
         shotsCompleted: 3,
         isHost: false,
         isSelf: true,
+        graceAvailable: false,
       },
     ]);
   });
@@ -76,17 +78,34 @@ describe('deriveTimerRoster', () => {
   it('keeps active and out members but drops removed rows', () => {
     const out = makePlayer({ id: 'p-out', user_id: 'u-out', status: 'out' });
     const removed = makePlayer({ id: 'p-removed', user_id: 'u-removed', status: 'removed' });
-    const rows = deriveTimerRoster([host, player, out, removed], 'u-host');
+    const rows = deriveTimerRoster([host, player, out, removed], 'u-host', 'disabled');
     expect(rows.map((r) => r.id)).toEqual(['p-host', 'p-guest', 'p-out']);
   });
 
   it('preserves the server ordering (host first)', () => {
-    const rows = deriveTimerRoster([host, player], 'u-host');
+    const rows = deriveTimerRoster([host, player], 'u-host', 'disabled');
     expect(rows.map((r) => r.id)).toEqual(['p-host', 'p-guest']);
   });
 
   it('flags no row as self when there is no authenticated user', () => {
-    const rows = deriveTimerRoster([host, player], null);
+    const rows = deriveTimerRoster([host, player], null, 'disabled');
     expect(rows.every((r) => r.isSelf === false)).toBe(true);
+  });
+
+  it('derives grace availability from mode and used_grace', () => {
+    const unused = makePlayer({ id: 'p-a', user_id: 'u-a', used_grace: false });
+    const used = makePlayer({ id: 'p-b', user_id: 'u-b', used_grace: true });
+
+    // enabled: available only while their grace is unspent.
+    const enabled = deriveTimerRoster([unused, used], null, 'enabled');
+    expect(enabled.map((r) => r.graceAvailable)).toEqual([true, false]);
+
+    // unlimited: always available regardless of used_grace.
+    const unlimited = deriveTimerRoster([unused, used], null, 'unlimited');
+    expect(unlimited.map((r) => r.graceAvailable)).toEqual([true, true]);
+
+    // disabled: never available.
+    const disabled = deriveTimerRoster([unused, used], null, 'disabled');
+    expect(disabled.map((r) => r.graceAvailable)).toEqual([false, false]);
   });
 });

@@ -11,6 +11,7 @@ import type { Database } from '@/types/db.generated';
 
 type PlayerRow = Database['public']['Tables']['party_players']['Row'];
 type PlayerStatus = Database['public']['Enums']['player_status'];
+type GraceMode = Database['public']['Enums']['grace_mode'];
 
 // Only active/out are present, current members. Narrowed from PlayerStatus so the
 // UI can switch exhaustively on the two live states.
@@ -23,6 +24,9 @@ export interface TimerRosterEntry {
   shotsCompleted: number;
   isHost: boolean;
   isSelf: boolean;
+  // True when the player still has a grace to spend: unlimited mode always, or
+  // enabled mode while they haven't used theirs. The roster shows a "Grace" tag.
+  graceAvailable: boolean;
 }
 
 function isVisible(player: PlayerRow): boolean {
@@ -32,9 +36,14 @@ function isVisible(player: PlayerRow): boolean {
 /**
  * Roster rows for the timer screen, in server order (host first). `userId` is the
  * caller's auth id, used to flag their own row so the host's controls can hide on
- * it (a host can't mark out / remove themselves; §11.2/§11.3).
+ * it (a host can't mark out / remove themselves; §11.2/§11.3). `graceMode` is the
+ * party setting, used to derive each player's remaining-grace flag.
  */
-export function deriveTimerRoster(players: PlayerRow[], userId: string | null): TimerRosterEntry[] {
+export function deriveTimerRoster(
+  players: PlayerRow[],
+  userId: string | null,
+  graceMode: GraceMode,
+): TimerRosterEntry[] {
   return players.filter(isVisible).map((player) => ({
     id: player.id,
     displayName: player.display_name,
@@ -44,5 +53,7 @@ export function deriveTimerRoster(players: PlayerRow[], userId: string | null): 
     shotsCompleted: player.total_shots_completed,
     isHost: player.permission_role === 'host',
     isSelf: userId !== null && player.user_id === userId,
+    graceAvailable:
+      graceMode === 'unlimited' || (graceMode === 'enabled' && !player.used_grace),
   }));
 }
