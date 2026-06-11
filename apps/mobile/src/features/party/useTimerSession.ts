@@ -99,6 +99,11 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   // calls it after a tap). One get_round_outcomes call per round, never per tick.
   const roundId = currentRound?.id;
   const myPlayerId = me?.id;
+  // Latest round id, read in the async callback so a fetch issued for round N can't
+  // overwrite myOutcome after the round has already advanced to N+1 — that stale
+  // write was what kept the buttons disabled into the next round.
+  const roundIdRef = useRef(roundId);
+  roundIdRef.current = roundId;
   const refreshOutcome = useCallback(() => {
     if (!roundId || !myPlayerId) {
       setMyOutcome(null);
@@ -106,6 +111,7 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     }
     getRoundOutcomes(roundId).then((result) => {
       if (!mountedRef.current || !result.ok) return;
+      if (roundIdRef.current !== roundId) return; // round advanced mid-fetch — drop
       setMyOutcome(result.data.outcomes.find((o) => o.party_player_id === myPlayerId) ?? null);
     });
   }, [roundId, myPlayerId]);
