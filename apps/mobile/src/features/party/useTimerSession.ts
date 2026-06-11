@@ -58,6 +58,10 @@ interface UseTimerSessionResult {
   // yet. Drives the Done/I'm Out button states. Re-read per round and on demand.
   myOutcome: OutcomeRow | null;
   errorMessage: string | null;
+  // Flips true when a realtime refresh finds the caller is no longer a member —
+  // the host removed them (get_party_state → SESSION_NOT_FOUND, or their own row
+  // is now 'removed'). The timer screen routes home on this. Mirrors useLobby.
+  membershipLost: boolean;
   reload: () => void;
   // Re-pull myOutcome (e.g. right after the player taps Done / I'm Out).
   refreshOutcome: () => void;
@@ -77,6 +81,7 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   const [me, setMe] = useState<PlayerRow | null>(null);
   const [myOutcome, setMyOutcome] = useState<OutcomeRow | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [membershipLost, setMembershipLost] = useState(false);
 
   // The silent refresh must not depend on userId (it would re-create on identity
   // change); read the latest off a ref to derive `me` instead.
@@ -104,12 +109,25 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   const refresh = useCallback(() => {
     if (!partyId) return;
     getPartyState(partyId).then((result) => {
-      if (!mountedRef.current || !result.ok) return;
+      if (!mountedRef.current) return;
+      if (!result.ok) {
+        // The host removed us — RLS now hides the session. Signal the screen to
+        // route home. Any other failure is transient: keep the last good snapshot.
+        if (result.error_code === 'SESSION_NOT_FOUND') setMembershipLost(true);
+        return;
+      }
+      const mine = result.data.players.find((player) => player.user_id === userIdRef.current) ?? null;
+      // Defensive: if the snapshot ever returns our own row marked removed (rather
+      // than hiding the session), treat it the same as a membership loss.
+      if (mine?.status === 'removed') {
+        setMembershipLost(true);
+        return;
+      }
       setSession(result.data.session);
       setSettings(result.data.settings);
       setCurrentRound(result.data.current_round);
       setPlayers(result.data.players);
-      setMe(result.data.players.find((player) => player.user_id === userIdRef.current) ?? null);
+      setMe(mine);
     });
   }, [partyId]);
 
@@ -250,6 +268,7 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     me,
     myOutcome,
     errorMessage,
+    membershipLost,
     reload,
     refreshOutcome,
     refreshSession: refresh,
