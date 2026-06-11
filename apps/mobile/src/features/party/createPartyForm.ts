@@ -59,10 +59,9 @@ export function formatDefaultPartyName(date: Date): string {
 }
 
 // Grace-mode segmented control: display label paired with the enum value the
-// RPC stores, plus a one-line description shown under the selector. Only offered
-// when elimination is on. The `unlimited` enum value still exists in the schema
-// but is no longer a UI choice — with elimination off, nobody is eliminated
-// anyway, which is what ELIMINATION_OFF_GRACE_HINT communicates.
+// RPC stores, plus a one-line description shown under the selector. Only shown
+// when elimination is on (the whole section is hidden otherwise). The `unlimited`
+// enum value still exists in the schema but is no longer a UI choice.
 export const GRACE_MODE_OPTIONS: readonly {
   label: string;
   value: GraceMode;
@@ -72,9 +71,9 @@ export const GRACE_MODE_OPTIONS: readonly {
   { label: 'Grace', value: 'enabled', description: 'First miss is forgiven, second means out' },
 ];
 
-// Shown under the Grace Mode label when elimination is off (no selector then):
-// misses are still recorded, but they carry no elimination consequence.
-export const ELIMINATION_OFF_GRACE_HINT = 'Misses are tracked but nobody is eliminated';
+// Elimination-toggle hint text, switched on the toggle's value.
+export const ELIMINATION_ON_HINT = 'Players who miss are eliminated';
+export const ELIMINATION_OFF_HINT = 'Misses are tracked but nobody is eliminated';
 
 export const DEFAULT_GRACE_MODE: GraceMode = 'disabled';
 
