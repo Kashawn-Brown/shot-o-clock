@@ -14,25 +14,53 @@
 // host controls land in Phase 10.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
+import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { useCountdown } from '@/features/game/useCountdown';
 import { useGameExit } from '@/features/party/useGameExit';
 import { routeForPhase } from '@/features/party/reconnectRoute';
 import { useTimerSession } from '@/features/party/useTimerSession';
+import { rpcErrorMessage } from '@/lib/errors';
 import { formatDuration } from '@/lib/time';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 export default function TimerScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
-  const { status, session, currentRound, errorMessage } = useTimerSession(partyId);
+  const { status, session, currentRound, me, myOutcome, errorMessage, refreshOutcome } =
+    useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
   const { leaving, confirmExit } = useGameExit(partyId);
+
+  // I'm Out during the countdown — mark_self_out is legal in countdown or
+  // shot_window (rpc-contracts §7.3). Opting out here records a self_out for the
+  // current round; the player goes out at round finalization (game-rules §7).
+  const [actingOut, setActingOut] = useState(false);
+  const [outError, setOutError] = useState<string | null>(null);
+  const isActive = me?.status === 'active';
+  const selfOutRecorded = myOutcome?.player_action === 'self_out';
+  const canSelfOut = isActive && !selfOutRecorded && !actingOut;
+
+  const handleSelfOut = useCallback(async () => {
+    if (!partyId || !canSelfOut) return;
+    setOutError(null);
+    setActingOut(true);
+
+    const result = await markSelfOut({ partySessionId: partyId });
+    setActingOut(false);
+
+    if (result.ok) {
+      refreshOutcome();
+      return;
+    }
+    setOutError(rpcErrorMessage(result.error_code));
+    refreshOutcome();
+  }, [partyId, canSelfOut, refreshOutcome]);
 
   // Ring fills clockwise as the proportion of the countdown remaining. Total is
   // the round's interval; clamp (in ProgressRing) guards against host_add_time
@@ -122,7 +150,13 @@ export default function TimerScreen(): React.JSX.Element {
           />
           <Button label="Host Controls" variant="outline" onPress={() => {}} style={styles.footerButton} />
         </View>
-        <Button label="I'm Out" variant="outline" onPress={() => {}} />
+        <ErrorBanner message={outError} />
+        <Button
+          label={selfOutRecorded ? "You're out" : "I'm Out"}
+          variant="outline"
+          onPress={handleSelfOut}
+          disabled={!canSelfOut}
+        />
         <Button label="End Party" variant="outline" onPress={confirmExit} disabled={leaving} />
       </View>
     </SafeAreaView>

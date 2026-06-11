@@ -5,43 +5,112 @@
 // doesn't fit — the actions are inverted (white Done, red I'm Out), so they're
 // drawn inline here.
 //
-// Phase 8 task 1: the ring shows the REAL shot-window countdown, computed from the
-// session's phase_ends_at minus skew-corrected server time (useCountdown), and
-// drains clockwise as the proportion of the shot window remaining — no client owns
-// the timer (CLAUDE.md §2.1). This screen reuses the same started-party machinery
-// as the timer (useTimerSession): it loads the snapshot once, aligns the clock,
-// and polls advance_phase_if_due so the window closes on the server's schedule.
-// When the server advances out of the shot window — into countdown for round N+1,
-// or into the round_complete halt — current_phase changes and the route effect
-// carries every device onto the next screen together.
+// The ring shows the REAL shot-window countdown, computed from the session's
+// phase_ends_at minus skew-corrected server time (useCountdown) and draining
+// clockwise — no client owns the timer (CLAUDE.md §2.1). useTimerSession loads the
+// snapshot, aligns the clock, and polls advance_phase_if_due so the window closes
+// on the server's schedule; at zero current_phase changes and the route effect
+// carries every device onward together.
 //
-// The back arrow is the shared testing escape hatch (useGameExit): end_party for
-// the host, mark_self_out → home for a guest. The real in-game host controls land
-// in Phase 10.
+// Phase 8 task 2: Done → mark_done, I'm Out → mark_self_out, with optimistic
+// feedback. Done is disabled for non-active players and once you've opted out
+// (SELF_OUT_IS_STICKY) — the server backstops both, so a force-close/reconnect
+// that loses the optimistic state still can't tap Done after a self-out, because
+// myOutcome reloads from the server.
 //
-// Still inert this task: Done / I'm Out. Wiring them to mark_done / mark_self_out
-// (with optimistic feedback and the non-active disabled state) is Phase 8 task 2.
+// The back arrow is the shared testing escape hatch (useGameExit). The real
+// in-game host controls land in Phase 10.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
+import { markDone } from '@/features/party/api/markDone';
+import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { useCountdown } from '@/features/game/useCountdown';
 import { useGameExit } from '@/features/party/useGameExit';
 import { routeForPhase } from '@/features/party/reconnectRoute';
 import { useTimerSession } from '@/features/party/useTimerSession';
+import { rpcErrorMessage } from '@/lib/errors';
 import { formatDuration } from '@/lib/time';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
+type PendingAction = 'done' | 'self_out' | null;
+
 export default function ShotOClockScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
-  const { status, session, settings, errorMessage } = useTimerSession(partyId);
+  const { status, session, settings, currentRound, me, myOutcome, errorMessage, refreshOutcome } =
+    useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
   const { leaving, confirmExit } = useGameExit(partyId);
+
+  // Optimistic action: set on tap for instant feedback, reconciled when myOutcome
+  // re-reads. Cleared when the round changes (defensive — the screen usually
+  // unmounts as the phase leaves shot_window).
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [acting, setActing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const roundId = currentRound?.id;
+  useEffect(() => {
+    setPendingAction(null);
+    setActionError(null);
+  }, [roundId]);
+
+  const isActive = me?.status === 'active';
+  // Only 'done' / 'self_out' are player taps; 'none' / 'missed' aren't acted states.
+  const recordedAction =
+    myOutcome?.player_action === 'done' || myOutcome?.player_action === 'self_out'
+      ? myOutcome.player_action
+      : null;
+  const myAction = pendingAction ?? recordedAction;
+  const doneRecorded = myAction === 'done';
+  const selfOutRecorded = myAction === 'self_out';
+
+  const canDone = isActive && !doneRecorded && !selfOutRecorded && !acting;
+  const canSelfOut = isActive && !selfOutRecorded && !acting;
+
+  const handleDone = useCallback(async () => {
+    if (!partyId || !canDone) return;
+    setActionError(null);
+    setActing(true);
+    setPendingAction('done');
+
+    const result = await markDone({ partySessionId: partyId });
+    setActing(false);
+
+    if (result.ok) {
+      refreshOutcome();
+      return;
+    }
+    // Revert the optimistic state and re-sync the truth (e.g. SELF_OUT_IS_STICKY
+    // means the server already has a self_out — myOutcome reload reflects it).
+    setPendingAction(null);
+    setActionError(rpcErrorMessage(result.error_code));
+    refreshOutcome();
+  }, [partyId, canDone, refreshOutcome]);
+
+  const handleSelfOut = useCallback(async () => {
+    if (!partyId || !canSelfOut) return;
+    setActionError(null);
+    setActing(true);
+    setPendingAction('self_out');
+
+    const result = await markSelfOut({ partySessionId: partyId });
+    setActing(false);
+
+    if (result.ok) {
+      refreshOutcome();
+      return;
+    }
+    setPendingAction(null);
+    setActionError(rpcErrorMessage(result.error_code));
+    refreshOutcome();
+  }, [partyId, canSelfOut, refreshOutcome]);
 
   // Ring fills clockwise as the proportion of the shot window remaining. Total is
   // the configured shot_window_seconds; clamp (in ProgressRing) guards against
@@ -111,14 +180,27 @@ export default function ShotOClockScreen(): React.JSX.Element {
         </ProgressRing>
       </View>
 
-      {/* Inert this task. mark_done / mark_self_out + the non-active disabled
-          state are Phase 8 task 2. */}
       <View style={styles.actions}>
-        <Pressable onPress={() => {}} style={[styles.action, styles.doneAction]}>
-          <Text style={styles.doneLabel}>Done ✓</Text>
+        <ErrorBanner message={actionError} />
+
+        {!isActive ? (
+          <Text style={styles.spectatorNote}>You&apos;re out — you can&apos;t take this shot.</Text>
+        ) : null}
+
+        <Pressable
+          onPress={handleDone}
+          disabled={!canDone}
+          style={[styles.action, styles.doneAction, !canDone && !doneRecorded && styles.actionDisabled]}
+        >
+          <Text style={styles.doneLabel}>{doneRecorded ? "You're done ✓" : 'Done ✓'}</Text>
         </Pressable>
-        <Pressable onPress={() => {}} style={[styles.action, styles.outAction]}>
-          <Text style={styles.outLabel}>I&apos;m Out</Text>
+
+        <Pressable
+          onPress={handleSelfOut}
+          disabled={!canSelfOut}
+          style={[styles.action, styles.outAction, !canSelfOut && !selfOutRecorded && styles.actionDisabled]}
+        >
+          <Text style={styles.outLabel}>{selfOutRecorded ? "You're out" : "I'm Out"}</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -178,10 +260,19 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     gap: SPACING.md,
   },
+  spectatorNote: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.shotText,
+    textAlign: 'center',
+    opacity: 0.7,
+  },
   action: {
     paddingVertical: SPACING.md,
     borderRadius: RADIUS.md,
     alignItems: 'center',
+  },
+  actionDisabled: {
+    opacity: 0.4,
   },
   doneAction: {
     backgroundColor: COLORS.shotText,
