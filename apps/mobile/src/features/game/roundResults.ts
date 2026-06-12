@@ -5,13 +5,20 @@
 // Seven groups, each player in exactly one. Two are STATE-based (read off the
 // player row, not the outcome) and take precedence; the rest read the outcome's
 // final_outcome + eliminated_this_round only:
-//   - Kicked  = the host removed them (party_players.status = 'removed')
-//   - Left    = they left the party (party_players.left_at is set)
+//   - Kicked  = the host removed them DURING this round (status 'removed' and
+//               removed_at within the round's window)
+//   - Left    = they left the party DURING this round and haven't returned
+//               (left_at within the window, and left_at > last_seen_at)
 //   - Out     = eliminated this round (eliminated_this_round, or final_outcome out)
 //   - Missed  = final_outcome 'missed'
 //   - UsedGrace = final_outcome 'grace_used' (a miss the server forgave)
 //   - Skipped = final_outcome 'self_out' (voluntary skip — grace-spend or not)
 //   - TookShot = final_outcome 'completed'
+//
+// Left / Kicked are scoped to the round they actually happened in (the round's
+// [countdown_started_at, completed_at] window) so a player who left/was kicked in
+// round 3 doesn't reappear in round 5's results. Left also follows the roster's
+// rule — a player who rejoined after leaving (last_seen_at >= left_at) is not Left.
 //
 // Assignment priority when more than one could apply (a kicked/left player may
 // also have an outcome, an eliminated player may have any final_outcome):
@@ -24,6 +31,15 @@ import type { Database } from '@/types/db.generated';
 
 type OutcomeRow = Database['public']['Tables']['round_player_outcomes']['Row'];
 type PlayerRow = Database['public']['Tables']['party_players']['Row'];
+
+// The shown round's timeframe (rounds.countdown_started_at / completed_at), used to
+// scope Left / Kicked to the round they happened in. Either may be null when the
+// round row couldn't be read — Left / Kicked then don't appear (we can't confirm
+// they happened this round).
+export interface RoundWindow {
+  startedAt: string | null;
+  completedAt: string | null;
+}
 
 export type ResultGroupKey =
   | 'took_shot'
@@ -91,12 +107,41 @@ const STILL_IN_GROUPS: ReadonlySet<ResultGroupKey> = new Set([
   'missed',
 ]);
 
+// True when `timestamp` falls within the round's window. A null timestamp or a
+// null start means we can't place the event in this round → false. A null end
+// treats the round as still open (only the lower bound applies).
+function withinRound(timestamp: string | null, window: RoundWindow): boolean {
+  if (timestamp === null || window.startedAt === null) return false;
+  const t = Date.parse(timestamp);
+  if (Number.isNaN(t) || t < Date.parse(window.startedAt)) return false;
+  return window.completedAt === null || t <= Date.parse(window.completedAt);
+}
+
+// The host removed them during this round.
+function isKicked(player: PlayerRow, window: RoundWindow): boolean {
+  return player.status === 'removed' && withinRound(player.removed_at, window);
+}
+
+// They left during this round and haven't returned since — a rejoin bumps
+// last_seen_at past left_at, so a returned player is not Left (roster's rule).
+function isLeft(player: PlayerRow, window: RoundWindow): boolean {
+  if (player.left_at === null) return false;
+  if (player.last_seen_at !== null && Date.parse(player.left_at) <= Date.parse(player.last_seen_at)) {
+    return false;
+  }
+  return withinRound(player.left_at, window);
+}
+
 // The single group a player belongs to this round, by the priority above; null
-// when the player neither has an outcome this round nor is kicked/left (i.e. they
-// didn't participate and aren't a departure).
-function classify(player: PlayerRow, outcome: OutcomeRow | undefined): ResultGroupKey | null {
-  if (player.status === 'removed') return 'kicked';
-  if (player.left_at !== null) return 'left';
+// when the player neither has an outcome this round nor is kicked/left this round
+// (i.e. they didn't participate and aren't a departure this round).
+function classify(
+  player: PlayerRow,
+  outcome: OutcomeRow | undefined,
+  window: RoundWindow,
+): ResultGroupKey | null {
+  if (isKicked(player, window)) return 'kicked';
+  if (isLeft(player, window)) return 'left';
   if (!outcome) return null;
   if (outcome.eliminated_this_round) return 'out';
   switch (outcome.final_outcome) {
@@ -120,15 +165,19 @@ export function deriveRoundResults(
   outcomes: OutcomeRow[],
   players: PlayerRow[],
   myPlayerId: string | null,
+  // The shown round's window, scoping Left / Kicked. Defaults to an empty window
+  // (no Left / Kicked) so a caller without round timestamps degrades safely.
+  roundWindow: RoundWindow = { startedAt: null, completedAt: null },
 ): RoundResultsView {
   const outcomeByPlayer = new Map(outcomes.map((outcome) => [outcome.party_player_id, outcome]));
 
   // Iterate the roster (so an outcome whose player isn't in the RLS-filtered roster
   // is dropped rather than rendered nameless). A player is shown when classify
-  // returns a group — i.e. they have an outcome this round, or are kicked / left.
+  // returns a group — i.e. they have an outcome this round, or are kicked / left
+  // this round.
   const rows: ResultRow[] = [];
   for (const player of players) {
-    const group = classify(player, outcomeByPlayer.get(player.id));
+    const group = classify(player, outcomeByPlayer.get(player.id), roundWindow);
     if (group === null) continue;
     rows.push({
       playerId: player.id,

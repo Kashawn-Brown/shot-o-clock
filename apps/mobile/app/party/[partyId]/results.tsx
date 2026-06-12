@@ -27,7 +27,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
-import { deriveRoundResults, type ResultGroupKey, type ResultRow } from '@/features/game/roundResults';
+import { getRoundWindow } from '@/features/game/api/roundWindow';
+import {
+  deriveRoundResults,
+  type ResultGroupKey,
+  type ResultRow,
+  type RoundWindow,
+} from '@/features/game/roundResults';
 import { useRoundOutcomes } from '@/features/game/useRoundOutcomes';
 import { useGameExit } from '@/features/party/useGameExit';
 import { useTimerSession } from '@/features/party/useTimerSession';
@@ -82,9 +88,30 @@ export default function ResultsScreen(): React.JSX.Element {
 
   const { outcomes } = useRoundOutcomes(partyId, shownRoundId);
 
+  // The shown round's window, so Left / Kicked are scoped to the round they
+  // happened in (they don't leak into later rounds' results).
+  const [roundWindow, setRoundWindow] = useState<RoundWindow>({ startedAt: null, completedAt: null });
+  useEffect(() => {
+    if (!shownRoundId) {
+      setRoundWindow({ startedAt: null, completedAt: null });
+      return;
+    }
+    let active = true;
+    getRoundWindow(shownRoundId)
+      .then((window) => {
+        if (active) setRoundWindow(window);
+      })
+      .catch(() => {
+        if (active) setRoundWindow({ startedAt: null, completedAt: null });
+      });
+    return () => {
+      active = false;
+    };
+  }, [shownRoundId]);
+
   const view = useMemo(
-    () => deriveRoundResults(outcomes, players, me?.id ?? null),
-    [outcomes, players, me?.id],
+    () => deriveRoundResults(outcomes, players, me?.id ?? null, roundWindow),
+    [outcomes, players, me?.id, roundWindow],
   );
 
   // Forward to the timer, carrying the round we just showed so the timer can offer

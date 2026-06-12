@@ -294,37 +294,41 @@ describe('deriveRoundResults — structure', () => {
   });
 });
 
-describe('deriveRoundResults — Left / Kicked (state-based) and priority', () => {
-  it('a removed player → Kicked, even with no outcome row', () => {
+// The shown round's window, and timestamps relative to it. makePlayer's default
+// last_seen_at (2026-06-09) is before IN_ROUND, so an IN_ROUND left_at reads as a
+// genuine departure (left_at > last_seen_at) unless a test overrides last_seen_at.
+const ROUND = { startedAt: '2026-06-11T00:00:00Z', completedAt: '2026-06-11T00:10:00Z' };
+const IN_ROUND = '2026-06-11T00:05:00Z';
+const BEFORE_ROUND = '2026-06-10T12:00:00Z'; // an earlier round
+const AFTER_ROUND = '2026-06-11T00:20:00Z'; // later (e.g. a rejoin)
+
+describe('deriveRoundResults — Left / Kicked (state-based, round-scoped) and priority', () => {
+  it('a player removed this round → Kicked, even with no outcome row', () => {
     const view = deriveRoundResults(
       [],
-      [makePlayer({ id: 'p-1', status: 'removed', removed_at: '2026-06-11T00:00:00Z' })],
+      [makePlayer({ id: 'p-1', status: 'removed', removed_at: IN_ROUND })],
       null,
+      ROUND,
     );
     expect(groupOf(view, 'p-1')).toBe('kicked');
   });
 
-  it('a player with left_at set → Left, even with no outcome row', () => {
+  it('a player who left this round → Left, even with no outcome row', () => {
     const view = deriveRoundResults(
       [],
-      [makePlayer({ id: 'p-1', left_at: '2026-06-11T00:00:00Z' })],
+      [makePlayer({ id: 'p-1', left_at: IN_ROUND })],
       null,
+      ROUND,
     );
     expect(groupOf(view, 'p-1')).toBe('left');
   });
 
-  it('Kicked wins over Left when both apply', () => {
+  it('Kicked wins over Left when both apply this round', () => {
     const view = deriveRoundResults(
       [],
-      [
-        makePlayer({
-          id: 'p-1',
-          status: 'removed',
-          removed_at: '2026-06-11T00:00:00Z',
-          left_at: '2026-06-11T00:00:00Z',
-        }),
-      ],
+      [makePlayer({ id: 'p-1', status: 'removed', removed_at: IN_ROUND, left_at: IN_ROUND })],
       null,
+      ROUND,
     );
     expect(groupOf(view, 'p-1')).toBe('kicked');
   });
@@ -344,13 +348,14 @@ describe('deriveRoundResults — Left / Kicked (state-based) and priority', () =
         makePlayer({
           id: 'p-1',
           status: 'out',
-          left_at: '2026-06-11T00:00:00Z',
+          left_at: IN_ROUND,
           out_reason: 'self_opted_out',
           out_round_number: 3,
-          out_at: '2026-06-11T00:00:00Z',
+          out_at: IN_ROUND,
         }),
       ],
       null,
+      ROUND,
     );
     expect(groupOf(view, 'p-1')).toBe('left');
   });
@@ -362,20 +367,60 @@ describe('deriveRoundResults — Left / Kicked (state-based) and priority', () =
       [makeOutcome({ party_player_id: 'p-1', player_action: 'done', final_outcome: 'completed' })],
       [makePlayer({ id: 'p-1' })],
       null,
+      ROUND,
     );
     expect(groupOf(view, 'p-1')).toBe('took_shot');
   });
 
+  it('left/kicked in an EARLIER round do not appear in this round (fix 1)', () => {
+    // Both departed before this round's window. Neither has an outcome this round,
+    // so neither is shown at all.
+    const view = deriveRoundResults(
+      [],
+      [
+        makePlayer({ id: 'p-old-left', left_at: BEFORE_ROUND }),
+        makePlayer({ id: 'p-old-kick', status: 'removed', removed_at: BEFORE_ROUND }),
+      ],
+      null,
+      ROUND,
+    );
+    expect(view.groups).toHaveLength(0);
+  });
+
+  it('a player who rejoined after leaving is NOT Left (fix 2)', () => {
+    // left this round, but last_seen_at is later (they came back) → not Left.
+    const view = deriveRoundResults(
+      [makeOutcome({ party_player_id: 'p-1', player_action: 'done', final_outcome: 'completed' })],
+      [makePlayer({ id: 'p-1', left_at: IN_ROUND, last_seen_at: AFTER_ROUND })],
+      null,
+      ROUND,
+    );
+    expect(groupOf(view, 'p-1')).toBe('took_shot');
+  });
+
+  it('with no round window, Left / Kicked do not appear', () => {
+    const view = deriveRoundResults(
+      [],
+      [
+        makePlayer({ id: 'p-1', left_at: IN_ROUND }),
+        makePlayer({ id: 'p-2', status: 'removed', removed_at: IN_ROUND }),
+      ],
+      null,
+    );
+    expect(view.groups).toHaveLength(0);
+  });
+
   it('left and kicked count as neither still-in nor out-this-round', () => {
     const players = [
-      makePlayer({ id: 'p-1', status: 'removed', removed_at: '2026-06-11T00:00:00Z' }),
-      makePlayer({ id: 'p-2', left_at: '2026-06-11T00:00:00Z' }),
+      makePlayer({ id: 'p-1', status: 'removed', removed_at: IN_ROUND }),
+      makePlayer({ id: 'p-2', left_at: IN_ROUND }),
       makePlayer({ id: 'p-3' }),
     ];
     const view = deriveRoundResults(
       [makeOutcome({ party_player_id: 'p-3', player_action: 'done', final_outcome: 'completed' })],
       players,
       null,
+      ROUND,
     );
     expect(view.stillIn).toBe(1); // only p-3 (took the shot)
     expect(view.outThisRound).toBe(0); // kicked / left are not eliminations
