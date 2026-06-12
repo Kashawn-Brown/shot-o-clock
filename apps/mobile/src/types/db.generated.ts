@@ -179,6 +179,7 @@ export type Database = {
           id: string;
           is_ready: boolean;
           joined_at: string;
+          joined_round_number: number | null;
           last_seen_at: string;
           left_at: string | null;
           out_at: string | null;
@@ -212,6 +213,7 @@ export type Database = {
           id?: string;
           is_ready?: boolean;
           joined_at?: string;
+          joined_round_number?: number | null;
           last_seen_at?: string;
           left_at?: string | null;
           out_at?: string | null;
@@ -245,6 +247,7 @@ export type Database = {
           id?: string;
           is_ready?: boolean;
           joined_at?: string;
+          joined_round_number?: number | null;
           last_seen_at?: string;
           left_at?: string | null;
           out_at?: string | null;
@@ -776,6 +779,10 @@ export type Database = {
         Args: { p_party_session_id: string };
         Returns: Json;
       };
+      advance_to_next_round: {
+        Args: { p_party_session_id: string };
+        Returns: undefined;
+      };
       create_party: {
         Args: {
           p_elimination_enabled: boolean;
@@ -800,6 +807,32 @@ export type Database = {
       get_party_state: { Args: { p_party_session_id: string }; Returns: Json };
       get_round_outcomes: { Args: { p_round_id: string }; Returns: Json };
       get_server_time: { Args: never; Returns: Json };
+      host_add_time: {
+        Args: { p_party_session_id: string; p_seconds: number };
+        Returns: Json;
+      };
+      host_end_shot_window: {
+        Args: { p_party_session_id: string };
+        Returns: Json;
+      };
+      host_mark_player_active: {
+        Args: { p_party_player_id: string };
+        Returns: Json;
+      };
+      host_mark_player_out: {
+        Args: { p_party_player_id: string };
+        Returns: Json;
+      };
+      host_pause_timer: { Args: { p_party_session_id: string }; Returns: Json };
+      host_remove_player: {
+        Args: { p_party_player_id: string; p_reason?: string };
+        Returns: Json;
+      };
+      host_resume_timer: { Args: { p_party_session_id: string }; Returns: Json };
+      host_skip_to_shot_window: {
+        Args: { p_party_session_id: string };
+        Returns: Json;
+      };
       is_active_party_member: { Args: { session_id: string }; Returns: boolean };
       is_party_host: { Args: { session_id: string }; Returns: boolean };
       is_party_member: { Args: { session_id: string }; Returns: boolean };
@@ -808,6 +841,9 @@ export type Database = {
         Returns: Json;
       };
       leave_party: { Args: { p_party_session_id: string }; Returns: Json };
+      mark_done: { Args: { p_party_session_id: string }; Returns: Json };
+      mark_self_left: { Args: { p_party_session_id: string }; Returns: Json };
+      mark_self_out: { Args: { p_party_session_id: string }; Returns: Json };
       my_party_player_id: { Args: { session_id: string }; Returns: string };
       start_game: { Args: { p_party_session_id: string }; Returns: Json };
     };

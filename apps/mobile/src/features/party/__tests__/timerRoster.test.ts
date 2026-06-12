@@ -49,6 +49,7 @@ function makePlayer(overrides: Partial<PlayerRow>): PlayerRow {
     id: 'p-default',
     is_ready: false,
     joined_at: '2026-06-11T00:00:00Z',
+    joined_round_number: null,
     last_seen_at: '2026-06-11T00:00:00Z',
     left_at: null,
     out_at: null,
