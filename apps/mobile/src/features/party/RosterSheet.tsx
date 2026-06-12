@@ -249,18 +249,17 @@ export function RosterSheet({
         {showActions ? (
           <View style={styles.actions}>
             {isOut ? (
+              // An out player is still in the party — host can Reinstate or Remove.
               <TextAction label="Reinstate" onPress={() => handleReinstate(entry.id)} disabled={locked} />
             ) : (
-              <>
-                <TextAction label="Mark Out" onPress={() => handleMarkOut(entry.id)} disabled={locked} />
-                <TextAction
-                  label="Remove"
-                  danger
-                  onPress={() => handleRemove(entry.id, entry.displayName)}
-                  disabled={locked}
-                />
-              </>
+              <TextAction label="Mark Out" onPress={() => handleMarkOut(entry.id)} disabled={locked} />
             )}
+            <TextAction
+              label="Remove"
+              danger
+              onPress={() => handleRemove(entry.id, entry.displayName)}
+              disabled={locked}
+            />
           </View>
         ) : null}
       </View>
