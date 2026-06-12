@@ -23,6 +23,7 @@ import { useAdvancePhase } from '@/features/game/useAdvancePhase';
 import { syncServerTime } from '@/features/game/syncServerTime';
 import { getPartyState } from '@/features/party/api/partyState';
 import { rpcErrorMessage } from '@/lib/errors';
+import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/db.generated';
 
 type PartyRow = Database['public']['Tables']['party_sessions']['Row'];
@@ -32,6 +33,15 @@ type PlayerRow = Database['public']['Tables']['party_players']['Row'];
 type OutcomeRow = Database['public']['Tables']['round_player_outcomes']['Row'];
 
 type TimerStatus = 'loading' | 'ready' | 'error';
+
+// Process-wide monotonic counter for the realtime channel topic. It MUST be
+// module-scoped, not a per-hook ref: the timer screen remounts every round, so a
+// per-instance counter restarts at 1 and collides with the previous instance's
+// channel of the same topic — whose removeChannel is still async-pending — and
+// supabase hands back that already-subscribed channel, whose .on() then throws
+// ("cannot add postgres_changes callbacks after subscribe()"). A global counter
+// never repeats, so every channel topic is unique for the life of the process.
+let realtimeChannelSeq = 0;
 
 interface UseTimerSessionResult {
   status: TimerStatus;
@@ -47,10 +57,22 @@ interface UseTimerSessionResult {
   // The caller's outcome row for the current round, or null if they haven't acted
   // yet. Drives the Done/I'm Out button states. Re-read per round and on demand.
   myOutcome: OutcomeRow | null;
+  // Every outcome row for the current round — lets the roster show a player who
+  // self_out this round as Out before finalization changes their status. [] until
+  // loaded / between rounds.
+  roundOutcomes: OutcomeRow[];
   errorMessage: string | null;
+  // Flips true when a realtime refresh finds the caller is no longer a member —
+  // the host removed them (get_party_state → SESSION_NOT_FOUND, or their own row
+  // is now 'removed'). The timer screen routes home on this. Mirrors useLobby.
+  membershipLost: boolean;
   reload: () => void;
   // Re-pull myOutcome (e.g. right after the player taps Done / I'm Out).
   refreshOutcome: () => void;
+  // Silently re-pull the session snapshot (e.g. right after a host control —
+  // pause / resume / add time — so the host's own screen updates without waiting
+  // on the realtime round-trip). No spinner, no error flip.
+  refreshSession: () => void;
 }
 
 export function useTimerSession(partyId: string | undefined): UseTimerSessionResult {
@@ -62,7 +84,11 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [me, setMe] = useState<PlayerRow | null>(null);
   const [myOutcome, setMyOutcome] = useState<OutcomeRow | null>(null);
+  // All outcomes for the current round, so the roster can show a player who has
+  // self_out this round as Out promptly — before finalization flips their status.
+  const [roundOutcomes, setRoundOutcomes] = useState<OutcomeRow[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [membershipLost, setMembershipLost] = useState(false);
 
   // The silent refresh must not depend on userId (it would re-create on identity
   // change); read the latest off a ref to derive `me` instead.
@@ -90,14 +116,32 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   const refresh = useCallback(() => {
     if (!partyId) return;
     getPartyState(partyId).then((result) => {
-      if (!mountedRef.current || !result.ok) return;
+      if (!mountedRef.current) return;
+      if (!result.ok) {
+        // The host removed us — RLS now hides the session. Signal the screen to
+        // route home. Any other failure is transient: keep the last good snapshot.
+        if (result.error_code === 'SESSION_NOT_FOUND') setMembershipLost(true);
+        return;
+      }
+      const mine = result.data.players.find((player) => player.user_id === userIdRef.current) ?? null;
+      // Defensive: if the snapshot ever returns our own row marked removed (rather
+      // than hiding the session), treat it the same as a membership loss.
+      if (mine?.status === 'removed') {
+        setMembershipLost(true);
+        return;
+      }
       setSession(result.data.session);
       setSettings(result.data.settings);
       setCurrentRound(result.data.current_round);
       setPlayers(result.data.players);
-      setMe(result.data.players.find((player) => player.user_id === userIdRef.current) ?? null);
+      setMe(mine);
     });
   }, [partyId]);
+
+  // Latest silent refresh, read off a ref so the realtime effect keys only on
+  // partyId and never tears down / resubscribes when refresh's identity changes.
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
 
   // Re-pull the caller's outcome for the current round. Keyed on the round id and
   // the caller's id, so it re-reads once when the round advances (and the screen
@@ -110,16 +154,27 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   const roundIdRef = useRef(roundId);
   roundIdRef.current = roundId;
   const refreshOutcome = useCallback(() => {
-    if (!roundId || !myPlayerId) {
+    if (!roundId) {
       setMyOutcome(null);
+      setRoundOutcomes([]);
       return;
     }
     getRoundOutcomes(roundId).then((result) => {
       if (!mountedRef.current || !result.ok) return;
       if (roundIdRef.current !== roundId) return; // round advanced mid-fetch — drop
-      setMyOutcome(result.data.outcomes.find((o) => o.party_player_id === myPlayerId) ?? null);
+      setRoundOutcomes(result.data.outcomes);
+      setMyOutcome(
+        myPlayerId
+          ? (result.data.outcomes.find((o) => o.party_player_id === myPlayerId) ?? null)
+          : null,
+      );
     });
   }, [roundId, myPlayerId]);
+
+  // Latest refreshOutcome, read off a ref so the realtime effect (keyed on
+  // partyId) can call it without depending on the round/player ids.
+  const refreshOutcomeRef = useRef(refreshOutcome);
+  refreshOutcomeRef.current = refreshOutcome;
 
   // Clear the outcome the instant the round changes, before the async re-fetch
   // lands — otherwise the previous round's self_out/done would keep the buttons
@@ -127,6 +182,7 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   // driven by `me.status`, not the outcome.
   useEffect(() => {
     setMyOutcome(null);
+    setRoundOutcomes([]);
   }, [roundId]);
 
   useEffect(() => {
@@ -180,6 +236,62 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     onAdvance: refresh,
   });
 
+  // Realtime sync for the live game state. One channel carries two streams:
+  //   - party_sessions UPDATE: the advance poll only re-pulls while the timer is
+  //     active and due, so a host control that doesn't move phase_ends_at — pause
+  //     (option (a): status → paused, phase_ends_at intact, §10.1) and resume, and
+  //     end_party — would never reach the other devices through it. Watching the
+  //     session row closes that gap.
+  //   - party_players *: a host marking a player out / active / removed mutates
+  //     only party_players, so the roster (and the target's own `me.status`) stays
+  //     live across devices. Mirrors the lobby's subs (D027/D031).
+  //   - round_player_outcomes *: a player tapping Done / I'm Out (and leaving via
+  //     mark_self_out) writes only an outcome row — no party_players change — so
+  //     without this the other devices' rosters wouldn't reflect a self_out until
+  //     finalization. Re-pulls the round's outcomes (refreshOutcome).
+  // All three tables are in the supabase_realtime publication (schema.md §15); RLS
+  // (rls-rules.md §2/§4) gates delivery to members. Keyed on partyId only — the
+  // handlers read the latest refreshers off refs.
+  useEffect(() => {
+    if (!partyId) return;
+
+    // Globally-unique topic per subscription — see realtimeChannelSeq. Guards the
+    // remount/reconnect double-subscribe crash.
+    realtimeChannelSeq += 1;
+    const channel = supabase
+      .channel(`timer:${partyId}:${realtimeChannelSeq}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'party_sessions', filter: `id=eq.${partyId}` },
+        () => refreshRef.current(),
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'party_players',
+          filter: `party_session_id=eq.${partyId}`,
+        },
+        () => refreshRef.current(),
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'round_player_outcomes',
+          filter: `party_session_id=eq.${partyId}`,
+        },
+        () => refreshOutcomeRef.current(),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [partyId]);
+
   return {
     status,
     session,
@@ -188,8 +300,11 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     players,
     me,
     myOutcome,
+    roundOutcomes,
     errorMessage,
+    membershipLost,
     reload,
     refreshOutcome,
+    refreshSession: refresh,
   };
 }

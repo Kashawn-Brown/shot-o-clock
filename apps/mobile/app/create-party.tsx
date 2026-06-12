@@ -20,6 +20,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { Stepper } from '@/components/ui/Stepper';
 import { useDisplayName } from '@/features/auth/useDisplayName';
 import { createParty } from '@/features/party/api/createParty';
+import { clearLeftPartyId } from '@/features/party/leftParty';
 import {
   DEFAULT_ELIMINATION_ENABLED,
   DEFAULT_GRACE_MODE,
@@ -96,6 +97,8 @@ export default function CreatePartyScreen(): React.JSX.Element {
     const response = await createParty(result.params);
 
     if (response.ok) {
+      // Entering a fresh party clears any intentionally-left marker (leftParty).
+      void clearLeftPartyId();
       // replace (not push) so Back from the lobby doesn't return to a stale
       // create form for a party that now exists.
       router.replace(`/party/${response.data.party_session_id}/lobby`);

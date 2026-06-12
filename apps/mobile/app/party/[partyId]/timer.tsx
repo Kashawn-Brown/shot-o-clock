@@ -1,26 +1,42 @@
 // Timer — the between-shots countdown. Single file that adapts for host vs
-// player: the host gets the pause button inside the ring, Add 30s / Add 1 min,
-// and the Host Controls section; a player sees only the ring, View Roster, and
-// I'm Out.
+// player. The bottom row carries a destructive exit (End Party for the host,
+// Leave Party for a player), a Roster button opening the roster sheet (host gets
+// per-player Mark Out / Reinstate / Remove there; a player sees it read-only),
+// and the I'm Out / Skip action below.
 //
 // The ring shows the REAL countdown, computed from the session's phase_ends_at
 // minus skew-corrected server time (useCountdown) and draining clockwise — no
 // client owns the timer (CLAUDE.md §2.1). useTimerSession loads the snapshot,
-// aligns the clock, and polls advance_phase_if_due to drive the transition.
-// Still placeholder this task: the host controls and I'm Out (Phase 8/10).
+// aligns the clock, polls advance_phase_if_due to drive the transition, and
+// subscribes to the session + roster rows so host actions reflect on every device.
 //
-// The back arrow + End Party are the shared testing escape hatch (useGameExit):
-// end_party for the host, mark_self_out → home for a guest. The real in-game
-// host controls land in Phase 10.
+// The back arrow + End/Leave Party are the shared escape hatch (useGameExit):
+// end_party for the host, mark_self_out → home for a guest (D032). The real
+// End Party → Final Summary routing lands in Phase 11.
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
+import { RosterSheet } from '@/features/party/RosterSheet';
+import { hostAddTime } from '@/features/party/api/hostAddTime';
+import { hostPauseTimer } from '@/features/party/api/hostPauseTimer';
+import { hostResumeTimer } from '@/features/party/api/hostResumeTimer';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { selfOutCopy } from '@/features/game/selfOutCopy';
 import { useCountdown } from '@/features/game/useCountdown';
@@ -39,10 +55,80 @@ export default function TimerScreen(): React.JSX.Element {
     lastRoundId?: string;
     lastRoundNumber?: string;
   }>();
-  const { status, session, settings, currentRound, me, myOutcome, errorMessage, refreshOutcome } =
-    useTimerSession(partyId);
-  const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
+  const {
+    status,
+    session,
+    settings,
+    currentRound,
+    me,
+    myOutcome,
+    roundOutcomes,
+    errorMessage,
+    membershipLost,
+    players,
+    refreshOutcome,
+    refreshSession,
+  } = useTimerSession(partyId);
+  const { remainingMs: liveRemainingMs } = useCountdown(session?.phase_ends_at ?? null);
   const { leaving, confirmExit } = useGameExit(partyId);
+
+  // The caller's role drives the host-only roster controls (Mark Out / Reinstate /
+  // Remove live in the Roster sheet) and the destructive bottom-left button: a
+  // host ends the party, a player leaves it. RPCs backstop with NOT_HOST, so the
+  // gate is defence in depth (PartyPlayer.permissionRole, §2.4).
+  const isHost = me?.permission_role === 'host';
+  const isPaused = session?.status === 'paused';
+  const [rosterOpen, setRosterOpen] = useState(false);
+  // Host taps the party name to reveal the join code for sharing mid-game.
+  const [joinCodeOpen, setJoinCodeOpen] = useState(false);
+
+  // While paused the server freezes the timer under option (a): status → paused,
+  // phase_ends_at left intact (§10.1). So the live countdown would keep draining
+  // a stale deadline — show the frozen paused_remaining_seconds instead, on every
+  // device (the realtime session sub delivers the paused status). useCountdown
+  // stays pure; we just pick which value to display.
+  const remainingMs = isPaused
+    ? (session?.paused_remaining_seconds ?? 0) * 1000
+    : liveRemainingMs;
+
+  // Host timer controls (pause/resume, add time) — integrated onto the ring, not a
+  // sheet. One in-flight lock across them; add_time isn't idempotent, so the lock
+  // is what stops a double-tap stacking two extensions (hostAddTime.ts). Errors
+  // surface in a small banner under the ring. On success refreshSession re-pulls so
+  // the host's screen updates without waiting on the realtime round-trip.
+  const [controlBusy, setControlBusy] = useState(false);
+  const [controlError, setControlError] = useState<string | null>(null);
+
+  const handlePauseResume = useCallback(async () => {
+    if (!partyId || controlBusy) return;
+    setControlError(null);
+    setControlBusy(true);
+    const result = isPaused
+      ? await hostResumeTimer({ partySessionId: partyId })
+      : await hostPauseTimer({ partySessionId: partyId });
+    setControlBusy(false);
+    if (result.ok) {
+      refreshSession();
+      return;
+    }
+    setControlError(rpcErrorMessage(result.error_code));
+  }, [partyId, controlBusy, isPaused, refreshSession]);
+
+  const handleAddTime = useCallback(
+    async (seconds: number) => {
+      if (!partyId || controlBusy) return;
+      setControlError(null);
+      setControlBusy(true);
+      const result = await hostAddTime({ partySessionId: partyId, seconds });
+      setControlBusy(false);
+      if (result.ok) {
+        refreshSession();
+        return;
+      }
+      setControlError(rpcErrorMessage(result.error_code));
+    },
+    [partyId, controlBusy, refreshSession],
+  );
 
   // "Round N Results" button: only when the handed-over round is genuinely the one
   // just before this countdown (current_round_number - 1). This self-updates each
@@ -69,6 +155,7 @@ export default function TimerScreen(): React.JSX.Element {
   const [actingOut, setActingOut] = useState(false);
   const [outError, setOutError] = useState<string | null>(null);
   const isActive = me?.status === 'active';
+  const isOut = me?.status === 'out';
   const selfOutRecorded = myOutcome?.player_action === 'self_out';
   // Done can't be recorded during countdown (mark_done is shot_window-only), but
   // mirror the shot screen's rule for consistency: a recorded Done closes I'm Out.
@@ -133,11 +220,29 @@ export default function TimerScreen(): React.JSX.Element {
   // us right after useGameExit's router.replace('/'). The intentional exit wins.
   const currentPhase = session?.current_phase;
   useEffect(() => {
-    if (leaving || status !== 'ready' || !partyId || !currentPhase || currentPhase === 'countdown') {
+    if (
+      leaving ||
+      membershipLost ||
+      status !== 'ready' ||
+      !partyId ||
+      !currentPhase ||
+      currentPhase === 'countdown'
+    ) {
       return;
     }
     router.replace(`/party/${partyId}/${routeForPhase(currentPhase)}`);
-  }, [leaving, status, currentPhase, partyId]);
+  }, [leaving, membershipLost, status, currentPhase, partyId]);
+
+  // The host removed us mid-game — surface why, then return home. Same message as
+  // the lobby (useLobby membershipLost). Driven by the realtime party_players sub.
+  useEffect(() => {
+    if (!membershipLost) return;
+    Alert.alert(
+      'Removed from party',
+      "The host removed you from this party. You won't be able to rejoin.",
+    );
+    router.replace('/');
+  }, [membershipLost]);
 
   if (status === 'loading') {
     return (
@@ -158,72 +263,231 @@ export default function TimerScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.headerBar}>
-        <Pressable onPress={confirmExit} accessibilityRole="button" hitSlop={8} disabled={leaving}>
-          <Text style={styles.back}>←</Text>
-        </Pressable>
+        {/* The back arrow is the player's Leave Party escape hatch. The host has
+            End Party in the Players sheet, so it's redundant for them — hidden.
+            An empty spacer keeps the results link right-aligned. */}
+        {isHost ? (
+          <View />
+        ) : (
+          <Pressable
+            onPress={() => confirmExit({ isHost })}
+            accessibilityRole="button"
+            hitSlop={8}
+            disabled={leaving}
+          >
+            <Text style={styles.back}>←</Text>
+          </Pressable>
+        )}
+
+        {/* Quick jump back to the round that just finished — top-right of the
+            header, hidden on round 1 / a reconnect that skipped results. */}
+        {showLastResults ? (
+          <Pressable onPress={viewLastResults} accessibilityRole="button" hitSlop={8}>
+            <Text style={styles.lastResultsText}>Round {lastRoundNumber} Results</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.header}>
-        <Text style={styles.partyName}>{session?.name}</Text>
+        {isHost ? (
+          <Pressable onPress={() => setJoinCodeOpen(true)} accessibilityRole="button" hitSlop={8}>
+            <Text style={[styles.partyName, styles.partyNameTappable]}>{session?.name}</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.partyName}>{session?.name}</Text>
+        )}
         <Text style={styles.subtitle}>Round {session?.current_round_number}</Text>
       </View>
-
-      {showLastResults ? (
-        <Pressable onPress={viewLastResults} accessibilityRole="button" style={styles.lastResults} hitSlop={8}>
-          <Text style={styles.lastResultsText}>← Round {lastRoundNumber} Results</Text>
-        </Pressable>
-      ) : null}
 
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.ringLabel}>NEXT SHOT O&apos;CLOCK IN</Text>
 
         {/* Real remaining time, draining clockwise. The server-driven transition
-            into the shot window is the advance_phase_if_due poll (useTimerSession). */}
-        <ProgressRing
-          size={RING_SIZE}
-          strokeWidth={10}
-          progress={ringProgress}
-          color={COLORS.buttonFilled}
-          trackColor={COLORS.border}
-        >
-          <View style={styles.ringContent}>
-            <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
-            <View style={styles.pauseButton}>
-              <Text style={styles.pauseIcon}>❚❚</Text>
+            into the shot window is the advance_phase_if_due poll (useTimerSession).
+            Host only: the time sits at true centre and the pause/play button is
+            pinned near the bottom of the circle interior; +30s / +1m circles float
+            at the lower corners. A player sees just the centred time. */}
+        <View style={styles.ringArea}>
+          <ProgressRing
+            size={RING_SIZE}
+            strokeWidth={10}
+            progress={ringProgress}
+            color={COLORS.buttonFilled}
+            trackColor={COLORS.border}
+          >
+            <View style={styles.ringContent}>
+              {/* The time stays centred; a paused player gets a PAUSED label just
+                  below it, the host gets the pause/play control near the bottom. */}
+              <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
+              {!isHost && isPaused ? (
+                <View style={styles.pausedLabelSlot}>
+                  <Text style={styles.pausedLabel}>❚❚ PAUSED</Text>
+                </View>
+              ) : null}
+              {isHost ? (
+                <View style={styles.pauseSlot}>
+                  <Pressable
+                    onPress={handlePauseResume}
+                    disabled={controlBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel={isPaused ? 'Resume timer' : 'Pause timer'}
+                    style={({ pressed }) => [
+                      styles.pauseButton,
+                      pressed && styles.controlPressed,
+                      controlBusy && styles.controlDisabled,
+                    ]}
+                  >
+                    <Text style={styles.pauseIcon}>{isPaused ? '▶' : '❚❚'}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </View>
-          </View>
-        </ProgressRing>
+          </ProgressRing>
 
-        <View style={styles.addTimeRow}>
-          <Button label="+ Add 30s" variant="outline" onPress={() => {}} style={styles.addTime} />
-          <Button label="+ Add 1 min" variant="outline" onPress={() => {}} style={styles.addTime} />
+          {isHost ? (
+            <>
+              <CircleControl
+                label="+30s"
+                onPress={() => void handleAddTime(ADD_TIME_SHORT_SECONDS)}
+                disabled={controlBusy}
+                style={styles.addLeft}
+              />
+              <CircleControl
+                label="+1m"
+                onPress={() => void handleAddTime(ADD_TIME_LONG_SECONDS)}
+                disabled={controlBusy}
+                style={styles.addRight}
+              />
+            </>
+          ) : null}
         </View>
+
+        {isHost ? <ErrorBanner message={controlError} /> : null}
       </ScrollView>
 
       <View style={styles.footer}>
+        {/* Out player: the "you're out" note + tally sits ABOVE the buttons, which
+            stay in their low position; no I'm Out action. */}
+        {isOut ? (
+          <View style={styles.outNote}>
+            <Text style={styles.outNoteTitle}>You&apos;re out</Text>
+            <Text style={styles.outNoteSub}>
+              You took {me?.total_shots_completed ?? 0}{' '}
+              {me?.total_shots_completed === 1 ? 'shot' : 'shots'}
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.footerRow}>
+          {/* Destructive exit: a host ends the party, a player leaves it. Both go
+              through the same confirmExit flow (useGameExit, D032). */}
           <Button
-            label="Roster"
+            label={isHost ? 'End Party' : 'Leave Party'}
             variant="outline"
-            onPress={() => router.push(`/party/${partyId}/roster`)}
+            onPress={() => confirmExit({ isHost })}
+            disabled={leaving}
+            style={[styles.footerButton, styles.destructiveButton]}
+          />
+          <Button
+            label="Players"
+            variant="outline"
+            onPress={() => setRosterOpen(true)}
             style={styles.footerButton}
           />
-          <Button label="Host Controls" variant="outline" onPress={() => {}} style={styles.footerButton} />
         </View>
-        <ErrorBanner message={outError} />
-        <Button
-          label={selfOutLabel}
-          variant="outline"
-          onPress={confirmSelfOut}
-          disabled={!canSelfOut}
-        />
-        <Button label="End Party" variant="outline" onPress={confirmExit} disabled={leaving} />
+
+        {/* Active player: the I'm Out / Skip action stays below the buttons. */}
+        {!isOut ? (
+          <>
+            <ErrorBanner message={outError} />
+            <Button
+              label={selfOutLabel}
+              variant="outline"
+              onPress={confirmSelfOut}
+              disabled={!canSelfOut}
+            />
+          </>
+        ) : null}
       </View>
+
+      {partyId ? (
+        <RosterSheet
+          visible={rosterOpen}
+          onClose={() => setRosterOpen(false)}
+          players={players}
+          currentRoundOutcomes={roundOutcomes}
+          graceMode={settings?.grace_mode ?? 'disabled'}
+          currentUserId={me?.user_id ?? null}
+          isHost={isHost}
+          onApplied={refreshSession}
+        />
+      ) : null}
+
+      {/* Host-only join-code popover. Tapping the dim backdrop (anywhere outside
+          the card) dismisses; the card swallows its own taps. */}
+      {isHost ? (
+        <Modal
+          visible={joinCodeOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setJoinCodeOpen(false)}
+        >
+          <Pressable style={styles.popoverBackdrop} onPress={() => setJoinCodeOpen(false)}>
+            <Pressable style={styles.popoverCard} onPress={() => {}}>
+              <Text style={styles.popoverLabel}>JOIN CODE</Text>
+              <Text style={styles.popoverCode}>{session?.join_code}</Text>
+              <Text style={styles.popoverHint}>Share this code so others can join.</Text>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      ) : null}
     </SafeAreaView>
   );
 }
 
-const RING_SIZE = 240;
+// Small circular floating control for the +time buttons at the ring's corners.
+function CircleControl({
+  label,
+  onPress,
+  disabled,
+  style,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled: boolean;
+  style: StyleProp<ViewStyle>;
+}): React.JSX.Element {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      hitSlop={8}
+      style={({ pressed }) => [
+        styles.circle,
+        style,
+        pressed && styles.controlPressed,
+        disabled && styles.controlDisabled,
+      ]}
+    >
+      <Text style={styles.circleLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+// ─── Timer layout knobs ───────────────────────────────────────────────────────
+// Tune the ring and host controls here — all in px. Each is consumed by the
+// `styles` block below (and `size={RING_SIZE}` on the ProgressRing). Adjust freely.
+const RING_SIZE = 280; // ring diameter
+const RING_TIME_FONT_SIZE = 60; // the M:SS time text inside the ring
+const PAUSE_BUTTON_SIZE = 64; // host pause/play button (centre-bottom of the ring)
+const ADD_TIME_BUTTON_SIZE = 64; // host +30s / +1m circles
+const ADD_TIME_BUTTON_OFFSET = 44; // how far the +time circles sit outside the ring's sides
+// ──────────────────────────────────────────────────────────────────────────────
+
+// Quick add-time amounts (seconds). host_add_time bounds input to 1–600.
+const ADD_TIME_SHORT_SECONDS = 30;
+const ADD_TIME_LONG_SECONDS = 60;
 
 const styles = StyleSheet.create({
   screen: {
@@ -238,6 +502,7 @@ const styles = StyleSheet.create({
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
@@ -249,11 +514,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.md,
   },
-  lastResults: {
-    alignSelf: 'center',
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.md,
-  },
   lastResultsText: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.textSecondary,
@@ -264,6 +524,11 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
   },
+  // Host's tappable party name (opens the join-code popover) — underlined to read
+  // as interactive.
+  partyNameTappable: {
+    textDecorationLine: 'underline',
+  },
   subtitle: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.textSecondary,
@@ -273,43 +538,118 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xl,
     gap: SPACING.xl,
   },
+  // Nudged down so it stays close to the repositioned (lower) ring.
   ringLabel: {
+    marginTop: SPACING.xl,
     fontSize: FONT_SIZE.sm,
     letterSpacing: 1,
     color: COLORS.textSecondary,
   },
-  ringContent: {
+  // Square that bounds the ring; the +time circles float at its lower corners.
+  ringArea: {
+    width: RING_SIZE,
+    height: RING_SIZE,
+    marginTop: SPACING.md,
     alignItems: 'center',
-    gap: SPACING.sm,
+    justifyContent: 'center',
+  },
+  // Fills the ring so the time sits at true centre and the pause button (absolute)
+  // can pin to the bottom of the circle interior.
+  ringContent: {
+    width: RING_SIZE,
+    height: RING_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ringTime: {
-    fontSize: FONT_SIZE.xl,
+    fontSize: RING_TIME_FONT_SIZE,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
   },
+  // Sits just below the centred time (which stays put), so PAUSED reads as an
+  // annotation under the clock rather than replacing it.
+  pausedLabelSlot: {
+    position: 'absolute',
+    top: '63%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  pausedLabel: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.medium,
+    letterSpacing: 1,
+    color: COLORS.textSecondary,
+  },
+  // Host pause/play, pinned near the bottom of the circle interior.
+  pauseSlot: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: SPACING.xl,
+    alignItems: 'center',
+  },
   pauseButton: {
-    width: 44,
-    height: 44,
+    width: PAUSE_BUTTON_SIZE,
+    height: PAUSE_BUTTON_SIZE,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pauseIcon: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.md,
     color: COLORS.textPrimary,
   },
-  addTimeRow: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
+  // The +time circles sit below and outside the ring's lower corners — negative
+  // offsets (ADD_TIME_BUTTON_OFFSET) push them clear of the ring arc.
+  circle: {
+    position: 'absolute',
+    bottom: -SPACING.md,
+    width: ADD_TIME_BUTTON_SIZE,
+    height: ADD_TIME_BUTTON_SIZE,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  addTime: {
-    flex: 1,
+  addLeft: {
+    left: -ADD_TIME_BUTTON_OFFSET,
+  },
+  addRight: {
+    right: -ADD_TIME_BUTTON_OFFSET,
+  },
+  circleLabel: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.medium,
+    color: COLORS.textPrimary,
+  },
+  controlPressed: {
+    opacity: 0.6,
+  },
+  controlDisabled: {
+    opacity: 0.4,
   },
   footer: {
     padding: SPACING.lg,
     gap: SPACING.sm,
+  },
+  // Replaces the I'm Out button for an out player: a plain note + their tally.
+  outNote: {
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  outNoteTitle: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.textSecondary,
+  },
+  outNoteSub: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
   },
   footerRow: {
     flexDirection: 'row',
@@ -317,5 +657,41 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
+  },
+  // Danger-tinted border marks the destructive exit (End / Leave Party) without a
+  // third Button variant; the label keeps the default outline color.
+  destructiveButton: {
+    borderColor: COLORS.danger,
+  },
+  // Join-code popover (host). Backdrop fills the screen and centres the card near
+  // the top, under the tapped party name.
+  popoverBackdrop: {
+    flex: 1,
+    alignItems: 'center',
+    paddingTop: SPACING.xxl * 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  popoverCard: {
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  popoverLabel: {
+    fontSize: FONT_SIZE.xs,
+    letterSpacing: 1,
+    color: COLORS.textSecondary,
+  },
+  popoverCode: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: FONT_WEIGHT.bold,
+    letterSpacing: 2,
+    color: COLORS.textPrimary,
+  },
+  popoverHint: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
   },
 });

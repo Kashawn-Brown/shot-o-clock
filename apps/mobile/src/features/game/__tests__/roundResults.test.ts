@@ -111,21 +111,21 @@ describe('deriveRoundResults — classification', () => {
     expect(groupOf(view, 'p-1')).toBe('used_grace');
   });
 
-  it('a self_out that consumed grace (elimination on) → Used Grace, not Skipped', () => {
+  it('a self_out → Skipped whether or not it consumed grace (reads final_outcome, not grace)', () => {
     const view = deriveRoundResults(
       [
         makeOutcome({
           party_player_id: 'p-1',
           player_action: 'self_out',
           final_outcome: 'self_out',
-          grace_applied: true, // D034: skip absorbed by spending grace
+          grace_applied: true, // grace spend no longer reclassifies a self_out
           status_after_round: 'active',
         }),
       ],
       [player],
       null,
     );
-    expect(groupOf(view, 'p-1')).toBe('used_grace');
+    expect(groupOf(view, 'p-1')).toBe('skipped');
   });
 
   it('a no-consequence self_out (elimination off / unlimited) → Skipped', () => {
@@ -263,38 +263,18 @@ describe('deriveRoundResults — structure', () => {
     expect(view.me).toBeNull();
   });
 
-  it('distinguishes a grace-forgiven miss from a grace-spending skip on the row', () => {
+  it('a grace-forgiven miss is Used Grace; a grace-spending skip is Skipped', () => {
     const players = [makePlayer({ id: 'p-1' }), makePlayer({ id: 'p-2' })];
     const view = deriveRoundResults(
       [
-        makeOutcome({
-          party_player_id: 'p-1',
-          player_action: 'missed',
-          final_outcome: 'grace_used',
-          grace_applied: true,
-        }),
-        makeOutcome({
-          party_player_id: 'p-2',
-          player_action: 'self_out',
-          final_outcome: 'self_out',
-          grace_applied: true,
-        }),
+        makeOutcome({ party_player_id: 'p-1', player_action: 'missed', final_outcome: 'grace_used' }),
+        makeOutcome({ party_player_id: 'p-2', player_action: 'self_out', final_outcome: 'self_out' }),
       ],
       players,
       null,
     );
-    const usedGrace = view.groups.find((group) => group.key === 'used_grace');
-    expect(usedGrace?.rows.find((row) => row.playerId === 'p-1')?.detail).toBe('Missed — grace used');
-    expect(usedGrace?.rows.find((row) => row.playerId === 'p-2')?.detail).toBe('Skipped — grace used');
-  });
-
-  it('leaves detail null for rows outside Used Grace', () => {
-    const view = deriveRoundResults(
-      [makeOutcome({ party_player_id: 'p-1', player_action: 'done', final_outcome: 'completed' })],
-      [makePlayer({ id: 'p-1' })],
-      null,
-    );
-    expect(view.groups[0].rows[0].detail).toBeNull();
+    expect(groupOf(view, 'p-1')).toBe('used_grace');
+    expect(groupOf(view, 'p-2')).toBe('skipped');
   });
 
   it('sorts rows within a group by display name', () => {
@@ -311,5 +291,138 @@ describe('deriveRoundResults — structure', () => {
       null,
     );
     expect(view.groups[0].rows.map((row) => row.displayName)).toEqual(['Ana', 'Zoe']);
+  });
+});
+
+// The shown round's window, and timestamps relative to it. makePlayer's default
+// last_seen_at (2026-06-09) is before IN_ROUND, so an IN_ROUND left_at reads as a
+// genuine departure (left_at > last_seen_at) unless a test overrides last_seen_at.
+const ROUND = { startedAt: '2026-06-11T00:00:00Z', completedAt: '2026-06-11T00:10:00Z' };
+const IN_ROUND = '2026-06-11T00:05:00Z';
+const BEFORE_ROUND = '2026-06-10T12:00:00Z'; // an earlier round
+const AFTER_ROUND = '2026-06-11T00:20:00Z'; // later (e.g. a rejoin)
+
+describe('deriveRoundResults — Left / Kicked (state-based, round-scoped) and priority', () => {
+  it('a player removed this round → Kicked, even with no outcome row', () => {
+    const view = deriveRoundResults(
+      [],
+      [makePlayer({ id: 'p-1', status: 'removed', removed_at: IN_ROUND })],
+      null,
+      ROUND,
+    );
+    expect(groupOf(view, 'p-1')).toBe('kicked');
+  });
+
+  it('a player who left this round → Left, even with no outcome row', () => {
+    const view = deriveRoundResults(
+      [],
+      [makePlayer({ id: 'p-1', left_at: IN_ROUND })],
+      null,
+      ROUND,
+    );
+    expect(groupOf(view, 'p-1')).toBe('left');
+  });
+
+  it('Kicked wins over Left when both apply this round', () => {
+    const view = deriveRoundResults(
+      [],
+      [makePlayer({ id: 'p-1', status: 'removed', removed_at: IN_ROUND, left_at: IN_ROUND })],
+      null,
+      ROUND,
+    );
+    expect(groupOf(view, 'p-1')).toBe('kicked');
+  });
+
+  it('Left wins over the outcome group: a left player who was eliminated is Left', () => {
+    const view = deriveRoundResults(
+      [
+        makeOutcome({
+          party_player_id: 'p-1',
+          player_action: 'self_out',
+          final_outcome: 'self_out',
+          eliminated_this_round: true,
+          status_after_round: 'out',
+        }),
+      ],
+      [
+        makePlayer({
+          id: 'p-1',
+          status: 'out',
+          left_at: IN_ROUND,
+          out_reason: 'self_opted_out',
+          out_round_number: 3,
+          out_at: IN_ROUND,
+        }),
+      ],
+      null,
+      ROUND,
+    );
+    expect(groupOf(view, 'p-1')).toBe('left');
+  });
+
+  it('a reinstated player is classified by their actual outcome, with no Reinstated group', () => {
+    // Reinstatement is an action, not an outcome — a player the host brought back
+    // lands in whatever group their round result matches (here, Took the Shot).
+    const view = deriveRoundResults(
+      [makeOutcome({ party_player_id: 'p-1', player_action: 'done', final_outcome: 'completed' })],
+      [makePlayer({ id: 'p-1' })],
+      null,
+      ROUND,
+    );
+    expect(groupOf(view, 'p-1')).toBe('took_shot');
+  });
+
+  it('left/kicked in an EARLIER round do not appear in this round (fix 1)', () => {
+    // Both departed before this round's window. Neither has an outcome this round,
+    // so neither is shown at all.
+    const view = deriveRoundResults(
+      [],
+      [
+        makePlayer({ id: 'p-old-left', left_at: BEFORE_ROUND }),
+        makePlayer({ id: 'p-old-kick', status: 'removed', removed_at: BEFORE_ROUND }),
+      ],
+      null,
+      ROUND,
+    );
+    expect(view.groups).toHaveLength(0);
+  });
+
+  it('a player who rejoined after leaving is NOT Left (fix 2)', () => {
+    // left this round, but last_seen_at is later (they came back) → not Left.
+    const view = deriveRoundResults(
+      [makeOutcome({ party_player_id: 'p-1', player_action: 'done', final_outcome: 'completed' })],
+      [makePlayer({ id: 'p-1', left_at: IN_ROUND, last_seen_at: AFTER_ROUND })],
+      null,
+      ROUND,
+    );
+    expect(groupOf(view, 'p-1')).toBe('took_shot');
+  });
+
+  it('with no round window, Left / Kicked do not appear', () => {
+    const view = deriveRoundResults(
+      [],
+      [
+        makePlayer({ id: 'p-1', left_at: IN_ROUND }),
+        makePlayer({ id: 'p-2', status: 'removed', removed_at: IN_ROUND }),
+      ],
+      null,
+    );
+    expect(view.groups).toHaveLength(0);
+  });
+
+  it('left and kicked count as neither still-in nor out-this-round', () => {
+    const players = [
+      makePlayer({ id: 'p-1', status: 'removed', removed_at: IN_ROUND }),
+      makePlayer({ id: 'p-2', left_at: IN_ROUND }),
+      makePlayer({ id: 'p-3' }),
+    ];
+    const view = deriveRoundResults(
+      [makeOutcome({ party_player_id: 'p-3', player_action: 'done', final_outcome: 'completed' })],
+      players,
+      null,
+      ROUND,
+    );
+    expect(view.stillIn).toBe(1); // only p-3 (took the shot)
+    expect(view.outThisRound).toBe(0); // kicked / left are not eliminations
   });
 });

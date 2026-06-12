@@ -4,7 +4,8 @@
 //
 // Why this exists / the rule it enforces:
 //   - Host  → end_party (ends the party for everyone), then route home.
-//   - Guest → mark_self_out (best effort, records them out), then route home.
+//   - Guest → mark this party intentionally-left (suppresses the launch
+//     reconnect, see leftParty), mark_self_out (best effort), then route home.
 //   - NEVER leave_party here. leave_party is lobby-only (rpc-contracts §4.3); a
 //     guest calling it mid-game gets ILLEGAL_TRANSITION and is left stranded with
 //     no way home. That bug recurred repeatedly in testing — this hook is the
@@ -23,13 +24,51 @@ import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 
 import { endParty } from '@/features/party/api/endParty';
+import { markSelfLeft } from '@/features/party/api/markSelfLeft';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
+import { setLeftPartyId } from '@/features/party/leftParty';
+
+interface ConfirmExitOptions {
+  /** The caller's role, when known, so the confirmation copy is role-correct: a
+   *  host is ending the game for everyone, a player is only leaving. Omitted on
+   *  screens that don't resolve the role — those fall back to neutral copy. */
+  isHost?: boolean;
+}
 
 interface UseGameExitResult {
   /** True while the exit is in flight — bind to disabled state and suppress phase-routing effects. */
   leaving: boolean;
   /** Show the confirmation dialog; on confirm, exits the party and routes home. */
-  confirmExit: () => void;
+  confirmExit: (options?: ConfirmExitOptions) => void;
+}
+
+// Role-correct confirmation copy. The exit BEHAVIOR is still decided server-side
+// (endParty → NOT_HOST falls back to self-out); isHost only shapes the wording.
+function exitCopy(isHost: boolean | undefined): {
+  title: string;
+  message: string;
+  confirmLabel: string;
+} {
+  if (isHost === true) {
+    return {
+      title: 'End party?',
+      message: 'This ends the game for everyone and returns you home.',
+      confirmLabel: 'End Party',
+    };
+  }
+  if (isHost === false) {
+    return {
+      title: 'Leave party?',
+      message: 'You will leave the game and return home.',
+      confirmLabel: 'Leave Party',
+    };
+  }
+  // Role unknown — neutral wording that fits either path.
+  return {
+    title: 'Leave party?',
+    message: 'If you are the host, this ends the party for everyone.',
+    confirmLabel: 'Leave',
+  };
 }
 
 export function useGameExit(partyId: string | undefined): UseGameExitResult {
@@ -47,22 +86,31 @@ export function useGameExit(partyId: string | undefined): UseGameExitResult {
     }
 
     // Not the host (NOT_HOST), or the session is already gone (SESSION_NOT_FOUND).
-    // Record a best-effort self-out so the roster reflects the guest leaving, then
-    // go home regardless of the result. Intentionally ignores the result: on
-    // round_complete mark_self_out returns ILLEGAL_TRANSITION (rpc-contracts §7.3)
-    // — not a failure to surface, just not applicable. A guest must never be
-    // stranded mid-game, so we route home either way.
+    // A guest leaving stays a party member (mark_self_out records them Out but
+    // doesn't remove them), so the launch reconnect would pull them straight back
+    // in — mark this party as intentionally-left first so useActiveParty suppresses
+    // that reconnect. mark_self_left stamps left_at so other devices show them as
+    // "Left" (mark_self_out alone is indistinguishable from "I'm Out"), and the
+    // self-out records the round skip (ignored on round_complete, where it returns
+    // ILLEGAL_TRANSITION, §7.3). Results are ignored — a guest must never be
+    // stranded, so we route home regardless.
+    await setLeftPartyId(partyId);
+    await markSelfLeft({ partySessionId: partyId });
     await markSelfOut({ partySessionId: partyId });
     router.replace('/');
   }, [partyId, leaving]);
 
-  const confirmExit = useCallback(() => {
-    if (leaving) return;
-    Alert.alert('Leave party?', 'If you are the host, this ends the party for everyone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Leave', style: 'destructive', onPress: handleExit },
-    ]);
-  }, [leaving, handleExit]);
+  const confirmExit = useCallback(
+    (options?: ConfirmExitOptions) => {
+      if (leaving) return;
+      const { title, message, confirmLabel } = exitCopy(options?.isHost);
+      Alert.alert(title, message, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: confirmLabel, style: 'destructive', onPress: handleExit },
+      ]);
+    },
+    [leaving, handleExit],
+  );
 
   return { leaving, confirmExit };
 }

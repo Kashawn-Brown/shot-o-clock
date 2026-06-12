@@ -212,7 +212,7 @@ export default function ShotOClockScreen(): React.JSX.Element {
       <StatusBar style="light" />
 
       <View style={styles.headerBar}>
-        <Pressable onPress={confirmExit} accessibilityRole="button" hitSlop={8} disabled={leaving}>
+        <Pressable onPress={() => confirmExit()} accessibilityRole="button" hitSlop={8} disabled={leaving}>
           <Text style={styles.back}>←</Text>
         </Pressable>
       </View>
@@ -267,7 +267,8 @@ export default function ShotOClockScreen(): React.JSX.Element {
   );
 }
 
-const RING_SIZE = 200;
+// Matches the timer ring size for visual consistency across the two screens.
+const RING_SIZE = 280;
 
 const styles = StyleSheet.create({
   screen: {
