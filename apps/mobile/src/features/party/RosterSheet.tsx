@@ -232,11 +232,14 @@ export function RosterSheet({
     // / Remove are pointless), per the "Left players do not need Remove" rule.
     const showActions = isHost && !entry.isSelf && !isLeft;
 
+    // RN opacity is a group property, so we can't fade the row and keep the action
+    // buttons crisp — instead fade only the avatar + info, leaving the actions at
+    // full weight (Remove always; Reinstate dimmed per entry.reinstatable).
     return (
-      <View key={entry.id} style={[styles.row, muted && styles.outRow]}>
-        <View style={styles.avatar} />
+      <View key={entry.id} style={styles.row}>
+        <View style={[styles.avatar, muted && styles.fadedContent]} />
 
-        <View style={styles.info}>
+        <View style={[styles.info, muted && styles.fadedContent]}>
           <Text style={styles.name} numberOfLines={1}>
             {entry.displayName}
           </Text>
@@ -255,7 +258,14 @@ export function RosterSheet({
           <View style={styles.actions}>
             {isOut ? (
               // An out player is still in the party — host can Reinstate or Remove.
-              <TextAction label="Reinstate" onPress={() => handleReinstate(entry.id)} disabled={locked} />
+              // Reinstate reads dimmed unless it's the host's to undo (host-marked-out
+              // or a left-and-rejoined player); it stays tappable either way.
+              <TextAction
+                label="Reinstate"
+                onPress={() => handleReinstate(entry.id)}
+                disabled={locked}
+                dimmed={!entry.reinstatable}
+              />
             ) : (
               <TextAction label="Mark Out" onPress={() => handleMarkOut(entry.id)} disabled={locked} />
             )}
@@ -320,17 +330,21 @@ export function RosterSheet({
 }
 
 // Minimal underlined text action — lighter than the Button primitive, which is
-// sized for full-width primary actions.
+// sized for full-width primary actions. `disabled` dims AND blocks (in-flight
+// lock); `dimmed` only de-emphasises (still tappable) — used for a Reinstate that
+// isn't the host's to undo.
 function TextAction({
   label,
   onPress,
   danger = false,
   disabled = false,
+  dimmed = false,
 }: {
   label: string;
   onPress: () => void;
   danger?: boolean;
   disabled?: boolean;
+  dimmed?: boolean;
 }): React.JSX.Element {
   return (
     <Pressable
@@ -339,7 +353,11 @@ function TextAction({
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       hitSlop={6}
-      style={({ pressed }) => [pressed && styles.actionPressed, disabled && styles.actionDisabled]}
+      style={({ pressed }) => [
+        pressed && styles.actionPressed,
+        dimmed && styles.actionDimmed,
+        disabled && styles.actionDisabled,
+      ]}
     >
       <Text style={[styles.actionText, danger && styles.actionTextDanger]}>{label}</Text>
     </Pressable>
@@ -410,7 +428,9 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     padding: SPACING.md,
   },
-  outRow: {
+  // Dims the avatar + info of an out/left row (not the whole row, so the action
+  // buttons keep full weight).
+  fadedContent: {
     opacity: 0.6,
   },
   avatar: {
@@ -470,6 +490,10 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   actionDisabled: {
+    opacity: 0.4,
+  },
+  // De-emphasised but still tappable (a Reinstate that isn't the host's to undo).
+  actionDimmed: {
     opacity: 0.4,
   },
   footer: {

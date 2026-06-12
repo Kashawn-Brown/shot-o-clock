@@ -29,6 +29,11 @@ export interface TimerRosterEntry {
   // True when the player still has a grace to spend: unlimited mode always, or
   // enabled mode while they haven't used theirs. The roster shows a "Grace" tag.
   graceAvailable: boolean;
+  // For an out player: whether Reinstate is a meaningful action (shown at normal
+  // weight) vs. dimmed. True when the host marked them out (the host can undo it)
+  // or they left and rejoined (reinstatable from any round, per the server fix);
+  // a player's own voluntary self-out is dimmed since it isn't the host's to undo.
+  reinstatable: boolean;
 }
 
 function isVisible(player: PlayerRow): boolean {
@@ -75,8 +80,21 @@ export function deriveTimerRoster(
       isSelf: userId !== null && player.user_id === userId,
       graceAvailable:
         graceMode === 'unlimited' || (graceMode === 'enabled' && !player.used_grace),
+      reinstatable: isReinstatable(player),
     };
   });
+}
+
+// Whether the host's Reinstate is the meaningful action (normal weight) for this
+// player: host_marked_out (the host can undo their own action) or a player who
+// rejoined after going out (left and came back — reinstatable from any round). A
+// plain self-out / miss is not the host's to undo, so it reads dimmed.
+function isReinstatable(player: PlayerRow): boolean {
+  if (player.out_reason === 'host_marked_out') return true;
+  if (player.rejoined_at !== null && player.out_at !== null) {
+    return Date.parse(player.rejoined_at) > Date.parse(player.out_at);
+  }
+  return false;
 }
 
 // True once a player has left and not been seen since (a rejoin bumps

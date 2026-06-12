@@ -95,6 +95,7 @@ describe('deriveTimerRoster', () => {
         isHost: true,
         isSelf: false,
         graceAvailable: false,
+        reinstatable: false,
       },
       {
         id: 'p-guest',
@@ -104,6 +105,7 @@ describe('deriveTimerRoster', () => {
         isHost: false,
         isSelf: true,
         graceAvailable: false,
+        reinstatable: false,
       },
     ]);
   });
@@ -180,5 +182,36 @@ describe('deriveTimerRoster', () => {
     // disabled: never available.
     const disabled = deriveTimerRoster([unused, used], null, 'disabled');
     expect(disabled.map((r) => r.graceAvailable)).toEqual([false, false]);
+  });
+
+  it('marks a host-marked-out player reinstatable, a plain self-out not', () => {
+    const hostOut = makePlayer({
+      id: 'p-h',
+      user_id: 'u-h',
+      status: 'out',
+      out_reason: 'host_marked_out',
+    });
+    const selfOut = makePlayer({
+      id: 'p-s',
+      user_id: 'u-s',
+      status: 'out',
+      out_reason: 'self_opted_out',
+    });
+    const rows = deriveTimerRoster([hostOut, selfOut], null, 'disabled');
+    expect(rows.find((r) => r.id === 'p-h')?.reinstatable).toBe(true);
+    expect(rows.find((r) => r.id === 'p-s')?.reinstatable).toBe(false);
+  });
+
+  it('marks a rejoined-after-out player reinstatable even on a self-out', () => {
+    const rejoined = makePlayer({
+      id: 'p-r',
+      user_id: 'u-r',
+      status: 'out',
+      out_reason: 'self_opted_out',
+      out_at: '2026-06-11T00:00:00Z',
+      rejoined_at: '2026-06-11T00:05:00Z',
+    });
+    const rows = deriveTimerRoster([rejoined], null, 'disabled');
+    expect(rows[0].reinstatable).toBe(true);
   });
 });
