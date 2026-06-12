@@ -27,6 +27,14 @@ type SettingsRow = Database['public']['Tables']['party_settings']['Row'];
 
 type LobbyStatus = 'loading' | 'ready' | 'error';
 
+// Process-wide monotonic counter for realtime channel topics. Module-scoped, not a
+// per-hook ref: if the lobby ever remounts (or an offscreen reconnect re-runs the
+// effect) while a previous channel's async removeChannel is still pending, a fixed
+// topic would let supabase hand back the already-subscribed channel and .on() would
+// throw "cannot add postgres_changes callbacks after subscribe()". A global counter
+// makes every topic unique for the life of the process. Mirrors useTimerSession.
+let realtimeChannelSeq = 0;
+
 interface UseLobbyResult {
   status: LobbyStatus;
   session: PartyRow | null;
@@ -125,8 +133,10 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
   useEffect(() => {
     if (!partyId) return;
 
+    // Unique topic per subscription — see realtimeChannelSeq.
+    realtimeChannelSeq += 1;
     const channel = supabase
-      .channel(`lobby:party_players:${partyId}`)
+      .channel(`lobby:party_players:${partyId}:${realtimeChannelSeq}`)
       .on(
         'postgres_changes',
         {
@@ -140,7 +150,7 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
   }, [partyId, refresh]);
 
@@ -154,8 +164,10 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
   useEffect(() => {
     if (!partyId) return;
 
+    // Unique topic per subscription — see realtimeChannelSeq.
+    realtimeChannelSeq += 1;
     const channel = supabase
-      .channel(`lobby:party_sessions:${partyId}`)
+      .channel(`lobby:party_sessions:${partyId}:${realtimeChannelSeq}`)
       .on(
         'postgres_changes',
         {
@@ -169,7 +181,7 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
   }, [partyId, refresh]);
 
