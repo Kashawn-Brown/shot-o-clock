@@ -22,7 +22,7 @@
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
@@ -205,20 +205,6 @@ export default function ResultsScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View style={styles.headerBar}>
-        {/* Back returns to the timer (it no longer ends/leaves the party). In the
-            halt there's no timer to return to (round_complete routes back here), so
-            it stays the exit — otherwise a guest would be stranded with no way out. */}
-        <Pressable
-          onPress={isHalt ? () => confirmExit() : goToTimer}
-          accessibilityRole="button"
-          hitSlop={8}
-          disabled={leaving}
-        >
-          <Text style={styles.back}>←</Text>
-        </Pressable>
-      </View>
-
       <View style={styles.header}>
         <Text style={styles.title}>{shownRoundNumber ? `Round ${shownRoundNumber} Results` : 'Round Results'}</Text>
         <Text style={styles.subtitle}>
@@ -291,16 +277,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
-  },
-  headerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  back: {
-    fontSize: FONT_SIZE.md,
-    color: COLORS.textPrimary,
   },
   header: {
     alignItems: 'center',
