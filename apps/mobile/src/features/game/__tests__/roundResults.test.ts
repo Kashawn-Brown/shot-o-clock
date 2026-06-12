@@ -313,3 +313,87 @@ describe('deriveRoundResults — structure', () => {
     expect(view.groups[0].rows.map((row) => row.displayName)).toEqual(['Ana', 'Zoe']);
   });
 });
+
+type AdminActionRow = Database['public']['Tables']['admin_action_logs']['Row'];
+
+function makeAdminAction(overrides: Partial<AdminActionRow>): AdminActionRow {
+  return {
+    action_type: 'remove_player',
+    actor_permission_role: 'host',
+    actor_player_id: 'p-host',
+    affected_player_id: 'p-default',
+    created_at: '2026-06-11T00:00:00Z',
+    id: 'a-default',
+    new_value: null,
+    party_session_id: 's-1',
+    previous_value: null,
+    reason: null,
+    round_id: 'r-1',
+    round_number: 3,
+    ...overrides,
+  };
+}
+
+describe('deriveRoundResults — host actions (Kicked / Reinstated)', () => {
+  it('groups a removed player under Kicked (even with no outcome row)', () => {
+    const view = deriveRoundResults(
+      [],
+      [makePlayer({ id: 'p-1' })],
+      null,
+      [makeAdminAction({ action_type: 'remove_player', affected_player_id: 'p-1' })],
+    );
+    expect(groupOf(view, 'p-1')).toBe('kicked');
+  });
+
+  it('groups a reinstated player under Reinstated, taking precedence over their outcome', () => {
+    const view = deriveRoundResults(
+      [makeOutcome({ party_player_id: 'p-1', player_action: 'done', final_outcome: 'completed' })],
+      [makePlayer({ id: 'p-1' })],
+      null,
+      [makeAdminAction({ action_type: 'mark_player_active', affected_player_id: 'p-1' })],
+    );
+    // Pulled out of Took the Shot into Reinstated — appears once.
+    expect(groupOf(view, 'p-1')).toBe('reinstated');
+  });
+
+  it('ignores a no-op reinstate (already-active mark)', () => {
+    const view = deriveRoundResults(
+      [makeOutcome({ party_player_id: 'p-1', player_action: 'done', final_outcome: 'completed' })],
+      [makePlayer({ id: 'p-1' })],
+      null,
+      [
+        makeAdminAction({
+          action_type: 'mark_player_active',
+          affected_player_id: 'p-1',
+          reason: 'no-change: already active',
+        }),
+      ],
+    );
+    expect(groupOf(view, 'p-1')).toBe('took_shot');
+  });
+
+  it('counts reinstated as still-in and kicked as neither still-in nor out-this-round', () => {
+    const players = [makePlayer({ id: 'p-1' }), makePlayer({ id: 'p-2' })];
+    const view = deriveRoundResults(
+      [],
+      players,
+      null,
+      [
+        makeAdminAction({ id: 'a-1', action_type: 'mark_player_active', affected_player_id: 'p-1' }),
+        makeAdminAction({ id: 'a-2', action_type: 'remove_player', affected_player_id: 'p-2' }),
+      ],
+    );
+    expect(view.stillIn).toBe(1); // reinstated p-1
+    expect(view.outThisRound).toBe(0); // kicked is not an elimination
+  });
+
+  it('no host actions → no Kicked/Reinstated groups (the guest case)', () => {
+    const view = deriveRoundResults(
+      [makeOutcome({ party_player_id: 'p-1', player_action: 'done', final_outcome: 'completed' })],
+      [makePlayer({ id: 'p-1' })],
+      null,
+      [],
+    );
+    expect(view.groups.map((group) => group.key)).toEqual(['took_shot']);
+  });
+});

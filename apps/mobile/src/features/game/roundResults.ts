@@ -14,8 +14,16 @@ import type { Database } from '@/types/db.generated';
 
 type OutcomeRow = Database['public']['Tables']['round_player_outcomes']['Row'];
 type PlayerRow = Database['public']['Tables']['party_players']['Row'];
+type AdminActionRow = Database['public']['Tables']['admin_action_logs']['Row'];
 
-export type ResultGroupKey = 'took_shot' | 'used_grace' | 'skipped' | 'missed' | 'out';
+export type ResultGroupKey =
+  | 'took_shot'
+  | 'reinstated'
+  | 'used_grace'
+  | 'skipped'
+  | 'missed'
+  | 'out'
+  | 'kicked';
 
 export interface ResultRow {
   playerId: string;
@@ -50,16 +58,31 @@ export interface RoundResultsView {
 }
 
 // Fixed display order (game-rules §7 outcome ordering): the good news first,
-// elimination last.
-const GROUP_ORDER: readonly ResultGroupKey[] = ['took_shot', 'used_grace', 'skipped', 'missed', 'out'];
+// elimination last. The host-action groups bracket the auto groups — Reinstated
+// (back in) near the top, Kicked (gone) at the very end.
+const GROUP_ORDER: readonly ResultGroupKey[] = [
+  'took_shot',
+  'reinstated',
+  'used_grace',
+  'skipped',
+  'missed',
+  'out',
+  'kicked',
+];
 
 const GROUP_LABELS: Record<ResultGroupKey, string> = {
   took_shot: 'Took the Shot',
+  reinstated: 'Reinstated',
   used_grace: 'Used Grace',
   skipped: 'Skipped',
   missed: 'Missed',
   out: 'Out',
+  kicked: 'Kicked',
 };
+
+// A no-op reinstate (host marked an already-active player) logs this reason — it
+// isn't a real reinstatement, so it shouldn't surface a Reinstated row.
+const REINSTATE_NO_OP_REASON = 'no-change: already active';
 
 // Classify a finalized outcome into exactly one group. Priority matters: a
 // self_out that consumed grace is Used Grace (not Skipped); one that eliminated
@@ -85,16 +108,40 @@ export function deriveRoundResults(
   outcomes: OutcomeRow[],
   players: PlayerRow[],
   myPlayerId: string | null,
+  // Host override actions logged against this round (admin_action_logs). Empty for
+  // a guest (host-only RLS), so Kicked / Reinstated simply don't appear for them.
+  adminActions: AdminActionRow[] = [],
 ): RoundResultsView {
   const playerById = new Map(players.map((player) => [player.id, player]));
 
-  // Only players who were finalized this round get an outcome row, so the rows
-  // are exactly the round's participants. An outcome whose player isn't in the
-  // (RLS-filtered) roster is dropped rather than rendered nameless.
+  // Players the host removed this round. They have no outcome row (removed before
+  // finalization), so they surface ONLY here.
+  const kickedIds = new Set(
+    adminActions
+      .filter((a) => a.action_type === 'remove_player' && a.affected_player_id !== null)
+      .map((a) => a.affected_player_id as string),
+  );
+  // Players the host reinstated this round (excluding no-op marks). Kick wins over
+  // reinstate if both somehow landed on the same player.
+  const reinstatedIds = new Set(
+    adminActions
+      .filter(
+        (a) =>
+          a.action_type === 'mark_player_active' &&
+          a.affected_player_id !== null &&
+          a.reason !== REINSTATE_NO_OP_REASON &&
+          !kickedIds.has(a.affected_player_id),
+      )
+      .map((a) => a.affected_player_id as string),
+  );
+
+  // Outcome-based rows. A player surfaced in an event group (Kicked / Reinstated)
+  // is pulled out of their auto group so they appear once, in the event group.
   const rows: ResultRow[] = outcomes
     .map((outcome): ResultRow | null => {
       const player = playerById.get(outcome.party_player_id);
       if (!player) return null;
+      if (kickedIds.has(player.id) || reinstatedIds.has(player.id)) return null;
       return {
         playerId: player.id,
         displayName: player.display_name,
@@ -106,15 +153,41 @@ export function deriveRoundResults(
     })
     .filter((row): row is ResultRow => row !== null);
 
+  // Event rows from the host log. Kicked players may not have an outcome row, so
+  // these are built from the player lookup directly. A player not in the
+  // (RLS-filtered) roster is dropped rather than rendered nameless.
+  const eventRow = (playerId: string, group: ResultGroupKey): ResultRow | null => {
+    const player = playerById.get(playerId);
+    if (!player) return null;
+    return {
+      playerId: player.id,
+      displayName: player.display_name,
+      isYou: myPlayerId !== null && player.id === myPlayerId,
+      shotCount: player.total_shots_completed,
+      group,
+      detail: null,
+    };
+  };
+  const eventRows: ResultRow[] = [
+    ...[...kickedIds].map((id) => eventRow(id, 'kicked')),
+    ...[...reinstatedIds].map((id) => eventRow(id, 'reinstated')),
+  ].filter((row): row is ResultRow => row !== null);
+
+  const allRows = [...rows, ...eventRows];
+
   const groups: ResultGroup[] = GROUP_ORDER.map((key) => ({
     key,
     label: GROUP_LABELS[key],
-    rows: rows.filter((row) => row.group === key).sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    rows: allRows
+      .filter((row) => row.group === key)
+      .sort((a, b) => a.displayName.localeCompare(b.displayName)),
   })).filter((group) => group.rows.length > 0);
 
-  const me = rows.find((row) => row.isYou) ?? null;
-  const outThisRound = rows.filter((row) => row.group === 'out').length;
-  const stillIn = rows.length - outThisRound;
+  const me = allRows.find((row) => row.isYou) ?? null;
+  // Eliminated and kicked are both no-longer-in; reinstated counts as still in.
+  const outThisRound = allRows.filter((row) => row.group === 'out').length;
+  const kickedCount = allRows.filter((row) => row.group === 'kicked').length;
+  const stillIn = allRows.length - outThisRound - kickedCount;
 
   return { groups, me, stillIn, outThisRound };
 }
