@@ -175,7 +175,15 @@ export default function ResultsScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.headerBar}>
-        <Pressable onPress={() => confirmExit()} accessibilityRole="button" hitSlop={8} disabled={leaving}>
+        {/* Back returns to the timer (it no longer ends/leaves the party). In the
+            halt there's no timer to return to (round_complete routes back here), so
+            it stays the exit — otherwise a guest would be stranded with no way out. */}
+        <Pressable
+          onPress={isHalt ? () => confirmExit() : goToTimer}
+          accessibilityRole="button"
+          hitSlop={8}
+          disabled={leaving}
+        >
           <Text style={styles.back}>←</Text>
         </Pressable>
       </View>
