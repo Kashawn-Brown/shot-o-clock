@@ -171,6 +171,7 @@ export function RosterSheet({
   const roster = deriveTimerRoster(players, currentUserId, graceMode, currentRoundOutcomes);
   const active = roster.filter((entry) => entry.status === 'active');
   const out = roster.filter((entry) => entry.status === 'out');
+  const left = roster.filter((entry) => entry.status === 'left');
 
   // The player id whose action is in flight, or null. Locks just that row's
   // actions so a double-tap can't fire two host_* calls at the target.
@@ -224,11 +225,15 @@ export function RosterSheet({
 
   const renderRow = (entry: TimerRosterEntry): React.JSX.Element => {
     const locked = busyId !== null;
-    const showActions = isHost && !entry.isSelf;
     const isOut = entry.status === 'out';
+    const isLeft = entry.status === 'left';
+    const muted = isOut || isLeft;
+    // A left player is already gone — no host actions on them (Mark Out / Reinstate
+    // / Remove are pointless), per the "Left players do not need Remove" rule.
+    const showActions = isHost && !entry.isSelf && !isLeft;
 
     return (
-      <View key={entry.id} style={[styles.row, isOut && styles.outRow]}>
+      <View key={entry.id} style={[styles.row, muted && styles.outRow]}>
         <View style={styles.avatar} />
 
         <View style={styles.info}>
@@ -238,8 +243,8 @@ export function RosterSheet({
           <View style={styles.tags}>
             {entry.isHost ? <Text style={styles.hostPill}>Host</Text> : null}
             {entry.isSelf && !entry.isHost ? <Text style={styles.youTag}>You</Text> : null}
-            {/* Grace only matters while a player is still in — don't tag an out row. */}
-            {!isOut && entry.graceAvailable ? <Text style={styles.graceTag}>Grace</Text> : null}
+            {/* Grace only matters while a player is still in — don't tag an out/left row. */}
+            {!muted && entry.graceAvailable ? <Text style={styles.graceTag}>Grace</Text> : null}
             <Text style={styles.shotsTag}>
               {entry.shotsCompleted} {entry.shotsCompleted === 1 ? 'shot' : 'shots'}
             </Text>
@@ -290,6 +295,13 @@ export function RosterSheet({
               <>
                 <Text style={[styles.sectionTitle, styles.outTitle]}>● Out ({out.length})</Text>
                 {out.map(renderRow)}
+              </>
+            ) : null}
+
+            {left.length > 0 ? (
+              <>
+                <Text style={[styles.sectionTitle, styles.leftTitle]}>● Left ({left.length})</Text>
+                {left.map(renderRow)}
               </>
             ) : null}
 
@@ -383,6 +395,11 @@ const styles = StyleSheet.create({
     color: COLORS.success,
   },
   outTitle: {
+    color: COLORS.textSecondary,
+  },
+  // Left players are voluntary departures, not eliminations — same muted rows as
+  // Out, but their own section header keeps the two clearly distinct.
+  leftTitle: {
     color: COLORS.textSecondary,
   },
   row: {

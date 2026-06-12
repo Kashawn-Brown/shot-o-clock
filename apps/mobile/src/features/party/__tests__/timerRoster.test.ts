@@ -132,6 +132,39 @@ describe('deriveTimerRoster', () => {
     expect(rows.find((r) => r.id === 'p-host')?.status).toBe('active');
   });
 
+  it('shows a player who left (left_at after last_seen_at) as Left', () => {
+    const leaver = makePlayer({
+      id: 'p-left',
+      user_id: 'u-left',
+      last_seen_at: '2026-06-11T00:00:00Z',
+      left_at: '2026-06-11T00:05:00Z',
+    });
+    const rows = deriveTimerRoster([host, leaver], 'u-host', 'disabled');
+    expect(rows.find((r) => r.id === 'p-left')?.status).toBe('left');
+  });
+
+  it('clears Left once seen again — a rejoin bumps last_seen_at past left_at', () => {
+    const rejoined = makePlayer({
+      id: 'p-left',
+      user_id: 'u-left',
+      left_at: '2026-06-11T00:05:00Z',
+      last_seen_at: '2026-06-11T00:06:00Z',
+    });
+    const rows = deriveTimerRoster([host, rejoined], 'u-host', 'disabled');
+    expect(rows.find((r) => r.id === 'p-left')?.status).toBe('active');
+  });
+
+  it('prefers Left over the self_out Out display when a leaver also self_out', () => {
+    const leaver = makePlayer({
+      id: 'p-left',
+      user_id: 'u-left',
+      last_seen_at: '2026-06-11T00:00:00Z',
+      left_at: '2026-06-11T00:05:00Z',
+    });
+    const rows = deriveTimerRoster([leaver], null, 'disabled', [selfOutOutcome('p-left')]);
+    expect(rows[0].status).toBe('left');
+  });
+
   it('derives grace availability from mode and used_grace', () => {
     const unused = makePlayer({ id: 'p-a', user_id: 'u-a', used_grace: false });
     const used = makePlayer({ id: 'p-b', user_id: 'u-b', used_grace: true });

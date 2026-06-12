@@ -14,9 +14,10 @@ type OutcomeRow = Database['public']['Tables']['round_player_outcomes']['Row'];
 type PlayerStatus = Database['public']['Enums']['player_status'];
 type GraceMode = Database['public']['Enums']['grace_mode'];
 
-// Only active/out are present, current members. Narrowed from PlayerStatus so the
-// UI can switch exhaustively on the two live states.
-export type RosterEntryStatus = Extract<PlayerStatus, 'active' | 'out'>;
+// Display states the roster renders. 'active' / 'out' come straight from the
+// player_status enum; 'left' is a display-only state for a member who voluntarily
+// left the game (left_at stamped, not removed) — distinct from being eliminated.
+export type RosterEntryStatus = Extract<PlayerStatus, 'active' | 'out'> | 'left';
 
 export interface TimerRosterEntry {
   id: string;
@@ -44,6 +45,11 @@ function isVisible(player: PlayerRow): boolean {
  * self_out this round as Out *now*, rather than waiting for finalization to flip
  * their party_players.status — so a mid-game Leave Party (which records a self_out)
  * reflects promptly on every device.
+ *
+ * A player who voluntarily left (mark_self_left → left_at) displays as 'left',
+ * taking precedence over the self_out 'out' display. "Left" holds only while
+ * left_at is more recent than last_seen_at — join_party's reconnect bumps
+ * last_seen_at, so a rejoin clears the label without any server change here.
  */
 export function deriveTimerRoster(
   players: PlayerRow[],
@@ -58,13 +64,7 @@ export function deriveTimerRoster(
   );
 
   return players.filter(isVisible).map((player) => {
-    // isVisible guarantees active/out; treat an active player who self_out this
-    // round as Out for display. The filter doesn't narrow the field, so assert the
-    // two-state subtype the UI switches on.
-    const displayStatus: RosterEntryStatus =
-      player.status === 'active' && selfOutPlayerIds.has(player.id)
-        ? 'out'
-        : (player.status as RosterEntryStatus);
+    const displayStatus = displayStatusFor(player, selfOutPlayerIds);
 
     return {
       id: player.id,
@@ -77,4 +77,20 @@ export function deriveTimerRoster(
         graceMode === 'unlimited' || (graceMode === 'enabled' && !player.used_grace),
     };
   });
+}
+
+// True once a player has left and not been seen since (a rejoin bumps
+// last_seen_at past left_at). Null-safe on both timestamps.
+function hasLeft(player: PlayerRow): boolean {
+  if (player.left_at === null) return false;
+  if (player.last_seen_at === null) return true;
+  return Date.parse(player.left_at) > Date.parse(player.last_seen_at);
+}
+
+// isVisible guarantees active/out as the base status. 'left' wins over the
+// self_out → 'out' override (someone who left isn't just "out").
+function displayStatusFor(player: PlayerRow, selfOutPlayerIds: Set<string>): RosterEntryStatus {
+  if (hasLeft(player)) return 'left';
+  if (player.status === 'active' && selfOutPlayerIds.has(player.id)) return 'out';
+  return player.status as Extract<typeof player.status, 'active' | 'out'>;
 }
