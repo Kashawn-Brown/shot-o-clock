@@ -27,7 +27,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
-import { getRoundAdminActions, type AdminActionRow } from '@/features/game/api/roundAdminActions';
 import { deriveRoundResults, type ResultGroupKey, type ResultRow } from '@/features/game/roundResults';
 import { useRoundOutcomes } from '@/features/game/useRoundOutcomes';
 import { useGameExit } from '@/features/party/useGameExit';
@@ -41,22 +40,22 @@ const AUTO_ADVANCE_SECONDS = 10;
 
 const GROUP_ACCENT: Record<ResultGroupKey, string> = {
   took_shot: COLORS.success,
-  reinstated: COLORS.success,
   used_grace: COLORS.warning,
   skipped: COLORS.textSecondary,
   missed: COLORS.textSecondary,
   out: COLORS.danger,
+  left: COLORS.textSecondary,
   kicked: COLORS.danger,
 };
 
 // Personalised hero copy for the caller's own outcome.
 const HERO_COPY: Record<ResultGroupKey, string> = {
   took_shot: 'You took the shot',
-  reinstated: 'Reinstated by the host',
   used_grace: 'Grace used — still in',
   skipped: 'You skipped this round',
   missed: 'You missed — still in',
   out: "You're out",
+  left: 'You left the party',
   kicked: 'Removed by the host',
 };
 
@@ -83,30 +82,9 @@ export default function ResultsScreen(): React.JSX.Element {
 
   const { outcomes } = useRoundOutcomes(partyId, shownRoundId);
 
-  // Host override actions for this round (Kicked / Reinstated). Host-only (RLS) —
-  // resolves to [] for a guest, so those groups don't appear for them.
-  const [adminActions, setAdminActions] = useState<AdminActionRow[]>([]);
-  useEffect(() => {
-    if (!shownRoundId) {
-      setAdminActions([]);
-      return;
-    }
-    let active = true;
-    getRoundAdminActions(shownRoundId)
-      .then((rows) => {
-        if (active) setAdminActions(rows);
-      })
-      .catch(() => {
-        if (active) setAdminActions([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [shownRoundId]);
-
   const view = useMemo(
-    () => deriveRoundResults(outcomes, players, me?.id ?? null, adminActions),
-    [outcomes, players, me?.id, adminActions],
+    () => deriveRoundResults(outcomes, players, me?.id ?? null),
+    [outcomes, players, me?.id],
   );
 
   // Forward to the timer, carrying the round we just showed so the timer can offer
@@ -246,7 +224,6 @@ export default function ResultsScreen(): React.JSX.Element {
                     {row.displayName}
                     {row.isYou ? ' (You)' : ''}
                   </Text>
-                  {row.detail ? <Text style={styles.playerDetail}>{row.detail}</Text> : null}
                 </View>
                 <Text style={styles.shotCount}>🥃 {row.shotCount}</Text>
               </View>
@@ -362,10 +339,6 @@ const styles = StyleSheet.create({
   playerName: {
     fontSize: FONT_SIZE.md,
     color: COLORS.textPrimary,
-  },
-  playerDetail: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.textSecondary,
   },
   shotCount: {
     fontSize: FONT_SIZE.sm,

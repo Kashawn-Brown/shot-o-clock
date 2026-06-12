@@ -111,21 +111,21 @@ describe('deriveRoundResults — classification', () => {
     expect(groupOf(view, 'p-1')).toBe('used_grace');
   });
 
-  it('a self_out that consumed grace (elimination on) → Used Grace, not Skipped', () => {
+  it('a self_out → Skipped whether or not it consumed grace (reads final_outcome, not grace)', () => {
     const view = deriveRoundResults(
       [
         makeOutcome({
           party_player_id: 'p-1',
           player_action: 'self_out',
           final_outcome: 'self_out',
-          grace_applied: true, // D034: skip absorbed by spending grace
+          grace_applied: true, // grace spend no longer reclassifies a self_out
           status_after_round: 'active',
         }),
       ],
       [player],
       null,
     );
-    expect(groupOf(view, 'p-1')).toBe('used_grace');
+    expect(groupOf(view, 'p-1')).toBe('skipped');
   });
 
   it('a no-consequence self_out (elimination off / unlimited) → Skipped', () => {
@@ -263,38 +263,18 @@ describe('deriveRoundResults — structure', () => {
     expect(view.me).toBeNull();
   });
 
-  it('distinguishes a grace-forgiven miss from a grace-spending skip on the row', () => {
+  it('a grace-forgiven miss is Used Grace; a grace-spending skip is Skipped', () => {
     const players = [makePlayer({ id: 'p-1' }), makePlayer({ id: 'p-2' })];
     const view = deriveRoundResults(
       [
-        makeOutcome({
-          party_player_id: 'p-1',
-          player_action: 'missed',
-          final_outcome: 'grace_used',
-          grace_applied: true,
-        }),
-        makeOutcome({
-          party_player_id: 'p-2',
-          player_action: 'self_out',
-          final_outcome: 'self_out',
-          grace_applied: true,
-        }),
+        makeOutcome({ party_player_id: 'p-1', player_action: 'missed', final_outcome: 'grace_used' }),
+        makeOutcome({ party_player_id: 'p-2', player_action: 'self_out', final_outcome: 'self_out' }),
       ],
       players,
       null,
     );
-    const usedGrace = view.groups.find((group) => group.key === 'used_grace');
-    expect(usedGrace?.rows.find((row) => row.playerId === 'p-1')?.detail).toBe('Missed — grace used');
-    expect(usedGrace?.rows.find((row) => row.playerId === 'p-2')?.detail).toBe('Skipped — grace used');
-  });
-
-  it('leaves detail null for rows outside Used Grace', () => {
-    const view = deriveRoundResults(
-      [makeOutcome({ party_player_id: 'p-1', player_action: 'done', final_outcome: 'completed' })],
-      [makePlayer({ id: 'p-1' })],
-      null,
-    );
-    expect(view.groups[0].rows[0].detail).toBeNull();
+    expect(groupOf(view, 'p-1')).toBe('used_grace');
+    expect(groupOf(view, 'p-2')).toBe('skipped');
   });
 
   it('sorts rows within a group by display name', () => {
@@ -314,86 +294,90 @@ describe('deriveRoundResults — structure', () => {
   });
 });
 
-type AdminActionRow = Database['public']['Tables']['admin_action_logs']['Row'];
-
-function makeAdminAction(overrides: Partial<AdminActionRow>): AdminActionRow {
-  return {
-    action_type: 'remove_player',
-    actor_permission_role: 'host',
-    actor_player_id: 'p-host',
-    affected_player_id: 'p-default',
-    created_at: '2026-06-11T00:00:00Z',
-    id: 'a-default',
-    new_value: null,
-    party_session_id: 's-1',
-    previous_value: null,
-    reason: null,
-    round_id: 'r-1',
-    round_number: 3,
-    ...overrides,
-  };
-}
-
-describe('deriveRoundResults — host actions (Kicked / Reinstated)', () => {
-  it('groups a removed player under Kicked (even with no outcome row)', () => {
+describe('deriveRoundResults — Left / Kicked (state-based) and priority', () => {
+  it('a removed player → Kicked, even with no outcome row', () => {
     const view = deriveRoundResults(
       [],
-      [makePlayer({ id: 'p-1' })],
+      [makePlayer({ id: 'p-1', status: 'removed', removed_at: '2026-06-11T00:00:00Z' })],
       null,
-      [makeAdminAction({ action_type: 'remove_player', affected_player_id: 'p-1' })],
     );
     expect(groupOf(view, 'p-1')).toBe('kicked');
   });
 
-  it('groups a reinstated player under Reinstated, taking precedence over their outcome', () => {
+  it('a player with left_at set → Left, even with no outcome row', () => {
     const view = deriveRoundResults(
-      [makeOutcome({ party_player_id: 'p-1', player_action: 'done', final_outcome: 'completed' })],
-      [makePlayer({ id: 'p-1' })],
+      [],
+      [makePlayer({ id: 'p-1', left_at: '2026-06-11T00:00:00Z' })],
       null,
-      [makeAdminAction({ action_type: 'mark_player_active', affected_player_id: 'p-1' })],
     );
-    // Pulled out of Took the Shot into Reinstated — appears once.
-    expect(groupOf(view, 'p-1')).toBe('reinstated');
+    expect(groupOf(view, 'p-1')).toBe('left');
   });
 
-  it('ignores a no-op reinstate (already-active mark)', () => {
+  it('Kicked wins over Left when both apply', () => {
+    const view = deriveRoundResults(
+      [],
+      [
+        makePlayer({
+          id: 'p-1',
+          status: 'removed',
+          removed_at: '2026-06-11T00:00:00Z',
+          left_at: '2026-06-11T00:00:00Z',
+        }),
+      ],
+      null,
+    );
+    expect(groupOf(view, 'p-1')).toBe('kicked');
+  });
+
+  it('Left wins over the outcome group: a left player who was eliminated is Left', () => {
+    const view = deriveRoundResults(
+      [
+        makeOutcome({
+          party_player_id: 'p-1',
+          player_action: 'self_out',
+          final_outcome: 'self_out',
+          eliminated_this_round: true,
+          status_after_round: 'out',
+        }),
+      ],
+      [
+        makePlayer({
+          id: 'p-1',
+          status: 'out',
+          left_at: '2026-06-11T00:00:00Z',
+          out_reason: 'self_opted_out',
+          out_round_number: 3,
+          out_at: '2026-06-11T00:00:00Z',
+        }),
+      ],
+      null,
+    );
+    expect(groupOf(view, 'p-1')).toBe('left');
+  });
+
+  it('a reinstated player is classified by their actual outcome, with no Reinstated group', () => {
+    // Reinstatement is an action, not an outcome — a player the host brought back
+    // lands in whatever group their round result matches (here, Took the Shot).
     const view = deriveRoundResults(
       [makeOutcome({ party_player_id: 'p-1', player_action: 'done', final_outcome: 'completed' })],
       [makePlayer({ id: 'p-1' })],
       null,
-      [
-        makeAdminAction({
-          action_type: 'mark_player_active',
-          affected_player_id: 'p-1',
-          reason: 'no-change: already active',
-        }),
-      ],
     );
     expect(groupOf(view, 'p-1')).toBe('took_shot');
   });
 
-  it('counts reinstated as still-in and kicked as neither still-in nor out-this-round', () => {
-    const players = [makePlayer({ id: 'p-1' }), makePlayer({ id: 'p-2' })];
+  it('left and kicked count as neither still-in nor out-this-round', () => {
+    const players = [
+      makePlayer({ id: 'p-1', status: 'removed', removed_at: '2026-06-11T00:00:00Z' }),
+      makePlayer({ id: 'p-2', left_at: '2026-06-11T00:00:00Z' }),
+      makePlayer({ id: 'p-3' }),
+    ];
     const view = deriveRoundResults(
-      [],
+      [makeOutcome({ party_player_id: 'p-3', player_action: 'done', final_outcome: 'completed' })],
       players,
       null,
-      [
-        makeAdminAction({ id: 'a-1', action_type: 'mark_player_active', affected_player_id: 'p-1' }),
-        makeAdminAction({ id: 'a-2', action_type: 'remove_player', affected_player_id: 'p-2' }),
-      ],
     );
-    expect(view.stillIn).toBe(1); // reinstated p-1
-    expect(view.outThisRound).toBe(0); // kicked is not an elimination
-  });
-
-  it('no host actions → no Kicked/Reinstated groups (the guest case)', () => {
-    const view = deriveRoundResults(
-      [makeOutcome({ party_player_id: 'p-1', player_action: 'done', final_outcome: 'completed' })],
-      [makePlayer({ id: 'p-1' })],
-      null,
-      [],
-    );
-    expect(view.groups.map((group) => group.key)).toEqual(['took_shot']);
+    expect(view.stillIn).toBe(1); // only p-3 (took the shot)
+    expect(view.outThisRound).toBe(0); // kicked / left are not eliminations
   });
 });
