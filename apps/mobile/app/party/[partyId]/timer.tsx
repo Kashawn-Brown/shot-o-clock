@@ -280,21 +280,10 @@ export default function TimerScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.headerBar}>
-        {/* The back arrow is the player's Leave Party escape hatch. The host has
-            End Party in the Players sheet, so it's redundant for them — hidden.
-            An empty spacer keeps the results link right-aligned. */}
-        {isHost ? (
-          <View />
-        ) : (
-          <Pressable
-            onPress={() => confirmExit({ isHost })}
-            accessibilityRole="button"
-            hitSlop={8}
-            disabled={leaving}
-          >
-            <Text style={styles.back}>←</Text>
-          </Pressable>
-        )}
+        {/* No back arrow: the host ends the party and a player leaves via the
+            End Party / Leave Party button in the footer, so it's redundant for both.
+            The empty spacer keeps the results link right-aligned. */}
+        <View />
 
         {/* Quick jump back to the round that just finished — top-right of the
             header, hidden on round 1 / a reconnect that skipped results. */}
@@ -523,10 +512,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-  },
-  back: {
-    fontSize: FONT_SIZE.md,
-    color: COLORS.textPrimary,
   },
   header: {
     alignItems: 'center',
