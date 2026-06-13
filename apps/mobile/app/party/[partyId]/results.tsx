@@ -74,8 +74,8 @@ export default function ResultsScreen(): React.JSX.Element {
   }>();
 
   const { status, session, currentRound, players, me, errorMessage } = useTimerSession(partyId);
-  // Shared testing escape hatch — also backs the halt's End Party (host → end_party,
-  // guest → mark_self_out → home). See D032.
+  // Shared exit hook — also backs the halt's End Party (host → end_party → Final
+  // Summary, guest → mark_self_out → home). See D032.
   const { leaving, confirmExit } = useGameExit(partyId);
 
   const isHalt = session?.current_phase === 'round_complete';
@@ -143,22 +143,22 @@ export default function ResultsScreen(): React.JSX.Element {
     return () => clearTimeout(id);
   }, [autoAdvance, secondsLeft, goToTimer]);
 
-  // If the party has already ended by the time this screen loads, route home.
-  // (Phase 11 will route to the final summary instead.)
+  // If the party has already ended by the time this screen loads, route to the
+  // Final Summary (Phase 11).
   const currentPhase = session?.current_phase;
   useEffect(() => {
     if (leaving || status !== 'ready' || !partyId) return;
     if (currentPhase === 'ended') {
-      router.replace('/');
+      router.replace(`/party/${partyId}/summary`);
     }
   }, [leaving, status, partyId, currentPhase]);
 
   // Live end-of-party detection. The halt is terminal, and useTimerSession's
   // advance poll is a no-op in round_complete, so without this a guest waiting on
   // the halt screen would never learn the host pressed End Party. Watch the session
-  // row directly: an UPDATE to status = 'ended' routes every device home. RLS
-  // (rls-rules.md §2) gates delivery to members; requires party_sessions in the
-  // realtime publication (migration 20260610…). Phase 11 will route to the summary.
+  // row directly: an UPDATE to status = 'ended' routes every device to the Final
+  // Summary (Phase 11). RLS (rls-rules.md §2) gates delivery to members; requires
+  // party_sessions in the realtime publication (migration 20260610…).
   useEffect(() => {
     if (!partyId) return;
 
@@ -176,7 +176,7 @@ export default function ResultsScreen(): React.JSX.Element {
           // The session is the caller's own party row (fully visible to members),
           // so reading status off the payload is safe here — no RLS-filtered field.
           if ((payload.new as { status?: string }).status === 'ended') {
-            router.replace('/');
+            router.replace(`/party/${partyId}/summary`);
           }
         },
       )
