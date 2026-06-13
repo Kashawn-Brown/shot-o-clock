@@ -10,9 +10,9 @@
 // aligns the clock, polls advance_phase_if_due to drive the transition, and
 // subscribes to the session + roster rows so host actions reflect on every device.
 //
-// The back arrow + End/Leave Party are the shared escape hatch (useGameExit):
-// end_party for the host, mark_self_out → home for a guest (D032). The real
-// End Party → Final Summary routing lands in Phase 11.
+// End/Leave Party go through useGameExit: end_party → Final Summary for the host
+// (the intentional wrap-up), mark_self_out → home for a guest (D032). The other
+// devices follow the host onto the summary via partyEnded / 'ended' detection.
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -217,11 +217,10 @@ export default function TimerScreen(): React.JSX.Element {
   // keeps us here for round N+1. This is the consumer side of the timer's
   // server-authoritative transition (CLAUDE.md §2.1).
   //
-  // Suppressed while `leaving`: the exit flips the phase (end_party → 'ended') and
-  // the poll can still catch 'shot_window' mid-exit, either of which would re-route
-  // us right after useGameExit's router.replace('/'). The intentional exit wins.
-  // 'ended' is handled below (route home, not via routeForPhase) so End Party never
-  // lands a non-host on the summary placeholder.
+  // Suppressed while `leaving`: useGameExit's host path already routes to the
+  // summary on end_party, and the poll can still catch 'shot_window' mid-exit —
+  // either would re-route us right after that. The intentional exit wins. 'ended'
+  // is handled below (route to the summary, not via routeForPhase).
   const currentPhase = session?.current_phase;
   useEffect(() => {
     if (
@@ -236,20 +235,20 @@ export default function TimerScreen(): React.JSX.Element {
       return;
     }
     // The party ended (e.g. the screen loaded after end_party, so the snapshot read
-    // it directly) → home. Phase 11 will route to the Final Summary instead.
+    // it directly) → Final Summary (Phase 11).
     if (currentPhase === 'ended') {
-      router.replace('/');
+      router.replace(`/party/${partyId}/summary`);
       return;
     }
     router.replace(`/party/${partyId}/${routeForPhase(currentPhase)}`);
   }, [leaving, membershipLost, partyEnded, status, currentPhase, partyId]);
 
   // Host ended the party — read live off the party_sessions realtime payload
-  // (useTimerSession.partyEnded), so we route home even if a get_party_state
-  // refresh would have failed. Phase 11 will route to the Final Summary instead.
+  // (useTimerSession.partyEnded), so we route on even if a get_party_state refresh
+  // would have failed. End Party lands every device on the Final Summary (Phase 11).
   useEffect(() => {
-    if (partyEnded) router.replace('/');
-  }, [partyEnded]);
+    if (partyEnded && partyId) router.replace(`/party/${partyId}/summary`);
+  }, [partyEnded, partyId]);
 
   // The host removed us mid-game — surface why, then return home. Same message as
   // the lobby (useLobby membershipLost). Driven by the realtime party_players sub.

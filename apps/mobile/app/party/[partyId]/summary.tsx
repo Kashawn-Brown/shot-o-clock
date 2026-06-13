@@ -1,58 +1,147 @@
-// Final Summary — shown to every device when the party ends. Trophy, last
-// standing, total rounds, and the ranked final standings.
+// Final Summary — the whole-game wrap-up shown to every device when the party
+// ends (CLAUDE.md §4.1; plan.md Phase 11). Not a repeat of the last Round Results
+// (that's per-round) — this ranks the whole game by cumulative shots taken.
 //
-// This screen is terminal and read-only: it performs no mutations. The camera
-// affordance in the wireframe is a post-MVP party-album hook and is rendered
-// inert here. Phase 3 placeholder: mock standings, no data. "Back to Home"
-// resets the navigation stack to the launch screen.
+// Terminal and read-only: it performs NO mutations (Phase 11 Done-when). A single
+// get_party_state read feeds the pure derivePartySummary; the screen just renders
+// what it returns. Members can still read an ended party (the roster rows stay,
+// is_active_party_member doesn't gate on session.status); a removed player can't,
+// but they're routed home before reaching here, never to the summary.
+//
+// "Back to Home" resets the navigation stack to the launch screen.
 
-import { router } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
+import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { getPartyState } from '@/features/party/api/partyState';
+import { derivePartySummary, type PartySummaryView } from '@/features/game/partySummary';
+import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
-const STANDINGS = [
-  { rank: 1, name: 'Alex', detail: '8 shots completed', out: false },
-  { rank: 2, name: 'Jordan', detail: '8 shots completed', out: false },
-  { rank: 3, name: 'Morgan', detail: '5 shots completed', out: true },
-  { rank: 4, name: 'Casey', detail: '3 shots completed', out: true },
-  { rank: 5, name: 'Sam', detail: '2 shots completed', out: true },
-];
+type LoadStatus = 'loading' | 'ready' | 'error';
+
+// "Alex" / "Alex & Bo" / "Alex, Bo & Cy" — for the hero when 1–3 players tie.
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  if (names.length === 2) return `${names[0]} & ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
+}
 
 export default function SummaryScreen(): React.JSX.Element {
+  const { partyId } = useLocalSearchParams<{ partyId: string }>();
+  const { userId } = useAuth();
+
+  const [status, setStatus] = useState<LoadStatus>('loading');
+  const [view, setView] = useState<PartySummaryView | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // One-shot read on mount — the summary is terminal, so no polling / realtime /
+  // routing (unlike useTimerSession). Derive the whole-game ranking from the
+  // snapshot's roster.
+  useEffect(() => {
+    if (!partyId) {
+      setStatus('error');
+      setErrorMessage('Missing party.');
+      return;
+    }
+    let active = true;
+    getPartyState(partyId)
+      .then((result) => {
+        if (!active) return;
+        if (!result.ok) {
+          setStatus('error');
+          setErrorMessage(rpcErrorMessage(result.error_code));
+          return;
+        }
+        const { session, settings, players } = result.data;
+        const me = players.find((player) => player.user_id === userId) ?? null;
+        setView(
+          derivePartySummary(players, me?.id ?? null, {
+            partyName: session.name,
+            totalRounds: session.current_round_number,
+            eliminationEnabled: settings.elimination_enabled,
+          }),
+        );
+        setStatus('ready');
+      })
+      .catch(() => {
+        if (!active) return;
+        setStatus('error');
+        setErrorMessage('Could not load the summary.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [partyId, userId]);
+
+  if (status === 'loading') {
+    return (
+      <SafeAreaView style={[styles.screen, styles.centered]} edges={['top', 'bottom']}>
+        <ActivityIndicator color={COLORS.textPrimary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (status === 'error' || !view) {
+    return (
+      <SafeAreaView style={[styles.screen, styles.centered]} edges={['top', 'bottom']}>
+        <ErrorBanner message={errorMessage} />
+        <View style={styles.errorFooter}>
+          <Button label="Back to Home" onPress={() => router.replace('/')} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Text style={styles.title}>Party Complete!</Text>
-        <Text style={styles.partyName}>Friday Night Shots</Text>
+        <Text style={styles.partyName}>{view.partyName}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.hero}>
-          <Text style={styles.trophy}>🏆</Text>
-          <Text style={styles.heroLabel}>Last Standing</Text>
-          <Text style={styles.heroNames}>Alex &amp; Jordan</Text>
-        </View>
+        <Hero view={view} />
 
         <View style={styles.roundsCard}>
-          <Text style={styles.roundsNumber}>8</Text>
-          <Text style={styles.roundsLabel}>Total Rounds</Text>
+          <Text style={styles.roundsNumber}>{view.totalRounds}</Text>
+          <Text style={styles.roundsLabel}>{view.totalRounds === 1 ? 'Round' : 'Rounds'}</Text>
         </View>
 
         <Text style={styles.sectionTitle}>Final Standings</Text>
-        {STANDINGS.map((entry) => (
-          <View key={entry.name} style={[styles.standingRow, entry.out && styles.standingOut]}>
-            <Text style={styles.rank}>{entry.rank}</Text>
-            <View style={styles.avatar} />
-            <View style={styles.standingInfo}>
-              <Text style={styles.standingName}>{entry.name}</Text>
-              <Text style={styles.standingDetail}>{entry.detail}</Text>
+        {view.standings.map((standing, index) => {
+          // Position rank among non-removed players; removed players show no rank
+          // (they're out of contention) and a "Removed" badge instead of shots.
+          const rank = standing.isRemoved ? null : index + 1;
+          return (
+            <View
+              key={standing.playerId}
+              style={[styles.standingRow, standing.isRemoved && styles.standingRemoved]}
+            >
+              <Text style={styles.rank}>{rank ?? '—'}</Text>
+              <View style={styles.avatar} />
+              <View style={styles.standingInfo}>
+                <Text style={styles.standingName}>
+                  {standing.displayName}
+                  {standing.isYou ? ' (You)' : ''}
+                </Text>
+                <Text style={styles.standingDetail}>
+                  {standing.shotCount} {standing.shotCount === 1 ? 'shot' : 'shots'}
+                </Text>
+              </View>
+              {standing.isRemoved ? (
+                <Text style={styles.removedBadge}>Removed</Text>
+              ) : standing.isLeader ? (
+                <Text style={styles.trophyBadge}>🏆</Text>
+              ) : null}
             </View>
-            <Text style={styles.standingBadge}>{entry.out ? 'Out' : '🏆'}</Text>
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -62,10 +151,56 @@ export default function SummaryScreen(): React.JSX.Element {
   );
 }
 
+// The "who won" card. Names for 1–3 tied leaders, a count for 4+, and a muted
+// message when nobody took a shot.
+function Hero({ view }: { view: PartySummaryView }): React.JSX.Element {
+  if (view.heroMode === 'none') {
+    return (
+      <View style={styles.hero}>
+        <Text style={styles.heroLabel}>{view.heroTitle}</Text>
+        <Text style={styles.heroEmpty}>No shots taken this game</Text>
+      </View>
+    );
+  }
+
+  if (view.heroMode === 'count') {
+    return (
+      <View style={styles.hero}>
+        <Text style={styles.trophy}>🏆</Text>
+        <Text style={styles.heroLabel}>{view.heroTitle}</Text>
+        <Text style={styles.heroNames}>
+          {view.leaderCount} people at {view.topShotCount}{' '}
+          {view.topShotCount === 1 ? 'shot' : 'shots'}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.hero}>
+      <Text style={styles.trophy}>🏆</Text>
+      <Text style={styles.heroLabel}>{view.heroTitle}</Text>
+      <Text style={styles.heroNames}>{joinNames(view.leaders.map((leader) => leader.displayName))}</Text>
+      <Text style={styles.heroSub}>
+        {view.topShotCount} {view.topShotCount === 1 ? 'shot' : 'shots'}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    gap: SPACING.lg,
+  },
+  errorFooter: {
+    alignSelf: 'stretch',
   },
   header: {
     alignItems: 'center',
@@ -103,6 +238,15 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.lg,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.warning,
+    textAlign: 'center',
+  },
+  heroSub: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+  },
+  heroEmpty: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
   },
   roundsCard: {
     alignItems: 'center',
@@ -132,8 +276,8 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     padding: SPACING.md,
   },
-  standingOut: {
-    opacity: 0.6,
+  standingRemoved: {
+    opacity: 0.5,
   },
   rank: {
     fontSize: FONT_SIZE.md,
@@ -159,9 +303,12 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     color: COLORS.textSecondary,
   },
-  standingBadge: {
+  trophyBadge: {
     fontSize: FONT_SIZE.sm,
-    color: COLORS.textSecondary,
+  },
+  removedBadge: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.danger,
   },
   footer: {
     padding: SPACING.lg,

@@ -3,7 +3,8 @@
 // screen reachable during an active party so a player can never get stranded.
 //
 // Why this exists / the rule it enforces:
-//   - Host  → end_party (ends the party for everyone), then route home.
+//   - Host  → end_party (ends the party for everyone), then route to the Final
+//     Summary (End Party is the intentional wrap-up, not an escape hatch — Phase 11).
 //   - Guest → mark this party intentionally-left (suppresses the launch
 //     reconnect, see leftParty), mark_self_out (best effort), then route home.
 //   - NEVER leave_party here. leave_party is lobby-only (rpc-contracts §4.3); a
@@ -11,13 +12,12 @@
 //     no way home. That bug recurred repeatedly in testing — this hook is the
 //     permanent fix, so the lobby-only call lives ONLY in the lobby.
 //
-// Either way the device routes home, so the exit can't fail closed. mark_self_out
-// is only legal in countdown/shot_window (rpc-contracts §7.3): on the results
-// screen (round_complete) it no-ops with ILLEGAL_TRANSITION — intentional, we
-// still route home. This is the testing escape hatch until Phase 10 (host
-// controls) and Phase 11 (End Party propagation + end-of-game routing) replace it
-// with the real in-game exits. New game screens in later phases should mount this
-// hook to inherit a working exit. See decisions.md D032.
+// Either way the device routes onward (host → summary, guest → home), so the exit
+// can't fail closed. mark_self_out is only legal in countdown/shot_window
+// (rpc-contracts §7.3): on the results screen (round_complete) it no-ops with
+// ILLEGAL_TRANSITION — intentional, we still route the guest home. New game screens
+// in later phases should mount this hook to inherit a working exit. See
+// decisions.md D032.
 
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -40,6 +40,10 @@ interface UseGameExitResult {
   leaving: boolean;
   /** Show the confirmation dialog; on confirm, exits the party and routes home. */
   confirmExit: (options?: ConfirmExitOptions) => void;
+  /** Exit immediately with NO confirmation. For the zero-active halt, where End
+   *  Party is the only logical action — the host taps it and goes straight to the
+   *  Final Summary (no "are you sure?" when there's nothing left to play). */
+  exitNow: () => void;
 }
 
 // Role-correct confirmation copy. The exit BEHAVIOR is still decided server-side
@@ -78,10 +82,13 @@ export function useGameExit(partyId: string | undefined): UseGameExitResult {
     if (!partyId || leaving) return;
     setLeaving(true);
 
-    // Host path: end the party for everyone.
+    // Host path: end the party for everyone. End Party is the host's INTENTIONAL
+    // wrap-up (not an escape hatch), so it lands on the Final Summary — the
+    // other devices follow via their partyEnded / 'ended' detection (Phase 11).
+    // The guest fallback below is the escape hatch and still routes home.
     const ended = await endParty({ partySessionId: partyId });
     if (ended.ok) {
-      router.replace('/');
+      router.replace(`/party/${partyId}/summary`);
       return;
     }
 
@@ -112,5 +119,5 @@ export function useGameExit(partyId: string | undefined): UseGameExitResult {
     [leaving, handleExit],
   );
 
-  return { leaving, confirmExit };
+  return { leaving, confirmExit, exitNow: handleExit };
 }

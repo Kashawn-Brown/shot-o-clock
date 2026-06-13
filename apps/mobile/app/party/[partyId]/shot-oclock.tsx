@@ -192,12 +192,11 @@ export default function ShotOClockScreen(): React.JSX.Element {
       return;
     }
     // The party ended (e.g. the screen loaded after end_party, so the snapshot read
-    // it directly) → home. Phase 11 will route to the Final Summary instead.
-    // Otherwise the round just finished — auto-advanced to countdown, or rested in
-    // the round_complete halt — so show its results, handing over the round that was
-    // live in the window.
+    // it directly) → Final Summary (Phase 11). Otherwise the round just finished —
+    // auto-advanced to countdown, or rested in the round_complete halt — so show its
+    // results, handing over the round that was live in the window.
     if (currentPhase === 'ended') {
-      router.replace('/');
+      router.replace(`/party/${partyId}/summary`);
       return;
     }
     const completed = completedRoundRef.current;
@@ -210,11 +209,11 @@ export default function ShotOClockScreen(): React.JSX.Element {
   }, [leaving, partyEnded, status, currentPhase, partyId]);
 
   // Host ended the party — read live off the party_sessions realtime payload
-  // (useTimerSession.partyEnded), so we route home even if a get_party_state refresh
-  // would have failed. Phase 11 will route to the Final Summary instead.
+  // (useTimerSession.partyEnded), so we route on even if a get_party_state refresh
+  // would have failed. End Party lands every device on the Final Summary (Phase 11).
   useEffect(() => {
-    if (partyEnded) router.replace('/');
-  }, [partyEnded]);
+    if (partyEnded && partyId) router.replace(`/party/${partyId}/summary`);
+  }, [partyEnded, partyId]);
 
   if (status === 'loading') {
     return (
