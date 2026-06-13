@@ -18,8 +18,10 @@
 // that loses the optimistic state still can't tap Done after a self-out, because
 // myOutcome reloads from the server.
 //
-// The back arrow is the shared testing escape hatch (useGameExit). The real
-// in-game host controls land in Phase 10.
+// There is no exit from this screen: the shot window is brief, so neither the
+// host nor a player leaves from here — the host ends the party and a player leaves
+// from the timer screen. useGameExit is still mounted only for its `leaving` guard
+// on the phase-routing effects (so an in-flight exit elsewhere doesn't re-route).
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -55,7 +57,7 @@ export default function ShotOClockScreen(): React.JSX.Element {
     refreshOutcome,
   } = useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
-  const { leaving, confirmExit } = useGameExit(partyId);
+  const { leaving } = useGameExit(partyId);
 
   // Optimistic action: set on tap for instant feedback, reconciled when myOutcome
   // re-reads. Cleared when the round changes (defensive — the screen usually
@@ -72,10 +74,6 @@ export default function ShotOClockScreen(): React.JSX.Element {
 
   const isActive = me?.status === 'active';
   const isOut = me?.status === 'out';
-  // The host has no back-arrow escape hatch — they end the game via End Party in
-  // the Players sheet (mirrors the timer screen). A player keeps the back arrow as
-  // their Leave Party escape hatch.
-  const isHost = me?.permission_role === 'host';
   // Only 'done' / 'self_out' are player taps; 'none' / 'missed' aren't acted states.
   const recordedAction =
     myOutcome?.player_action === 'done' || myOutcome?.player_action === 'self_out'
@@ -240,22 +238,10 @@ export default function ShotOClockScreen(): React.JSX.Element {
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <StatusBar style="light" />
 
-      <View style={styles.headerBar}>
-        {/* Host: no back arrow — they exit via End Party in the Players sheet. A
-            player keeps it as their Leave Party escape hatch. Mirrors timer.tsx. */}
-        {isHost ? (
-          <View />
-        ) : (
-          <Pressable
-            onPress={() => confirmExit()}
-            accessibilityRole="button"
-            hitSlop={8}
-            disabled={leaving}
-          >
-            <Text style={styles.back}>←</Text>
-          </Pressable>
-        )}
-      </View>
+      {/* No exit from the Shot O'Clock screen (host or player) — the shot window is
+          brief; leaving happens from the timer screen. The empty header preserves
+          the ring's vertical position. */}
+      <View style={styles.headerBar} />
 
       <View style={styles.center}>
         <Text style={styles.title}>SHOT{'\n'}O&apos;CLOCK</Text>
@@ -325,10 +311,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-  },
-  back: {
-    fontSize: FONT_SIZE.md,
-    color: COLORS.shotText,
   },
   center: {
     flex: 1,
