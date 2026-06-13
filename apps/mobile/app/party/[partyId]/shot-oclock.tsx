@@ -268,11 +268,15 @@ export default function ShotOClockScreen(): React.JSX.Element {
             trackColor="rgba(255,255,255,0.2)"
           >
             <View style={styles.ringContent}>
-              <Text style={styles.ringLabel}>SHOT WINDOW</Text>
-              <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
+              <Text style={[styles.ringLabel, hostOnly && styles.ringLabelLarge]}>SHOT WINDOW</Text>
+              <Text style={[styles.ringTime, hostOnly && styles.ringTimeLarge]}>
+                {formatDuration(remainingMs)}
+              </Text>
             </View>
           </ProgressRing>
-          <Text style={styles.ringCaption}>Time to take your shot</Text>
+          <Text style={[styles.ringCaption, hostOnly && styles.ringCaptionLarge]}>
+            {hostOnly ? 'Time to take your shots' : 'Time to take your shot'}
+          </Text>
         </View>
       </View>
 
@@ -342,8 +346,8 @@ const styles = StyleSheet.create({
   },
   // Larger title for single-phone mode, where there are no action buttons below.
   titleLarge: {
-    fontSize: 48,
-    letterSpacing: 3,
+    fontSize: 56,
+    letterSpacing: 4,
   },
   ringGroup: {
     alignItems: 'center',
@@ -358,15 +362,26 @@ const styles = StyleSheet.create({
     color: COLORS.shotText,
     opacity: 0.7,
   },
+  // Single-phone bumps the in-ring + caption text to match the larger ring/title.
+  ringCaptionLarge: {
+    fontSize: FONT_SIZE.md,
+  },
   ringLabel: {
     fontSize: FONT_SIZE.xs,
     letterSpacing: 1,
     color: COLORS.shotText,
   },
+  ringLabelLarge: {
+    fontSize: FONT_SIZE.sm,
+    letterSpacing: 2,
+  },
   ringTime: {
     fontSize: FONT_SIZE.xl,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.shotText,
+  },
+  ringTimeLarge: {
+    fontSize: 68,
   },
   actions: {
     padding: SPACING.lg,
