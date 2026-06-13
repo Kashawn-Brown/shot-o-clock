@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   partyName: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.custom_1,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
   },

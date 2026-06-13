@@ -122,8 +122,8 @@ export default function SummaryScreen(): React.JSX.Element {
     return (
       <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
         <View style={styles.header}>
-          <Text style={styles.title}>Party Complete!</Text>
           <Text style={styles.partyName}>{partyName}</Text>
+          <Text style={styles.title}>Game Complete!</Text>
         </View>
 
         <View style={styles.hostOnlyContent}>
@@ -153,8 +153,8 @@ export default function SummaryScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Party Complete!</Text>
         <Text style={styles.partyName}>{view.partyName}</Text>
+        <Text style={styles.title}>Game Complete!</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -261,13 +261,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.bold,
+    // fontWeight: FONT_WEIGHT.bold,
     color: COLORS.buttonFilledText,
   },
   partyName: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.custom_1,
+    fontWeight: FONT_WEIGHT.bold,
     color: COLORS.buttonFilledText,
-    opacity: 0.7,
+    // opacity: 0.7,
   },
   content: {
     padding: SPACING.lg,

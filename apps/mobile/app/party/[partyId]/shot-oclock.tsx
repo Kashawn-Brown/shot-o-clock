@@ -342,18 +342,19 @@ const styles = StyleSheet.create({
     gap: SPACING.xxl,
   },
   title: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: FONT_SIZE.xl,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.shotText,
     textAlign: 'center',
     letterSpacing: 2,
-    // Nudge up the page without moving the ring (TITLE_OFFSET_Y).
-    transform: [{ translateY: TITLE_OFFSET_Y }],
+    
   },
   // Larger title for single-phone mode, where there are no action buttons below.
   titleLarge: {
     fontSize: 56,
     letterSpacing: 4,
+    // Nudge up the page without moving the ring (TITLE_OFFSET_Y).
+    transform: [{ translateY: TITLE_OFFSET_Y }],
   },
   ringGroup: {
     alignItems: 'center',
@@ -371,6 +372,7 @@ const styles = StyleSheet.create({
   // Single-phone bumps the in-ring + caption text to match the larger ring/title.
   ringCaptionLarge: {
     fontSize: FONT_SIZE.md,
+    transform: [{ translateY: 20 }],
   },
   ringLabel: {
     fontSize: FONT_SIZE.xs,
