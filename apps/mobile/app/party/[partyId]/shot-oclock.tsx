@@ -314,6 +314,10 @@ export default function ShotOClockScreen(): React.JSX.Element {
 const RING_SIZE = 280;
 // Single-phone mode drops the action buttons, so the ring grows to fill the space.
 const HOST_ONLY_RING_SIZE = 330;
+// How far to nudge the "SHOT O'CLOCK" title up the page (px). Visual-only
+// (translateY) so it shifts the title without moving the ring. More negative =
+// higher. Consumed by styles.title below.
+const TITLE_OFFSET_Y = -25;
 
 const styles = StyleSheet.create({
   screen: {
@@ -343,6 +347,8 @@ const styles = StyleSheet.create({
     color: COLORS.shotText,
     textAlign: 'center',
     letterSpacing: 2,
+    // Nudge up the page without moving the ring (TITLE_OFFSET_Y).
+    transform: [{ translateY: TITLE_OFFSET_Y }],
   },
   // Larger title for single-phone mode, where there are no action buttons below.
   titleLarge: {
@@ -381,7 +387,7 @@ const styles = StyleSheet.create({
     color: COLORS.shotText,
   },
   ringTimeLarge: {
-    fontSize: 68,
+    fontSize: 56,
   },
   actions: {
     padding: SPACING.lg,
