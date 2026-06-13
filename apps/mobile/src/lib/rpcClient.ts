@@ -13,12 +13,20 @@
 //     response) are converted to `{ ok: false, error_code: 'UNEXPECTED_ERROR' }`
 //     by this wrapper. See docs/KNOWN_ISSUES.md #D010.
 
+import { isOrphanedSessionError } from '@/lib/orphanedSession';
+import { recoverFreshAnonymousSession } from '@/lib/sessionRecovery';
 import { supabase } from '@/lib/supabase';
 import type { RpcResult } from '@/types/api';
 
 type RpcArgs = Record<string, unknown>;
 
-export async function callRpc<T>(fnName: string, args: RpcArgs = {}): Promise<RpcResult<T>> {
+export async function callRpc<T>(
+  fnName: string,
+  args: RpcArgs = {},
+  // Internal: set on the post-recovery retry so an orphaned-session re-auth runs at
+  // most once per call (no retry loop). Callers never pass this.
+  isOrphanRetry = false,
+): Promise<RpcResult<T>> {
   try {
     // `as never` casts are deliberate, not a bug:
     //   (a) supabase.rpc() is typed against Database['public']['Functions'],
@@ -36,6 +44,18 @@ export async function callRpc<T>(fnName: string, args: RpcArgs = {}): Promise<Rp
     const { data, error } = await supabase.rpc(fnName as never, args as never);
 
     if (error) {
+      // Orphaned session (e.g. the user was deleted by a dev `supabase db reset`):
+      // the user_id FK violates on a party insert, or the JWT is rejected. Re-auth
+      // as a fresh anonymous guest and retry once — transparent to the user. The
+      // failed RPC's transaction rolled back, so the retry is safe to re-run.
+      if (!isOrphanRetry && isOrphanedSessionError(error)) {
+        try {
+          await recoverFreshAnonymousSession();
+          return await callRpc<T>(fnName, args, true);
+        } catch {
+          // Recovery itself failed (offline, etc.) — fall through to the error.
+        }
+      }
       return unexpected(`RPC ${fnName} failed: ${error.message}`);
     }
 
