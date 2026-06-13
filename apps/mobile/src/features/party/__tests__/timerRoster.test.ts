@@ -49,6 +49,7 @@ function makePlayer(overrides: Partial<PlayerRow>): PlayerRow {
     id: 'p-default',
     is_ready: false,
     joined_at: '2026-06-11T00:00:00Z',
+    joined_round_number: null,
     last_seen_at: '2026-06-11T00:00:00Z',
     left_at: null,
     out_at: null,
@@ -184,22 +185,49 @@ describe('deriveTimerRoster', () => {
     expect(disabled.map((r) => r.graceAvailable)).toEqual([false, false]);
   });
 
-  it('marks a host-marked-out player reinstatable, a plain self-out not', () => {
+  it('marks a host-marked-out player reinstatable; a self-out in the current round not', () => {
     const hostOut = makePlayer({
       id: 'p-h',
       user_id: 'u-h',
       status: 'out',
       out_reason: 'host_marked_out',
     });
+    // Self-out finalized in round 2, and the session is still on round 2 — dimmed.
     const selfOut = makePlayer({
       id: 'p-s',
       user_id: 'u-s',
       status: 'out',
       out_reason: 'self_opted_out',
+      out_round_number: 2,
     });
-    const rows = deriveTimerRoster([hostOut, selfOut], null, 'disabled');
+    const rows = deriveTimerRoster([hostOut, selfOut], null, 'disabled', [], 2);
     expect(rows.find((r) => r.id === 'p-h')?.reinstatable).toBe(true);
     expect(rows.find((r) => r.id === 'p-s')?.reinstatable).toBe(false);
+  });
+
+  it('marks a self-out reinstatable once a new round has started (out_round < current)', () => {
+    const selfOut = makePlayer({
+      id: 'p-s',
+      user_id: 'u-s',
+      status: 'out',
+      out_reason: 'self_opted_out',
+      out_round_number: 2,
+    });
+    // Same player, now that the game has advanced to round 3 — full weight.
+    const rows = deriveTimerRoster([selfOut], null, 'disabled', [], 3);
+    expect(rows[0].reinstatable).toBe(true);
+  });
+
+  it('dims a pending self-out (not yet finalized, out_round_number null)', () => {
+    const selfOut = makePlayer({
+      id: 'p-s',
+      user_id: 'u-s',
+      status: 'out',
+      out_reason: 'self_opted_out',
+      out_round_number: null,
+    });
+    const rows = deriveTimerRoster([selfOut], null, 'disabled', [], 2);
+    expect(rows[0].reinstatable).toBe(false);
   });
 
   it('marks a rejoined-after-out player reinstatable even on a self-out', () => {

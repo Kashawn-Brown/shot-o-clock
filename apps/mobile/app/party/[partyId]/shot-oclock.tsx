@@ -18,8 +18,10 @@
 // that loses the optimistic state still can't tap Done after a self-out, because
 // myOutcome reloads from the server.
 //
-// The back arrow is the shared testing escape hatch (useGameExit). The real
-// in-game host controls land in Phase 10.
+// There is no exit from this screen: the shot window is brief, so neither the
+// host nor a player leaves from here — the host ends the party and a player leaves
+// from the timer screen. useGameExit is still mounted only for its `leaving` guard
+// on the phase-routing effects (so an in-flight exit elsewhere doesn't re-route).
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -43,10 +45,19 @@ type PendingAction = 'done' | 'self_out' | null;
 
 export default function ShotOClockScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
-  const { status, session, settings, currentRound, me, myOutcome, errorMessage, refreshOutcome } =
-    useTimerSession(partyId);
+  const {
+    status,
+    session,
+    settings,
+    currentRound,
+    me,
+    myOutcome,
+    errorMessage,
+    partyEnded,
+    refreshOutcome,
+  } = useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
-  const { leaving, confirmExit } = useGameExit(partyId);
+  const { leaving } = useGameExit(partyId);
 
   // Optimistic action: set on tap for instant feedback, reconciled when myOutcome
   // re-reads. Cleared when the round changes (defensive — the screen usually
@@ -170,14 +181,23 @@ export default function ShotOClockScreen(): React.JSX.Element {
   }, [currentPhase, currentRound?.id, currentRound?.round_number]);
 
   useEffect(() => {
-    if (leaving || status !== 'ready' || !partyId || !currentPhase || currentPhase === 'shot_window') {
+    if (
+      leaving ||
+      partyEnded ||
+      status !== 'ready' ||
+      !partyId ||
+      !currentPhase ||
+      currentPhase === 'shot_window'
+    ) {
       return;
     }
-    // The party ended during the window → summary. Otherwise the round just
-    // finished — auto-advanced to countdown, or rested in the round_complete halt —
-    // so show its results, handing over the round that was live in the window.
+    // The party ended (e.g. the screen loaded after end_party, so the snapshot read
+    // it directly) → home. Phase 11 will route to the Final Summary instead.
+    // Otherwise the round just finished — auto-advanced to countdown, or rested in
+    // the round_complete halt — so show its results, handing over the round that was
+    // live in the window.
     if (currentPhase === 'ended') {
-      router.replace({ pathname: '/party/[partyId]/summary', params: { partyId } });
+      router.replace('/');
       return;
     }
     const completed = completedRoundRef.current;
@@ -187,7 +207,14 @@ export default function ShotOClockScreen(): React.JSX.Element {
         ? { partyId, roundId: completed.id, roundNumber: String(completed.number) }
         : { partyId },
     });
-  }, [leaving, status, currentPhase, partyId]);
+  }, [leaving, partyEnded, status, currentPhase, partyId]);
+
+  // Host ended the party — read live off the party_sessions realtime payload
+  // (useTimerSession.partyEnded), so we route home even if a get_party_state refresh
+  // would have failed. Phase 11 will route to the Final Summary instead.
+  useEffect(() => {
+    if (partyEnded) router.replace('/');
+  }, [partyEnded]);
 
   if (status === 'loading') {
     return (
@@ -211,11 +238,10 @@ export default function ShotOClockScreen(): React.JSX.Element {
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <StatusBar style="light" />
 
-      <View style={styles.headerBar}>
-        <Pressable onPress={() => confirmExit()} accessibilityRole="button" hitSlop={8} disabled={leaving}>
-          <Text style={styles.back}>←</Text>
-        </Pressable>
-      </View>
+      {/* No exit from the Shot O'Clock screen (host or player) — the shot window is
+          brief; leaving happens from the timer screen. The empty header preserves
+          the ring's vertical position. */}
+      <View style={styles.headerBar} />
 
       <View style={styles.center}>
         <Text style={styles.title}>SHOT{'\n'}O&apos;CLOCK</Text>
@@ -285,10 +311,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-  },
-  back: {
-    fontSize: FONT_SIZE.md,
-    color: COLORS.shotText,
   },
   center: {
     flex: 1,

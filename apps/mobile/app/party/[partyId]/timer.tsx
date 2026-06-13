@@ -29,6 +29,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
@@ -65,6 +66,7 @@ export default function TimerScreen(): React.JSX.Element {
     roundOutcomes,
     errorMessage,
     membershipLost,
+    partyEnded,
     players,
     refreshOutcome,
     refreshSession,
@@ -218,11 +220,14 @@ export default function TimerScreen(): React.JSX.Element {
   // Suppressed while `leaving`: the exit flips the phase (end_party → 'ended') and
   // the poll can still catch 'shot_window' mid-exit, either of which would re-route
   // us right after useGameExit's router.replace('/'). The intentional exit wins.
+  // 'ended' is handled below (route home, not via routeForPhase) so End Party never
+  // lands a non-host on the summary placeholder.
   const currentPhase = session?.current_phase;
   useEffect(() => {
     if (
       leaving ||
       membershipLost ||
+      partyEnded ||
       status !== 'ready' ||
       !partyId ||
       !currentPhase ||
@@ -230,8 +235,21 @@ export default function TimerScreen(): React.JSX.Element {
     ) {
       return;
     }
+    // The party ended (e.g. the screen loaded after end_party, so the snapshot read
+    // it directly) → home. Phase 11 will route to the Final Summary instead.
+    if (currentPhase === 'ended') {
+      router.replace('/');
+      return;
+    }
     router.replace(`/party/${partyId}/${routeForPhase(currentPhase)}`);
-  }, [leaving, membershipLost, status, currentPhase, partyId]);
+  }, [leaving, membershipLost, partyEnded, status, currentPhase, partyId]);
+
+  // Host ended the party — read live off the party_sessions realtime payload
+  // (useTimerSession.partyEnded), so we route home even if a get_party_state
+  // refresh would have failed. Phase 11 will route to the Final Summary instead.
+  useEffect(() => {
+    if (partyEnded) router.replace('/');
+  }, [partyEnded]);
 
   // The host removed us mid-game — surface why, then return home. Same message as
   // the lobby (useLobby membershipLost). Driven by the realtime party_players sub.
@@ -263,29 +281,34 @@ export default function TimerScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.headerBar}>
-        {/* The back arrow is the player's Leave Party escape hatch. The host has
-            End Party in the Players sheet, so it's redundant for them — hidden.
-            An empty spacer keeps the results link right-aligned. */}
-        {isHost ? (
-          <View />
-        ) : (
+        {/* Top-left: a back-style jump to the round that just finished. Hidden on
+            round 1 / a reconnect that skipped results (then an empty spacer keeps
+            the settings icon right-aligned). Not an app-exit — the footer's
+            End Party / Leave Party handles that. */}
+        {showLastResults ? (
           <Pressable
-            onPress={() => confirmExit({ isHost })}
+            onPress={viewLastResults}
             accessibilityRole="button"
             hitSlop={8}
-            disabled={leaving}
+            style={styles.lastResultsButton}
           >
-            <Text style={styles.back}>←</Text>
-          </Pressable>
-        )}
-
-        {/* Quick jump back to the round that just finished — top-right of the
-            header, hidden on round 1 / a reconnect that skipped results. */}
-        {showLastResults ? (
-          <Pressable onPress={viewLastResults} accessibilityRole="button" hitSlop={8}>
+            <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textSecondary} />
             <Text style={styles.lastResultsText}>Round {lastRoundNumber} Results</Text>
           </Pressable>
-        ) : null}
+        ) : (
+          <View />
+        )}
+
+        {/* Top-right: settings placeholder for all players — no-op for now, a hook
+            for future player settings. */}
+        <Pressable
+          onPress={() => {}}
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+          hitSlop={8}
+        >
+          <Ionicons name="settings-outline" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
+        </Pressable>
       </View>
 
       <View style={styles.header}>
@@ -416,6 +439,7 @@ export default function TimerScreen(): React.JSX.Element {
           onClose={() => setRosterOpen(false)}
           players={players}
           currentRoundOutcomes={roundOutcomes}
+          currentRoundNumber={session?.current_round_number ?? 0}
           graceMode={settings?.grace_mode ?? 'disabled'}
           currentUserId={me?.user_id ?? null}
           isHost={isHost}
@@ -483,6 +507,7 @@ const RING_TIME_FONT_SIZE = 60; // the M:SS time text inside the ring
 const PAUSE_BUTTON_SIZE = 64; // host pause/play button (centre-bottom of the ring)
 const ADD_TIME_BUTTON_SIZE = 64; // host +30s / +1m circles
 const ADD_TIME_BUTTON_OFFSET = 44; // how far the +time circles sit outside the ring's sides
+const HEADER_ICON_SIZE = 22; // header back-arrow + settings-gear icons
 // ──────────────────────────────────────────────────────────────────────────────
 
 // Quick add-time amounts (seconds). host_add_time bounds input to 1–600.
@@ -506,18 +531,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
-  back: {
-    fontSize: FONT_SIZE.md,
-    color: COLORS.textPrimary,
-  },
   header: {
     alignItems: 'center',
     paddingVertical: SPACING.md,
   },
+  // Row so the back arrow sits inline before the label, reading as a nav button.
+  lastResultsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
   lastResultsText: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.textSecondary,
-    textDecorationLine: 'underline',
   },
   partyName: {
     fontSize: FONT_SIZE.md,
