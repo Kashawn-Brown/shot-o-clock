@@ -40,6 +40,10 @@ interface UseGameExitResult {
   leaving: boolean;
   /** Show the confirmation dialog; on confirm, exits the party and routes home. */
   confirmExit: (options?: ConfirmExitOptions) => void;
+  /** Exit immediately with NO confirmation. For the zero-active halt, where End
+   *  Party is the only logical action — the host taps it and goes straight to the
+   *  Final Summary (no "are you sure?" when there's nothing left to play). */
+  exitNow: () => void;
 }
 
 // Role-correct confirmation copy. The exit BEHAVIOR is still decided server-side
@@ -115,5 +119,5 @@ export function useGameExit(partyId: string | undefined): UseGameExitResult {
     [leaving, handleExit],
   );
 
-  return { leaving, confirmExit };
+  return { leaving, confirmExit, exitNow: handleExit };
 }

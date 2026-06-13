@@ -75,8 +75,9 @@ export default function ResultsScreen(): React.JSX.Element {
 
   const { status, session, currentRound, players, me, errorMessage } = useTimerSession(partyId);
   // Shared exit hook — also backs the halt's End Party (host → end_party → Final
-  // Summary, guest → mark_self_out → home). See D032.
-  const { leaving, confirmExit } = useGameExit(partyId);
+  // Summary, guest → mark_self_out → home). See D032. The halt uses exitNow (no
+  // confirmation): when everyone is out, End Party is the only logical next step.
+  const { leaving, exitNow } = useGameExit(partyId);
 
   const isHalt = session?.current_phase === 'round_complete';
   const isReview = review === '1';
@@ -220,7 +221,7 @@ export default function ResultsScreen(): React.JSX.Element {
             <Text style={[styles.heroBadge, { color: GROUP_ACCENT[view.me.group] }]}>
               {HERO_COPY[view.me.group]}
             </Text>
-            <Text style={styles.heroSub}>{view.me.shotCount} shots this game</Text>
+            <Text style={styles.heroSub}>{view.me.shotCount} shot(s) this game</Text>
           </View>
         ) : null}
 
@@ -250,7 +251,7 @@ export default function ResultsScreen(): React.JSX.Element {
           <>
             <Text style={styles.haltNote}>No active players remaining.</Text>
             {isHost ? (
-              <Button label="End Party" variant="outline" onPress={confirmExit} disabled={leaving} />
+              <Button label="End Party" variant="outline" onPress={exitNow} disabled={leaving} />
             ) : (
               <Text style={styles.waitingText}>Waiting for the host…</Text>
             )}
