@@ -256,7 +256,7 @@ export default function ResultsScreen(): React.JSX.Element {
             )}
           </>
         ) : isReview ? (
-          <Button label="← Back to timer" variant="outline" onPress={() => router.back()} />
+          <Button label="Back to timer" variant="outline" onPress={() => router.back()} />
         ) : (
           <>
             <Text style={styles.waitingText}>Next round starts in {secondsLeft}s…</Text>
