@@ -18,8 +18,10 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { DISPLAY_NAME_MAX_LENGTH, isValidDisplayName } from '@/features/auth/api/displayName';
 import { useDisplayName } from '@/features/auth/useDisplayName';
+import { getPartyState } from '@/features/party/api/partyState';
 import { joinParty } from '@/features/party/api/joinParty';
 import { clearLeftPartyId } from '@/features/party/leftParty';
+import { routeForPhase } from '@/features/party/reconnectRoute';
 import {
   JOIN_CODE_LENGTH,
   isValidJoinCode,
@@ -73,10 +75,24 @@ export default function JoinPartyScreen(): React.JSX.Element {
       // Deliberately (re)entering a party clears any intentionally-left marker —
       // including the case of rejoining the very party they left (leftParty).
       void clearLeftPartyId();
-      // replace (not push) so Back from the lobby doesn't return to the join
-      // form for a party we're already in. Both a fresh join and a reconnect
-      // (§3.6) land in the lobby for MVP.
-      router.replace(`/party/${response.data.party_session_id}/lobby`);
+
+      const partyId = response.data.party_session_id;
+
+      // A fresh mid-game joiner (Phase 10B late join) skips the lobby and lands on
+      // the live phase's screen. join_party doesn't return the phase, so we read it
+      // from a quick snapshot and map it via routeForPhase (timer / shot-oclock).
+      // A snapshot failure falls back to the lobby, which forwards by phase anyway.
+      if (response.data.is_late_join) {
+        const state = await getPartyState(partyId);
+        const segment = state.ok ? routeForPhase(state.data.session.current_phase) : 'lobby';
+        router.replace(`/party/${partyId}/${segment}`);
+        return;
+      }
+
+      // replace (not push) so Back from the lobby doesn't return to the join form
+      // for a party we're already in. A lobby join and a reconnect (§3.6) land in
+      // the lobby — which forwards into the game on its own if it's already live.
+      router.replace(`/party/${partyId}/lobby`);
       return;
     }
 
