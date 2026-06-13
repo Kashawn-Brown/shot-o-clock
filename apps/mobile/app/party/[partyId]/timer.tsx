@@ -79,6 +79,10 @@ export default function TimerScreen(): React.JSX.Element {
   // host ends the party, a player leaves it. RPCs backstop with NOT_HOST, so the
   // gate is defence in depth (PartyPlayer.permissionRole, §2.4).
   const isHost = me?.permission_role === 'host';
+  // Single-phone mode (D040, D050): the host runs the game solo, so the multi-device
+  // surfaces collapse — no join-code popover, no Players sheet, no I'm Out, no
+  // results link. The host is the only player and never self-outs.
+  const hostOnly = settings?.host_only ?? false;
   const isPaused = session?.status === 'paused';
   const [rosterOpen, setRosterOpen] = useState(false);
   // Host taps the party name to reveal the join code for sharing mid-game.
@@ -138,6 +142,7 @@ export default function TimerScreen(): React.JSX.Element {
   // on round 1 and on a reconnect that never passed through results.
   const lastRoundNum = lastRoundNumber ? Number(lastRoundNumber) : null;
   const showLastResults =
+    !hostOnly &&
     !!lastRoundId &&
     lastRoundNum !== null &&
     session?.current_round_number != null &&
@@ -311,7 +316,7 @@ export default function TimerScreen(): React.JSX.Element {
       </View>
 
       <View style={styles.header}>
-        {isHost ? (
+        {isHost && !hostOnly ? (
           <Pressable onPress={() => setJoinCodeOpen(true)} accessibilityRole="button" hitSlop={8}>
             <Text style={[styles.partyName, styles.partyNameTappable]}>{session?.name}</Text>
           </Pressable>
@@ -410,16 +415,20 @@ export default function TimerScreen(): React.JSX.Element {
             disabled={leaving}
             style={[styles.footerButton, styles.destructiveButton]}
           />
-          <Button
-            label="Players"
-            variant="outline"
-            onPress={() => setRosterOpen(true)}
-            style={styles.footerButton}
-          />
+          {/* No roster in single-phone mode — there are no other players (D040). */}
+          {!hostOnly ? (
+            <Button
+              label="Players"
+              variant="outline"
+              onPress={() => setRosterOpen(true)}
+              style={styles.footerButton}
+            />
+          ) : null}
         </View>
 
-        {/* Active player: the I'm Out / Skip action stays below the buttons. */}
-        {!isOut ? (
+        {/* Active player: the I'm Out / Skip action stays below the buttons. Hidden
+            in single-phone mode — the host is the only player and never self-outs. */}
+        {!isOut && !hostOnly ? (
           <>
             <ErrorBanner message={outError} />
             <Button
@@ -432,7 +441,7 @@ export default function TimerScreen(): React.JSX.Element {
         ) : null}
       </View>
 
-      {partyId ? (
+      {partyId && !hostOnly ? (
         <RosterSheet
           visible={rosterOpen}
           onClose={() => setRosterOpen(false)}
@@ -446,9 +455,10 @@ export default function TimerScreen(): React.JSX.Element {
         />
       ) : null}
 
-      {/* Host-only join-code popover. Tapping the dim backdrop (anywhere outside
-          the card) dismisses; the card swallows its own taps. */}
-      {isHost ? (
+      {/* Join-code popover (multi-device host only). Tapping the dim backdrop
+          (anywhere outside the card) dismisses; the card swallows its own taps.
+          Never mounted in single-phone mode — no code is shared (D040). */}
+      {isHost && !hostOnly ? (
         <Modal
           visible={joinCodeOpen}
           transparent

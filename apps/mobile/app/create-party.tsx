@@ -86,7 +86,12 @@ export default function CreatePartyScreen(): React.JSX.Element {
       startingIntervalMinutes: String(startingIntervalMinutes),
       intervalIncrementMinutes: String(intervalIncrementMinutes),
       shotWindowSeconds: String(shotWindowSeconds),
-      eliminationEnabled,
+      // Single-phone parties force elimination off: the host is the only roster
+      // row and never taps Done, so under elimination they'd eliminate themselves
+      // and halt the solo loop. Off keeps timer → Shot O'Clock → timer running
+      // until End Party (D040, D050). The validator collapses graceMode to
+      // 'disabled' when elimination is off, so the held graceMode value is moot.
+      eliminationEnabled: hostOnly ? false : eliminationEnabled,
       graceMode,
       hostDisplayName: displayName,
       hostOnly,
@@ -211,19 +216,24 @@ export default function CreatePartyScreen(): React.JSX.Element {
           />
         </View>
 
-        <View style={styles.toggleRow}>
-          <View style={styles.toggleText}>
-            <Text style={styles.label}>Elimination Mode</Text>
-            <Text style={styles.hint}>
-              {eliminationEnabled ? ELIMINATION_ON_HINT : ELIMINATION_OFF_HINT}
-            </Text>
+        {/* Elimination + Grace are meaningless in single-phone mode — there are no
+            tracked players to eliminate, and forcing elimination off is what keeps
+            the solo loop running (D040, D050). Hide both when host-only is on. */}
+        {!hostOnly && (
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleText}>
+              <Text style={styles.label}>Elimination Mode</Text>
+              <Text style={styles.hint}>
+                {eliminationEnabled ? ELIMINATION_ON_HINT : ELIMINATION_OFF_HINT}
+              </Text>
+            </View>
+            <Switch value={eliminationEnabled} onValueChange={setEliminationEnabled} />
           </View>
-          <Switch value={eliminationEnabled} onValueChange={setEliminationEnabled} />
-        </View>
+        )}
 
         {/* Grace mode only matters with elimination on — hide it otherwise
-            (plan.md Phase 5). */}
-        {eliminationEnabled && (
+            (plan.md Phase 5), and always in single-phone mode. */}
+        {!hostOnly && eliminationEnabled && (
           <View style={styles.field}>
             <Text style={styles.label}>Grace Mode</Text>
             <View style={styles.segment}>

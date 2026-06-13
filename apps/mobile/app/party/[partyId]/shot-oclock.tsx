@@ -74,6 +74,10 @@ export default function ShotOClockScreen(): React.JSX.Element {
 
   const isActive = me?.status === 'active';
   const isOut = me?.status === 'out';
+  // Single-phone mode (D040, D050): no Done / I'm Out — the host just watches the
+  // shot window — and the round loop skips Round Results, going straight back to
+  // the next countdown.
+  const hostOnly = settings?.host_only ?? false;
   // Only 'done' / 'self_out' are player taps; 'none' / 'missed' aren't acted states.
   const recordedAction =
     myOutcome?.player_action === 'done' || myOutcome?.player_action === 'self_out'
@@ -199,6 +203,12 @@ export default function ShotOClockScreen(): React.JSX.Element {
       router.replace(`/party/${partyId}/summary`);
       return;
     }
+    // Single-phone mode skips Round Results entirely (D040) — the window closed,
+    // so go straight back to the next round's countdown on the timer screen.
+    if (hostOnly) {
+      router.replace({ pathname: '/party/[partyId]/timer', params: { partyId } });
+      return;
+    }
     const completed = completedRoundRef.current;
     router.replace({
       pathname: '/party/[partyId]/results',
@@ -206,7 +216,7 @@ export default function ShotOClockScreen(): React.JSX.Element {
         ? { partyId, roundId: completed.id, roundNumber: String(completed.number) }
         : { partyId },
     });
-  }, [leaving, partyEnded, status, currentPhase, partyId]);
+  }, [leaving, partyEnded, status, currentPhase, partyId, hostOnly]);
 
   // Host ended the party — read live off the party_sessions realtime payload
   // (useTimerSession.partyEnded), so we route on even if a get_party_state refresh
@@ -263,7 +273,7 @@ export default function ShotOClockScreen(): React.JSX.Element {
       </View>
 
       <View style={styles.actions}>
-        {isActive ? (
+        {hostOnly ? null : isActive ? (
           <>
             <ErrorBanner message={actionError} />
             <View style={styles.actionRow}>

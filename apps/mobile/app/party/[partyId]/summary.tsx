@@ -20,6 +20,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { getPartyState } from '@/features/party/api/partyState';
 import { derivePartySummary, type PartySummaryView } from '@/features/game/partySummary';
+import { deriveHostOnlySummary, type HostOnlyEndView } from '@/features/game/hostOnlySummary';
 import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
@@ -38,6 +39,11 @@ export default function SummaryScreen(): React.JSX.Element {
 
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [view, setView] = useState<PartySummaryView | null>(null);
+  // Single-phone (host_only) parties get a minimal end view instead of standings
+  // — there are no tracked players to rank (D040, D050). Mutually exclusive with
+  // `view`: exactly one is set once the snapshot loads.
+  const [hostOnlyView, setHostOnlyView] = useState<HostOnlyEndView | null>(null);
+  const [partyName, setPartyName] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // One-shot read on mount — the summary is terminal, so no polling / realtime /
@@ -59,6 +65,18 @@ export default function SummaryScreen(): React.JSX.Element {
           return;
         }
         const { session, settings, players } = result.data;
+        setPartyName(session.name);
+        if (settings.host_only) {
+          setHostOnlyView(
+            deriveHostOnlySummary({
+              currentRoundNumber: session.current_round_number,
+              startedAt: session.started_at,
+              endedAt: session.ended_at,
+            }),
+          );
+          setStatus('ready');
+          return;
+        }
         const me = players.find((player) => player.user_id === userId) ?? null;
         setView(
           derivePartySummary(players, me?.id ?? null, {
@@ -87,7 +105,7 @@ export default function SummaryScreen(): React.JSX.Element {
     );
   }
 
-  if (status === 'error' || !view) {
+  if (status === 'error' || (!view && !hostOnlyView)) {
     return (
       <SafeAreaView style={[styles.screen, styles.centered]} edges={['top', 'bottom']}>
         <ErrorBanner message={errorMessage} />
@@ -97,6 +115,40 @@ export default function SummaryScreen(): React.JSX.Element {
       </SafeAreaView>
     );
   }
+
+  // Single-phone end screen: rounds played + total time elapsed, no standings
+  // (D040, D050). Terminal and read-only, same as the multi-device summary below.
+  if (hostOnlyView) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Party Complete!</Text>
+          <Text style={styles.partyName}>{partyName}</Text>
+        </View>
+
+        <View style={styles.hostOnlyContent}>
+          <View style={styles.roundsCard}>
+            <Text style={styles.roundsNumber}>{hostOnlyView.rounds}</Text>
+            <Text style={styles.roundsLabel}>
+              {hostOnlyView.rounds === 1 ? 'Round' : 'Rounds'}
+            </Text>
+          </View>
+
+          <View style={styles.roundsCard}>
+            <Text style={styles.roundsNumber}>{hostOnlyView.elapsedLabel ?? '—'}</Text>
+            <Text style={styles.roundsLabel}>Total time</Text>
+          </View>
+        </View>
+
+        <View style={styles.footer}>
+          <Button label="Back to Home" onPress={() => router.replace('/')} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // From here `view` is non-null (the !view && !hostOnlyView guard above returned).
+  if (!view) return <View />;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
@@ -218,6 +270,14 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   content: {
+    padding: SPACING.lg,
+    gap: SPACING.lg,
+  },
+  // Host-only end screen: the two stat cards centred in the available space rather
+  // than scrolling a standings list.
+  hostOnlyContent: {
+    flex: 1,
+    justifyContent: 'center',
     padding: SPACING.lg,
     gap: SPACING.lg,
   },
