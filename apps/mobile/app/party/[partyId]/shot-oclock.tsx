@@ -72,6 +72,10 @@ export default function ShotOClockScreen(): React.JSX.Element {
 
   const isActive = me?.status === 'active';
   const isOut = me?.status === 'out';
+  // The host has no back-arrow escape hatch — they end the game via End Party in
+  // the Players sheet (mirrors the timer screen). A player keeps the back arrow as
+  // their Leave Party escape hatch.
+  const isHost = me?.permission_role === 'host';
   // Only 'done' / 'self_out' are player taps; 'none' / 'missed' aren't acted states.
   const recordedAction =
     myOutcome?.player_action === 'done' || myOutcome?.player_action === 'self_out'
@@ -237,9 +241,20 @@ export default function ShotOClockScreen(): React.JSX.Element {
       <StatusBar style="light" />
 
       <View style={styles.headerBar}>
-        <Pressable onPress={() => confirmExit()} accessibilityRole="button" hitSlop={8} disabled={leaving}>
-          <Text style={styles.back}>←</Text>
-        </Pressable>
+        {/* Host: no back arrow — they exit via End Party in the Players sheet. A
+            player keeps it as their Leave Party escape hatch. Mirrors timer.tsx. */}
+        {isHost ? (
+          <View />
+        ) : (
+          <Pressable
+            onPress={() => confirmExit()}
+            accessibilityRole="button"
+            hitSlop={8}
+            disabled={leaving}
+          >
+            <Text style={styles.back}>←</Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.center}>

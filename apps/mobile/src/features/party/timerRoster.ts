@@ -29,10 +29,11 @@ export interface TimerRosterEntry {
   // True when the player still has a grace to spend: unlimited mode always, or
   // enabled mode while they haven't used theirs. The roster shows a "Grace" tag.
   graceAvailable: boolean;
-  // For an out player: whether Reinstate is a meaningful action (shown at normal
-  // weight) vs. dimmed. True when the host marked them out (the host can undo it)
-  // or they left and rejoined (reinstatable from any round, per the server fix);
-  // a player's own voluntary self-out is dimmed since it isn't the host's to undo.
+  // For an out player: whether Reinstate is shown at normal weight vs. dimmed.
+  // True when the host marked them out (the host can undo it), they left and
+  // rejoined (reinstatable from any round, per the server fix), or they self-outed
+  // in a PRIOR round (the host can bring them back once a new round has started).
+  // A self-out is dimmed only during the round they tapped I'm Out.
   reinstatable: boolean;
 }
 
@@ -61,6 +62,10 @@ export function deriveTimerRoster(
   userId: string | null,
   graceMode: GraceMode,
   currentRoundOutcomes: OutcomeRow[] = [],
+  // The session's current round, used to decide whether a self-out's Reinstate is
+  // dimmed (same round they tapped I'm Out) or full weight (a prior round). Null
+  // falls back to "dim every self-out", the pre-round-aware behavior.
+  currentRoundNumber: number | null = null,
 ): TimerRosterEntry[] {
   const selfOutPlayerIds = new Set(
     currentRoundOutcomes
@@ -80,19 +85,34 @@ export function deriveTimerRoster(
       isSelf: userId !== null && player.user_id === userId,
       graceAvailable:
         graceMode === 'unlimited' || (graceMode === 'enabled' && !player.used_grace),
-      reinstatable: isReinstatable(player),
+      reinstatable: isReinstatable(player, currentRoundNumber),
     };
   });
 }
 
-// Whether the host's Reinstate is the meaningful action (normal weight) for this
-// player: host_marked_out (the host can undo their own action) or a player who
-// rejoined after going out (left and came back — reinstatable from any round). A
-// plain self-out / miss is not the host's to undo, so it reads dimmed.
-function isReinstatable(player: PlayerRow): boolean {
+// Whether the host's Reinstate reads at normal weight for this out player:
+//   - host_marked_out — the host can undo their own action (any round);
+//   - rejoined after going out — left and came back (reinstatable from any round);
+//   - self-out in a PRIOR round — the host can bring them back once a new round has
+//     started, so it is dimmed only during the round they tapped I'm Out. A pending
+//     self-out (not yet finalized, out_round_number null) reads as the current round
+//     and stays dimmed.
+// A miss / exhausted-grace elimination is not the host's to undo, so it stays dimmed.
+function isReinstatable(player: PlayerRow, currentRoundNumber: number | null): boolean {
   if (player.out_reason === 'host_marked_out') return true;
-  if (player.rejoined_at !== null && player.out_at !== null) {
-    return Date.parse(player.rejoined_at) > Date.parse(player.out_at);
+  if (
+    player.rejoined_at !== null &&
+    player.out_at !== null &&
+    Date.parse(player.rejoined_at) > Date.parse(player.out_at)
+  ) {
+    return true;
+  }
+  if (player.out_reason === 'self_opted_out') {
+    return (
+      currentRoundNumber !== null &&
+      player.out_round_number !== null &&
+      player.out_round_number !== currentRoundNumber
+    );
   }
   return false;
 }

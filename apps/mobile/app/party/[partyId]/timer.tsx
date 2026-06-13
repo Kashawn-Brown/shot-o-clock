@@ -433,6 +433,7 @@ export default function TimerScreen(): React.JSX.Element {
           onClose={() => setRosterOpen(false)}
           players={players}
           currentRoundOutcomes={roundOutcomes}
+          currentRoundNumber={session?.current_round_number ?? 0}
           graceMode={settings?.grace_mode ?? 'disabled'}
           currentUserId={me?.user_id ?? null}
           isHost={isHost}

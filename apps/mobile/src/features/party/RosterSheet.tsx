@@ -58,6 +58,8 @@ type RosterSheetProps = {
   players: PlayerRow[];
   /** Current-round outcomes — a self_out this round shows the player as Out now. */
   currentRoundOutcomes: OutcomeRow[];
+  /** Session's current round — dims a self-out's Reinstate only in that same round. */
+  currentRoundNumber: number;
   /** Party grace setting — derives each player's remaining-grace tag. */
   graceMode: GraceMode;
   /** The caller's auth id — flags their own row so host controls hide on it. */
@@ -73,6 +75,7 @@ export function RosterSheet({
   onClose,
   players,
   currentRoundOutcomes,
+  currentRoundNumber,
   graceMode,
   currentUserId,
   isHost,
@@ -168,7 +171,13 @@ export function RosterSheet({
     [translateY],
   );
 
-  const roster = deriveTimerRoster(players, currentUserId, graceMode, currentRoundOutcomes);
+  const roster = deriveTimerRoster(
+    players,
+    currentUserId,
+    graceMode,
+    currentRoundOutcomes,
+    currentRoundNumber,
+  );
   const active = roster.filter((entry) => entry.status === 'active');
   const out = roster.filter((entry) => entry.status === 'out');
   const left = roster.filter((entry) => entry.status === 'left');
