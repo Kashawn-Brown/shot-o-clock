@@ -29,6 +29,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
@@ -280,18 +281,34 @@ export default function TimerScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.headerBar}>
-        {/* No back arrow: the host ends the party and a player leaves via the
-            End Party / Leave Party button in the footer, so it's redundant for both.
-            The empty spacer keeps the results link right-aligned. */}
-        <View />
-
-        {/* Quick jump back to the round that just finished — top-right of the
-            header, hidden on round 1 / a reconnect that skipped results. */}
+        {/* Top-left: a back-style jump to the round that just finished. Hidden on
+            round 1 / a reconnect that skipped results (then an empty spacer keeps
+            the settings icon right-aligned). Not an app-exit — the footer's
+            End Party / Leave Party handles that. */}
         {showLastResults ? (
-          <Pressable onPress={viewLastResults} accessibilityRole="button" hitSlop={8}>
+          <Pressable
+            onPress={viewLastResults}
+            accessibilityRole="button"
+            hitSlop={8}
+            style={styles.lastResultsButton}
+          >
+            <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textSecondary} />
             <Text style={styles.lastResultsText}>Round {lastRoundNumber} Results</Text>
           </Pressable>
-        ) : null}
+        ) : (
+          <View />
+        )}
+
+        {/* Top-right: settings placeholder for all players — no-op for now, a hook
+            for future player settings. */}
+        <Pressable
+          onPress={() => {}}
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+          hitSlop={8}
+        >
+          <Ionicons name="settings-outline" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
+        </Pressable>
       </View>
 
       <View style={styles.header}>
@@ -490,6 +507,7 @@ const RING_TIME_FONT_SIZE = 60; // the M:SS time text inside the ring
 const PAUSE_BUTTON_SIZE = 64; // host pause/play button (centre-bottom of the ring)
 const ADD_TIME_BUTTON_SIZE = 64; // host +30s / +1m circles
 const ADD_TIME_BUTTON_OFFSET = 44; // how far the +time circles sit outside the ring's sides
+const HEADER_ICON_SIZE = 22; // header back-arrow + settings-gear icons
 // ──────────────────────────────────────────────────────────────────────────────
 
 // Quick add-time amounts (seconds). host_add_time bounds input to 1–600.
@@ -517,10 +535,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.md,
   },
+  // Row so the back arrow sits inline before the label, reading as a nav button.
+  lastResultsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
   lastResultsText: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.textSecondary,
-    textDecorationLine: 'underline',
   },
   partyName: {
     fontSize: FONT_SIZE.md,
