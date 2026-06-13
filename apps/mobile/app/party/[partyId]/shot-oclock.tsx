@@ -253,12 +253,16 @@ export default function ShotOClockScreen(): React.JSX.Element {
       <View style={styles.headerBar} />
 
       <View style={styles.center}>
-        <Text style={styles.title}>SHOT{'\n'}O&apos;CLOCK</Text>
+        {/* Single-phone mode has no Done / I'm Out buttons, so the moment leans on
+            the title + ring to fill the space — both scale up (D050). */}
+        <Text style={[styles.title, hostOnly && styles.titleLarge]}>
+          SHOT{'\n'}O&apos;CLOCK
+        </Text>
 
         <View style={styles.ringGroup}>
           <ProgressRing
-            size={RING_SIZE}
-            strokeWidth={8}
+            size={hostOnly ? HOST_ONLY_RING_SIZE : RING_SIZE}
+            strokeWidth={hostOnly ? 10 : 8}
             progress={ringProgress}
             color={COLORS.shotRing}
             trackColor="rgba(255,255,255,0.2)"
@@ -304,6 +308,8 @@ export default function ShotOClockScreen(): React.JSX.Element {
 
 // Matches the timer ring size for visual consistency across the two screens.
 const RING_SIZE = 280;
+// Single-phone mode drops the action buttons, so the ring grows to fill the space.
+const HOST_ONLY_RING_SIZE = 330;
 
 const styles = StyleSheet.create({
   screen: {
@@ -333,6 +339,11 @@ const styles = StyleSheet.create({
     color: COLORS.shotText,
     textAlign: 'center',
     letterSpacing: 2,
+  },
+  // Larger title for single-phone mode, where there are no action buttons below.
+  titleLarge: {
+    fontSize: 48,
+    letterSpacing: 3,
   },
   ringGroup: {
     alignItems: 'center',

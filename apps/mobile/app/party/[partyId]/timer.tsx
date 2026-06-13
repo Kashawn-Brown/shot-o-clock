@@ -411,7 +411,7 @@ export default function TimerScreen(): React.JSX.Element {
           <Button
             label={isHost ? 'End Party' : 'Leave Party'}
             variant="outline"
-            onPress={() => confirmExit({ isHost })}
+            onPress={() => confirmExit({ isHost, hostOnly })}
             disabled={leaving}
             style={[styles.footerButton, styles.destructiveButton]}
           />

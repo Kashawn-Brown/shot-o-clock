@@ -260,7 +260,7 @@ export default function CreatePartyScreen(): React.JSX.Element {
 
         <View style={styles.toggleRow}>
           <View style={styles.toggleText}>
-            <Text style={styles.label}>Single-Phone Mode</Text>
+            <Text style={styles.label}>Host-Only Mode</Text>
             <Text style={styles.hint}>{hostOnly ? HOST_ONLY_ON_HINT : HOST_ONLY_OFF_HINT}</Text>
           </View>
           <Switch value={hostOnly} onValueChange={setHostOnly} />
