@@ -43,8 +43,17 @@ type PendingAction = 'done' | 'self_out' | null;
 
 export default function ShotOClockScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
-  const { status, session, settings, currentRound, me, myOutcome, errorMessage, refreshOutcome } =
-    useTimerSession(partyId);
+  const {
+    status,
+    session,
+    settings,
+    currentRound,
+    me,
+    myOutcome,
+    errorMessage,
+    partyEnded,
+    refreshOutcome,
+  } = useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
   const { leaving, confirmExit } = useGameExit(partyId);
 
@@ -170,14 +179,23 @@ export default function ShotOClockScreen(): React.JSX.Element {
   }, [currentPhase, currentRound?.id, currentRound?.round_number]);
 
   useEffect(() => {
-    if (leaving || status !== 'ready' || !partyId || !currentPhase || currentPhase === 'shot_window') {
+    if (
+      leaving ||
+      partyEnded ||
+      status !== 'ready' ||
+      !partyId ||
+      !currentPhase ||
+      currentPhase === 'shot_window'
+    ) {
       return;
     }
-    // The party ended during the window → summary. Otherwise the round just
-    // finished — auto-advanced to countdown, or rested in the round_complete halt —
-    // so show its results, handing over the round that was live in the window.
+    // The party ended (e.g. the screen loaded after end_party, so the snapshot read
+    // it directly) → home. Phase 11 will route to the Final Summary instead.
+    // Otherwise the round just finished — auto-advanced to countdown, or rested in
+    // the round_complete halt — so show its results, handing over the round that was
+    // live in the window.
     if (currentPhase === 'ended') {
-      router.replace({ pathname: '/party/[partyId]/summary', params: { partyId } });
+      router.replace('/');
       return;
     }
     const completed = completedRoundRef.current;
@@ -187,7 +205,14 @@ export default function ShotOClockScreen(): React.JSX.Element {
         ? { partyId, roundId: completed.id, roundNumber: String(completed.number) }
         : { partyId },
     });
-  }, [leaving, status, currentPhase, partyId]);
+  }, [leaving, partyEnded, status, currentPhase, partyId]);
+
+  // Host ended the party — read live off the party_sessions realtime payload
+  // (useTimerSession.partyEnded), so we route home even if a get_party_state refresh
+  // would have failed. Phase 11 will route to the Final Summary instead.
+  useEffect(() => {
+    if (partyEnded) router.replace('/');
+  }, [partyEnded]);
 
   if (status === 'loading') {
     return (

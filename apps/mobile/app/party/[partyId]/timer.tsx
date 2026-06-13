@@ -65,6 +65,7 @@ export default function TimerScreen(): React.JSX.Element {
     roundOutcomes,
     errorMessage,
     membershipLost,
+    partyEnded,
     players,
     refreshOutcome,
     refreshSession,
@@ -218,11 +219,14 @@ export default function TimerScreen(): React.JSX.Element {
   // Suppressed while `leaving`: the exit flips the phase (end_party → 'ended') and
   // the poll can still catch 'shot_window' mid-exit, either of which would re-route
   // us right after useGameExit's router.replace('/'). The intentional exit wins.
+  // 'ended' is handled below (route home, not via routeForPhase) so End Party never
+  // lands a non-host on the summary placeholder.
   const currentPhase = session?.current_phase;
   useEffect(() => {
     if (
       leaving ||
       membershipLost ||
+      partyEnded ||
       status !== 'ready' ||
       !partyId ||
       !currentPhase ||
@@ -230,8 +234,21 @@ export default function TimerScreen(): React.JSX.Element {
     ) {
       return;
     }
+    // The party ended (e.g. the screen loaded after end_party, so the snapshot read
+    // it directly) → home. Phase 11 will route to the Final Summary instead.
+    if (currentPhase === 'ended') {
+      router.replace('/');
+      return;
+    }
     router.replace(`/party/${partyId}/${routeForPhase(currentPhase)}`);
-  }, [leaving, membershipLost, status, currentPhase, partyId]);
+  }, [leaving, membershipLost, partyEnded, status, currentPhase, partyId]);
+
+  // Host ended the party — read live off the party_sessions realtime payload
+  // (useTimerSession.partyEnded), so we route home even if a get_party_state
+  // refresh would have failed. Phase 11 will route to the Final Summary instead.
+  useEffect(() => {
+    if (partyEnded) router.replace('/');
+  }, [partyEnded]);
 
   // The host removed us mid-game — surface why, then return home. Same message as
   // the lobby (useLobby membershipLost). Driven by the realtime party_players sub.

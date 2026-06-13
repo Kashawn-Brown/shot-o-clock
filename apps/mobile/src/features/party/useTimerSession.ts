@@ -66,6 +66,12 @@ interface UseTimerSessionResult {
   // the host removed them (get_party_state → SESSION_NOT_FOUND, or their own row
   // is now 'removed'). The timer screen routes home on this. Mirrors useLobby.
   membershipLost: boolean;
+  // Flips true when the host ends the party — read directly off the party_sessions
+  // realtime payload (status='ended'), so routing home does NOT depend on a
+  // get_party_state refresh succeeding (the silent refresh swallows failures, which
+  // would otherwise strand the device on the game screen). The timer / shot-oclock
+  // screens route home on this. Phase 11 will route to the Final Summary instead.
+  partyEnded: boolean;
   reload: () => void;
   // Re-pull myOutcome (e.g. right after the player taps Done / I'm Out).
   refreshOutcome: () => void;
@@ -89,6 +95,7 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   const [roundOutcomes, setRoundOutcomes] = useState<OutcomeRow[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [membershipLost, setMembershipLost] = useState(false);
+  const [partyEnded, setPartyEnded] = useState(false);
 
   // The silent refresh must not depend on userId (it would re-create on identity
   // change); read the latest off a ref to derive `me` instead.
@@ -263,7 +270,18 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'party_sessions', filter: `id=eq.${partyId}` },
-        () => refreshRef.current(),
+        (payload) => {
+          // end_party is terminal: signal the screen to route home directly from the
+          // payload (the session is the caller's own party row, fully visible to
+          // members — no RLS-filtered field), rather than via a get_party_state
+          // refresh that the silent path would swallow on failure. Mirrors
+          // results.tsx. Any other session change is a normal re-pull.
+          if ((payload.new as { status?: string }).status === 'ended') {
+            setPartyEnded(true);
+            return;
+          }
+          refreshRef.current();
+        },
       )
       .on(
         'postgres_changes',
@@ -303,6 +321,7 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     roundOutcomes,
     errorMessage,
     membershipLost,
+    partyEnded,
     reload,
     refreshOutcome,
     refreshSession: refresh,
