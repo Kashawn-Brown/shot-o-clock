@@ -303,6 +303,7 @@ export type Database = {
       }
       party_sessions: {
         Row: {
+          auto_ended_inactive: boolean
           consecutive_inactive_rounds: number
           created_at: string
           current_phase: Database["public"]["Enums"]["party_phase"]
@@ -325,6 +326,7 @@ export type Database = {
           visibility: Database["public"]["Enums"]["party_visibility"]
         }
         Insert: {
+          auto_ended_inactive?: boolean
           consecutive_inactive_rounds?: number
           created_at?: string
           current_phase?: Database["public"]["Enums"]["party_phase"]
@@ -347,6 +349,7 @@ export type Database = {
           visibility?: Database["public"]["Enums"]["party_visibility"]
         }
         Update: {
+          auto_ended_inactive?: boolean
           consecutive_inactive_rounds?: number
           created_at?: string
           current_phase?: Database["public"]["Enums"]["party_phase"]

@@ -44,6 +44,10 @@ export default function SummaryScreen(): React.JSX.Element {
   // `view`: exactly one is set once the snapshot loads.
   const [hostOnlyView, setHostOnlyView] = useState<HostOnlyEndView | null>(null);
   const [partyName, setPartyName] = useState('');
+  // True only when the party was auto-ended for inactivity (server flag, set in
+  // finalize_round_outcomes). host_only parties are exempt from auto-end, so this
+  // is only ever true on the multi-device summary.
+  const [autoEndedInactive, setAutoEndedInactive] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // One-shot read on mount — the summary is terminal, so no polling / realtime /
@@ -66,6 +70,7 @@ export default function SummaryScreen(): React.JSX.Element {
         }
         const { session, settings, players } = result.data;
         setPartyName(session.name);
+        setAutoEndedInactive(session.auto_ended_inactive);
         if (settings.host_only) {
           setHostOnlyView(
             deriveHostOnlySummary({
@@ -155,6 +160,9 @@ export default function SummaryScreen(): React.JSX.Element {
       <View style={styles.header}>
         <Text style={styles.partyName}>{view.partyName}</Text>
         <Text style={styles.title}>Game Complete!</Text>
+        {autoEndedInactive ? (
+          <Text style={styles.inactivityNote}>Game ended due to inactivity</Text>
+        ) : null}
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -263,6 +271,13 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     // fontWeight: FONT_WEIGHT.bold,
     color: COLORS.buttonFilledText,
+  },
+  // Shown under the title only when the party was auto-ended for inactivity.
+  inactivityNote: {
+    marginTop: SPACING.xs,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.buttonFilledText,
+    opacity: 0.7,
   },
   partyName: {
     fontSize: FONT_SIZE.custom_1,
