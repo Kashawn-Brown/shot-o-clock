@@ -16,6 +16,10 @@ type GraceMode = Database['public']['Enums']['grace_mode'];
 export interface SelfOutCopy {
   // Button label.
   label: string;
+  // False when opting out has no consequence (elimination off): the screen skips
+  // the confirmation dialog and acts immediately. True for the grace-consuming and
+  // permanent cases, where the player should confirm first.
+  requiresConfirm: boolean;
   confirmTitle: string;
   confirmMessage: string;
   confirmButton: string;
@@ -45,14 +49,17 @@ export function selfOutCopy(params: {
         ? 'Skip this shot'
         : "I'm Out";
 
+  // Elimination off skips the dialog (requiresConfirm = false), so its message is
+  // never shown; the other two are one short line each — just what happens.
   const confirmMessage = eliminationOff
-    ? 'You\'ll sit out this round. No consequence — misses are tracked but nobody is eliminated.'
+    ? 'Sit out this round.'
     : hasGrace
-      ? 'You\'ll sit out this round and use your grace. You can still be eliminated if you miss or skip again.'
-      : "You'll sit out the rest of this round and can't undo it — only the host can bring you back in.";
+      ? 'Uses your grace for this round.'
+      : "You'll be out for the rest of the game.";
 
   return {
     label,
+    requiresConfirm: !eliminationOff,
     confirmTitle: isSkip ? 'Skip this round?' : "I'm Out?",
     confirmMessage,
     confirmButton: isSkip ? 'Skip' : "I'm Out",

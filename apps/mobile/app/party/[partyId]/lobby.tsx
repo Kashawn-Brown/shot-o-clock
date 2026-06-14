@@ -191,8 +191,8 @@ export default function LobbyScreen(): React.JSX.Element {
     (player: LobbyRosterEntry) => {
       if (removingId) return;
       Alert.alert(
-        'Remove player?',
-        `Remove ${player.displayName} from the party? This is permanent — they won't be able to rejoin.`,
+        `Remove ${player.displayName}?`,
+        "They won't be able to rejoin.",
         [
           { text: 'Cancel', style: 'cancel' },
           {
