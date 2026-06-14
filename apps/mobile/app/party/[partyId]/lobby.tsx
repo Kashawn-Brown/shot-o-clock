@@ -28,6 +28,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
@@ -209,7 +210,7 @@ export default function LobbyScreen(): React.JSX.Element {
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={confirmExit} accessibilityRole="button" hitSlop={8} disabled={leaving}>
-          <Text style={styles.back}>←</Text>
+          <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
         </Pressable>
         <Text style={styles.title}>Lobby</Text>
       </View>
@@ -315,6 +316,8 @@ export default function LobbyScreen(): React.JSX.Element {
 
 // Floats the toast in the middle-lower area, clear of the footer / Start button.
 const TOAST_BOTTOM_OFFSET = 150;
+
+const HEADER_ICON_SIZE = 22; // header back-arrow + settings-gear icons
 
 const styles = StyleSheet.create({
   screen: {
