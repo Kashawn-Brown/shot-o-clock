@@ -74,6 +74,10 @@ export default function ShotOClockScreen(): React.JSX.Element {
 
   const isActive = me?.status === 'active';
   const isOut = me?.status === 'out';
+  // Single-phone mode (D040, D050): no Done / I'm Out — the host just watches the
+  // shot window — and the round loop skips Round Results, going straight back to
+  // the next countdown.
+  const hostOnly = settings?.host_only ?? false;
   // Only 'done' / 'self_out' are player taps; 'none' / 'missed' aren't acted states.
   const recordedAction =
     myOutcome?.player_action === 'done' || myOutcome?.player_action === 'self_out'
@@ -199,6 +203,12 @@ export default function ShotOClockScreen(): React.JSX.Element {
       router.replace(`/party/${partyId}/summary`);
       return;
     }
+    // Single-phone mode skips Round Results entirely (D040) — the window closed,
+    // so go straight back to the next round's countdown on the timer screen.
+    if (hostOnly) {
+      router.replace({ pathname: '/party/[partyId]/timer', params: { partyId } });
+      return;
+    }
     const completed = completedRoundRef.current;
     router.replace({
       pathname: '/party/[partyId]/results',
@@ -206,7 +216,7 @@ export default function ShotOClockScreen(): React.JSX.Element {
         ? { partyId, roundId: completed.id, roundNumber: String(completed.number) }
         : { partyId },
     });
-  }, [leaving, partyEnded, status, currentPhase, partyId]);
+  }, [leaving, partyEnded, status, currentPhase, partyId, hostOnly]);
 
   // Host ended the party — read live off the party_sessions realtime payload
   // (useTimerSession.partyEnded), so we route on even if a get_party_state refresh
@@ -243,27 +253,35 @@ export default function ShotOClockScreen(): React.JSX.Element {
       <View style={styles.headerBar} />
 
       <View style={styles.center}>
-        <Text style={styles.title}>SHOT{'\n'}O&apos;CLOCK</Text>
+        {/* Single-phone mode has no Done / I'm Out buttons, so the moment leans on
+            the title + ring to fill the space — both scale up (D050). */}
+        <Text style={[styles.title, hostOnly && styles.titleLarge]}>
+          SHOT{'\n'}O&apos;CLOCK
+        </Text>
 
         <View style={styles.ringGroup}>
           <ProgressRing
-            size={RING_SIZE}
-            strokeWidth={8}
+            size={hostOnly ? HOST_ONLY_RING_SIZE : RING_SIZE}
+            strokeWidth={hostOnly ? 10 : 8}
             progress={ringProgress}
             color={COLORS.shotRing}
             trackColor="rgba(255,255,255,0.2)"
           >
             <View style={styles.ringContent}>
-              <Text style={styles.ringLabel}>SHOT WINDOW</Text>
-              <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
+              <Text style={[styles.ringLabel, hostOnly && styles.ringLabelLarge]}>SHOT WINDOW</Text>
+              <Text style={[styles.ringTime, hostOnly && styles.ringTimeLarge]}>
+                {formatDuration(remainingMs)}
+              </Text>
             </View>
           </ProgressRing>
-          <Text style={styles.ringCaption}>Time to take your shot</Text>
+          <Text style={[styles.ringCaption, hostOnly && styles.ringCaptionLarge]}>
+            {hostOnly ? 'Time to take your shots' : 'Time to take your shot'}
+          </Text>
         </View>
       </View>
 
       <View style={styles.actions}>
-        {isActive ? (
+        {hostOnly ? null : isActive ? (
           <>
             <ErrorBanner message={actionError} />
             <View style={styles.actionRow}>
@@ -294,6 +312,12 @@ export default function ShotOClockScreen(): React.JSX.Element {
 
 // Matches the timer ring size for visual consistency across the two screens.
 const RING_SIZE = 280;
+// Single-phone mode drops the action buttons, so the ring grows to fill the space.
+const HOST_ONLY_RING_SIZE = 330;
+// How far to nudge the "SHOT O'CLOCK" title up the page (px). Visual-only
+// (translateY) so it shifts the title without moving the ring. More negative =
+// higher. Consumed by styles.title below.
+const TITLE_OFFSET_Y = -25;
 
 const styles = StyleSheet.create({
   screen: {
@@ -318,11 +342,19 @@ const styles = StyleSheet.create({
     gap: SPACING.xxl,
   },
   title: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: FONT_SIZE.xl,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.shotText,
     textAlign: 'center',
     letterSpacing: 2,
+    
+  },
+  // Larger title for single-phone mode, where there are no action buttons below.
+  titleLarge: {
+    fontSize: 56,
+    letterSpacing: 4,
+    // Nudge up the page without moving the ring (TITLE_OFFSET_Y).
+    transform: [{ translateY: TITLE_OFFSET_Y }],
   },
   ringGroup: {
     alignItems: 'center',
@@ -337,15 +369,27 @@ const styles = StyleSheet.create({
     color: COLORS.shotText,
     opacity: 0.7,
   },
+  // Single-phone bumps the in-ring + caption text to match the larger ring/title.
+  ringCaptionLarge: {
+    fontSize: FONT_SIZE.md,
+    transform: [{ translateY: 20 }],
+  },
   ringLabel: {
     fontSize: FONT_SIZE.xs,
     letterSpacing: 1,
     color: COLORS.shotText,
   },
+  ringLabelLarge: {
+    fontSize: FONT_SIZE.sm,
+    letterSpacing: 2,
+  },
   ringTime: {
     fontSize: FONT_SIZE.xl,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.shotText,
+  },
+  ringTimeLarge: {
+    fontSize: 56,
   },
   actions: {
     padding: SPACING.lg,

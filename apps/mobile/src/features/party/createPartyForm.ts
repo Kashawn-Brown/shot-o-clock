@@ -48,6 +48,10 @@ export const DEFAULT_INTERVAL_INCREMENT_MINUTES = 1;
 export const DEFAULT_SHOT_WINDOW_SECONDS = 60;
 export const DEFAULT_ELIMINATION_ENABLED = true;
 
+// Single-phone mode is off by default — the common path is a multi-device party
+// where others join by code (D040).
+export const DEFAULT_HOST_ONLY = false;
+
 // Default party name, e.g. "Shot O'Clock 06/08/26". Prefilled on Create so a
 // host can ship without naming the party; the field clears on first focus for
 // free typing. Date is passed in (not read here) to keep this pure/testable.
@@ -75,6 +79,10 @@ export const GRACE_MODE_OPTIONS: readonly {
 export const ELIMINATION_ON_HINT = 'Players who don\'t take their shot are eliminated';
 export const ELIMINATION_OFF_HINT = 'Misses are tracked but nobody is eliminated';
 
+// Single-phone-toggle hint text, switched on the toggle's value (D040).
+export const HOST_ONLY_ON_HINT = 'Run and manage the game on this phone — no one else joins';
+export const HOST_ONLY_OFF_HINT = 'Others join by code on their own phones';
+
 export const DEFAULT_GRACE_MODE: GraceMode = 'disabled';
 
 // Raw form state as held by the screen — interval/shot-window fields are the
@@ -87,6 +95,7 @@ export type CreatePartyFormInput = {
   eliminationEnabled: boolean;
   graceMode: GraceMode;
   hostDisplayName: string | null;
+  hostOnly: boolean;
 };
 
 export type CreatePartyFormResult =
@@ -173,6 +182,7 @@ export function validateCreatePartyForm(input: CreatePartyFormInput): CreatePart
       eliminationEnabled: input.eliminationEnabled,
       graceMode,
       hostDisplayName: input.hostDisplayName,
+      hostOnly: input.hostOnly,
     },
   };
 }

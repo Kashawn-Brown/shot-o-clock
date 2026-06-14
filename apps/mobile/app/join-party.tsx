@@ -12,6 +12,7 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -104,7 +105,7 @@ export default function JoinPartyScreen(): React.JSX.Element {
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>
-          <Text style={styles.back}>←</Text>
+        <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
         </Pressable>
         <Text style={styles.title}>Join Party</Text>
       </View>
@@ -162,6 +163,8 @@ export default function JoinPartyScreen(): React.JSX.Element {
     </SafeAreaView>
   );
 }
+
+const HEADER_ICON_SIZE = 22; // header back-arrow + settings-gear icons
 
 const styles = StyleSheet.create({
   screen: {

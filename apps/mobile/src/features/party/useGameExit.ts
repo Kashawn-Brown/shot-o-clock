@@ -33,6 +33,9 @@ interface ConfirmExitOptions {
    *  host is ending the game for everyone, a player is only leaving. Omitted on
    *  screens that don't resolve the role — those fall back to neutral copy. */
   isHost?: boolean;
+  /** Single-phone mode (D040): the host is alone, so the host copy drops any
+   *  "for everyone" wording — there's no one else in the session. */
+  hostOnly?: boolean;
 }
 
 interface UseGameExitResult {
@@ -48,11 +51,22 @@ interface UseGameExitResult {
 
 // Role-correct confirmation copy. The exit BEHAVIOR is still decided server-side
 // (endParty → NOT_HOST falls back to self-out); isHost only shapes the wording.
-function exitCopy(isHost: boolean | undefined): {
+function exitCopy(
+  isHost: boolean | undefined,
+  hostOnly: boolean | undefined,
+): {
   title: string;
   message: string;
   confirmLabel: string;
 } {
+  // Single-phone host: no other players, so drop the "for everyone" wording (D050).
+  if (isHost === true && hostOnly === true) {
+    return {
+      title: 'End the game?',
+      message: 'This will close the session.',
+      confirmLabel: 'End Party',
+    };
+  }
   if (isHost === true) {
     return {
       title: 'End party?',
@@ -110,7 +124,7 @@ export function useGameExit(partyId: string | undefined): UseGameExitResult {
   const confirmExit = useCallback(
     (options?: ConfirmExitOptions) => {
       if (leaving) return;
-      const { title, message, confirmLabel } = exitCopy(options?.isHost);
+      const { title, message, confirmLabel } = exitCopy(options?.isHost, options?.hostOnly);
       Alert.alert(title, message, [
         { text: 'Cancel', style: 'cancel' },
         { text: confirmLabel, style: 'destructive', onPress: handleExit },

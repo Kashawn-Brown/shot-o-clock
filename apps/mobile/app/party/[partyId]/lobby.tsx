@@ -28,6 +28,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
@@ -141,14 +142,28 @@ export default function LobbyScreen(): React.JSX.Element {
     setLeaving(false);
   }, [partyId, leaving]);
 
-  // Confirmation gate — leaving is destructive (ends the party for a host).
+  // Confirmation gate — role-correct copy: a host ends the party for everyone, a
+  // player only leaves. The exit BEHAVIOR is still server-decided (end_party →
+  // NOT_HOST falls back to leave_party); view.isHost just shapes the wording.
   const confirmExit = useCallback(() => {
     if (leaving) return;
-    Alert.alert('Leave party?', 'If you are the host, this ends the party for everyone.', [
+    const isHost = view?.isHost ?? false;
+    const { title, message, confirmLabel } = isHost
+      ? {
+          title: 'End party?',
+          message: 'This ends the party for everyone and returns you home.',
+          confirmLabel: 'End Party',
+        }
+      : {
+          title: 'Leave party?',
+          message: 'You will leave the party and return home.',
+          confirmLabel: 'Leave',
+        };
+    Alert.alert(title, message, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Leave', style: 'destructive', onPress: handleExit },
+      { text: confirmLabel, style: 'destructive', onPress: handleExit },
     ]);
-  }, [leaving, handleExit]);
+  }, [leaving, handleExit, view?.isHost]);
 
   // Host starts the game: start_game creates round 1's countdown, then we route
   // into the timer. router.replace (not push) because the lobby is no longer a
@@ -209,7 +224,7 @@ export default function LobbyScreen(): React.JSX.Element {
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={confirmExit} accessibilityRole="button" hitSlop={8} disabled={leaving}>
-          <Text style={styles.back}>←</Text>
+          <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
         </Pressable>
         <Text style={styles.title}>Lobby</Text>
       </View>
@@ -316,6 +331,8 @@ export default function LobbyScreen(): React.JSX.Element {
 // Floats the toast in the middle-lower area, clear of the footer / Start button.
 const TOAST_BOTTOM_OFFSET = 150;
 
+const HEADER_ICON_SIZE = 22; // header back-arrow + settings-gear icons
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -343,7 +360,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
   },
   partyName: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.custom_1,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
     textAlign: 'center',

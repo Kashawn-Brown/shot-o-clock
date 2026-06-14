@@ -14,16 +14,19 @@ import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { Stepper } from '@/components/ui/Stepper';
 import { useDisplayName } from '@/features/auth/useDisplayName';
 import { createParty } from '@/features/party/api/createParty';
+import { startGame } from '@/features/party/api/startGame';
 import { clearLeftPartyId } from '@/features/party/leftParty';
 import {
   DEFAULT_ELIMINATION_ENABLED,
   DEFAULT_GRACE_MODE,
+  DEFAULT_HOST_ONLY,
   DEFAULT_INTERVAL_INCREMENT_MINUTES,
   DEFAULT_SHOT_WINDOW_SECONDS,
   DEFAULT_STARTING_INTERVAL_MINUTES,
@@ -31,6 +34,8 @@ import {
   ELIMINATION_ON_HINT,
   formatDefaultPartyName,
   GRACE_MODE_OPTIONS,
+  HOST_ONLY_OFF_HINT,
+  HOST_ONLY_ON_HINT,
   INTERVAL_INCREMENT_MAX_MINUTES,
   INTERVAL_INCREMENT_MIN_MINUTES,
   INTERVAL_INCREMENT_STEP_MINUTES,
@@ -64,6 +69,7 @@ export default function CreatePartyScreen(): React.JSX.Element {
   const [shotWindowSeconds, setShotWindowSeconds] = useState(DEFAULT_SHOT_WINDOW_SECONDS);
   const [eliminationEnabled, setEliminationEnabled] = useState(DEFAULT_ELIMINATION_ENABLED);
   const [graceMode, setGraceMode] = useState<GraceMode>(DEFAULT_GRACE_MODE);
+  const [hostOnly, setHostOnly] = useState(DEFAULT_HOST_ONLY);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -81,9 +87,15 @@ export default function CreatePartyScreen(): React.JSX.Element {
       startingIntervalMinutes: String(startingIntervalMinutes),
       intervalIncrementMinutes: String(intervalIncrementMinutes),
       shotWindowSeconds: String(shotWindowSeconds),
-      eliminationEnabled,
+      // Single-phone parties force elimination off: the host is the only roster
+      // row and never taps Done, so under elimination they'd eliminate themselves
+      // and halt the solo loop. Off keeps timer → Shot O'Clock → timer running
+      // until End Party (D040, D050). The validator collapses graceMode to
+      // 'disabled' when elimination is off, so the held graceMode value is moot.
+      eliminationEnabled: hostOnly ? false : eliminationEnabled,
       graceMode,
       hostDisplayName: displayName,
+      hostOnly,
     });
 
     if (!result.ok) {
@@ -96,17 +108,35 @@ export default function CreatePartyScreen(): React.JSX.Element {
 
     const response = await createParty(result.params);
 
-    if (response.ok) {
-      // Entering a fresh party clears any intentionally-left marker (leftParty).
-      void clearLeftPartyId();
-      // replace (not push) so Back from the lobby doesn't return to a stale
-      // create form for a party that now exists.
-      router.replace(`/party/${response.data.party_session_id}/lobby`);
+    if (!response.ok) {
+      setErrorMessage(rpcErrorMessage(response.error_code));
+      setSubmitting(false);
       return;
     }
 
-    setErrorMessage(rpcErrorMessage(response.error_code));
-    setSubmitting(false);
+    const partySessionId = response.data.party_session_id;
+    // Entering a fresh party clears any intentionally-left marker (leftParty).
+    void clearLeftPartyId();
+
+    // Multi-device: land in the lobby so others can join by code, then the host
+    // taps Start. Single-phone (host_only, D040): there are no other devices to
+    // wait for, so skip the lobby — start round 1 here and drop straight into
+    // the timer. start_game is idempotent (§5.6); if it fails (rare, right after
+    // a successful create) fall back to the lobby, the one valid screen for a
+    // party still in the lobby phase, where Start can be retried.
+    if (hostOnly) {
+      const started = await startGame({ partySessionId });
+      if (started.ok) {
+        router.replace(`/party/${partySessionId}/timer`);
+        return;
+      }
+      router.replace(`/party/${partySessionId}/lobby`);
+      return;
+    }
+
+    // replace (not push) so Back from the lobby doesn't return to a stale
+    // create form for a party that now exists.
+    router.replace(`/party/${partySessionId}/lobby`);
   }, [
     submitting,
     partyName,
@@ -117,6 +147,7 @@ export default function CreatePartyScreen(): React.JSX.Element {
     eliminationEnabled,
     graceMode,
     displayName,
+    hostOnly,
   ]);
 
   const graceHint =
@@ -126,7 +157,7 @@ export default function CreatePartyScreen(): React.JSX.Element {
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>
-          <Text style={styles.back}>←</Text>
+          <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
         </Pressable>
         <Text style={styles.title}>Create Party</Text>
       </View>
@@ -186,19 +217,24 @@ export default function CreatePartyScreen(): React.JSX.Element {
           />
         </View>
 
-        <View style={styles.toggleRow}>
-          <View style={styles.toggleText}>
-            <Text style={styles.label}>Elimination Mode</Text>
-            <Text style={styles.hint}>
-              {eliminationEnabled ? ELIMINATION_ON_HINT : ELIMINATION_OFF_HINT}
-            </Text>
+        {/* Elimination + Grace are meaningless in single-phone mode — there are no
+            tracked players to eliminate, and forcing elimination off is what keeps
+            the solo loop running (D040, D050). Hide both when host-only is on. */}
+        {!hostOnly && (
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleText}>
+              <Text style={styles.label}>Elimination Mode</Text>
+              <Text style={styles.hint}>
+                {eliminationEnabled ? ELIMINATION_ON_HINT : ELIMINATION_OFF_HINT}
+              </Text>
+            </View>
+            <Switch value={eliminationEnabled} onValueChange={setEliminationEnabled} />
           </View>
-          <Switch value={eliminationEnabled} onValueChange={setEliminationEnabled} />
-        </View>
+        )}
 
         {/* Grace mode only matters with elimination on — hide it otherwise
-            (plan.md Phase 5). */}
-        {eliminationEnabled && (
+            (plan.md Phase 5), and always in single-phone mode. */}
+        {!hostOnly && eliminationEnabled && (
           <View style={styles.field}>
             <Text style={styles.label}>Grace Mode</Text>
             <View style={styles.segment}>
@@ -223,6 +259,14 @@ export default function CreatePartyScreen(): React.JSX.Element {
           </View>
         )}
 
+        <View style={styles.toggleRow}>
+          <View style={styles.toggleText}>
+            <Text style={styles.label}>Host-Only Mode</Text>
+            <Text style={styles.hint}>{hostOnly ? HOST_ONLY_ON_HINT : HOST_ONLY_OFF_HINT}</Text>
+          </View>
+          <Switch value={hostOnly} onValueChange={setHostOnly} />
+        </View>
+
         <ErrorBanner message={errorMessage} />
 
         <Button
@@ -235,6 +279,8 @@ export default function CreatePartyScreen(): React.JSX.Element {
     </SafeAreaView>
   );
 }
+
+const HEADER_ICON_SIZE = 22; // header back-arrow + settings-gear icons
 
 const styles = StyleSheet.create({
   screen: {

@@ -23,6 +23,8 @@ export type CreatePartyParams = {
   eliminationEnabled: boolean;
   graceMode: GraceMode;
   hostDisplayName: string;
+  // Single-phone mode: the host runs the whole game on one device (D040).
+  hostOnly: boolean;
 };
 
 // Data payload mirrors §2.6 — snake_case keys match the jsonb the function
@@ -42,5 +44,6 @@ export function createParty(params: CreatePartyParams): Promise<RpcResult<Create
     p_elimination_enabled: params.eliminationEnabled,
     p_grace_mode: params.graceMode,
     p_host_display_name: params.hostDisplayName,
+    p_host_only: params.hostOnly,
   });
 }

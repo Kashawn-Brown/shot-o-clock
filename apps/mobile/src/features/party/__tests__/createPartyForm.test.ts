@@ -14,6 +14,7 @@ function baseInput(overrides: Partial<CreatePartyFormInput> = {}): CreatePartyFo
     eliminationEnabled: true,
     graceMode: 'enabled',
     hostDisplayName: 'Kashawn',
+    hostOnly: false,
     ...overrides,
   };
 }
@@ -31,8 +32,14 @@ describe('validateCreatePartyForm', () => {
         eliminationEnabled: true,
         graceMode: 'enabled',
         hostDisplayName: 'Kashawn',
+        hostOnly: false,
       },
     });
+  });
+
+  it('threads host_only through to the params', () => {
+    const result = validateCreatePartyForm(baseInput({ hostOnly: true }));
+    expect(result.ok && result.params.hostOnly).toBe(true);
   });
 
   it('trims the party name before length-checking and sending', () => {
