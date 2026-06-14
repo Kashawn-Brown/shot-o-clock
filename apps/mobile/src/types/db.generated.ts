@@ -303,6 +303,7 @@ export type Database = {
       }
       party_sessions: {
         Row: {
+          consecutive_inactive_rounds: number
           created_at: string
           current_phase: Database["public"]["Enums"]["party_phase"]
           current_round_number: number
@@ -324,6 +325,7 @@ export type Database = {
           visibility: Database["public"]["Enums"]["party_visibility"]
         }
         Insert: {
+          consecutive_inactive_rounds?: number
           created_at?: string
           current_phase?: Database["public"]["Enums"]["party_phase"]
           current_round_number?: number
@@ -345,6 +347,7 @@ export type Database = {
           visibility?: Database["public"]["Enums"]["party_visibility"]
         }
         Update: {
+          consecutive_inactive_rounds?: number
           created_at?: string
           current_phase?: Database["public"]["Enums"]["party_phase"]
           current_round_number?: number
@@ -393,6 +396,7 @@ export type Database = {
           allow_rejoin: boolean
           auto_approve_if_all_players_done: boolean
           auto_approve_without_referee: boolean
+          auto_end_after_inactive_rounds: number
           auto_start_delay_seconds: number
           auto_start_next_round: boolean
           created_at: string
@@ -436,6 +440,7 @@ export type Database = {
           allow_rejoin?: boolean
           auto_approve_if_all_players_done?: boolean
           auto_approve_without_referee?: boolean
+          auto_end_after_inactive_rounds?: number
           auto_start_delay_seconds?: number
           auto_start_next_round?: boolean
           created_at?: string
@@ -479,6 +484,7 @@ export type Database = {
           allow_rejoin?: boolean
           auto_approve_if_all_players_done?: boolean
           auto_approve_without_referee?: boolean
+          auto_end_after_inactive_rounds?: number
           auto_start_delay_seconds?: number
           auto_start_next_round?: boolean
           created_at?: string
@@ -818,6 +824,10 @@ export type Database = {
         Returns: Json
       }
       end_party: { Args: { p_party_session_id: string }; Returns: Json }
+      finalize_if_all_submitted: {
+        Args: { p_party_session_id: string }
+        Returns: boolean
+      }
       finalize_round_outcomes: {
         Args: {
           p_party_session_id: string
