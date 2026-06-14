@@ -174,6 +174,7 @@ export default function TimerScreen(): React.JSX.Element {
   // grace in hand, else "I'm Out". See selfOutCopy.
   const {
     label: selfOutLabel,
+    requiresConfirm,
     confirmTitle,
     confirmMessage,
     confirmButton,
@@ -200,15 +201,20 @@ export default function TimerScreen(): React.JSX.Element {
     refreshOutcome();
   }, [partyId, canSelfOut, refreshOutcome]);
 
-  // Confirmation gate — opting out is irreversible within the round (game-rules §7);
-  // the message reflects the actual consequence (grace / elimination-off / out).
+  // Confirmation gate. A skip with no consequence (elimination off) needs no
+  // confirmation — act immediately. Otherwise confirm, since opting out is
+  // irreversible within the round (game-rules §7).
   const confirmSelfOut = useCallback(() => {
     if (!canSelfOut) return;
+    if (!requiresConfirm) {
+      void handleSelfOut();
+      return;
+    }
     Alert.alert(confirmTitle, confirmMessage, [
       { text: 'Cancel', style: 'cancel' },
       { text: confirmButton, style: 'destructive', onPress: handleSelfOut },
     ]);
-  }, [canSelfOut, handleSelfOut, confirmTitle, confirmMessage, confirmButton]);
+  }, [canSelfOut, handleSelfOut, requiresConfirm, confirmTitle, confirmMessage, confirmButton]);
 
   // Ring fills clockwise as the proportion of the countdown remaining. Total is
   // the round's interval; clamp (in ProgressRing) guards against host_add_time

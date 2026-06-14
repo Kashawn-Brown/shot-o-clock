@@ -218,7 +218,7 @@ export function RosterSheet({
     (playerId: string, displayName: string) => {
       Alert.alert(
         `Remove ${displayName}?`,
-        'They will be removed from the party and cannot rejoin.',
+        "They won't be able to rejoin.",
         [
           { text: 'Cancel', style: 'cancel' },
           {

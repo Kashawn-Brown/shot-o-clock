@@ -63,28 +63,28 @@ function exitCopy(
   if (isHost === true && hostOnly === true) {
     return {
       title: 'End the game?',
-      message: 'This will close the session.',
+      message: 'This ends the game.',
       confirmLabel: 'End Party',
     };
   }
   if (isHost === true) {
     return {
       title: 'End party?',
-      message: 'This ends the game for everyone and returns you home.',
+      message: 'This ends the game for everyone.',
       confirmLabel: 'End Party',
     };
   }
   if (isHost === false) {
     return {
       title: 'Leave party?',
-      message: 'You will leave the game and return home.',
+      message: "You'll leave the game.",
       confirmLabel: 'Leave Party',
     };
   }
   // Role unknown — neutral wording that fits either path.
   return {
     title: 'Leave party?',
-    message: 'If you are the host, this ends the party for everyone.',
+    message: "If you're the host, this ends it for everyone.",
     confirmLabel: 'Leave',
   };
 }
