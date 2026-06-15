@@ -42,6 +42,7 @@ import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { selfOutCopy } from '@/features/game/selfOutCopy';
 import { useCountdown } from '@/features/game/useCountdown';
 import { useGameExit } from '@/features/party/useGameExit';
+import { shareJoinCode } from '@/features/party/shareJoinCode';
 import { routeForPhase } from '@/features/party/reconnectRoute';
 import { useTimerSession } from '@/features/party/useTimerSession';
 import { rpcErrorMessage } from '@/lib/errors';
@@ -476,6 +477,18 @@ export default function TimerScreen(): React.JSX.Element {
               <Text style={styles.popoverLabel}>JOIN CODE</Text>
               <Text style={styles.popoverCode}>{session?.join_code}</Text>
               <Text style={styles.popoverHint}>Share this code so others can join.</Text>
+              <Pressable
+                onPress={() => {
+                  if (session?.join_code) void shareJoinCode(session?.name, session.join_code);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Share join code"
+                style={styles.popoverShareButton}
+                hitSlop={8}
+              >
+                <Ionicons name="share-outline" size={POPOVER_SHARE_ICON_SIZE} color={COLORS.buttonFilledText} />
+                <Text style={styles.popoverShareText}>Share code</Text>
+              </Pressable>
             </Pressable>
           </Pressable>
         </Modal>
@@ -523,6 +536,7 @@ const PAUSE_BUTTON_SIZE = 64; // host pause/play button (centre-bottom of the ri
 const ADD_TIME_BUTTON_SIZE = 64; // host +30s / +1m circles
 const ADD_TIME_BUTTON_OFFSET = 44; // how far the +time circles sit outside the ring's sides
 const HEADER_ICON_SIZE = 22; // header back-arrow + settings-gear icons
+const POPOVER_SHARE_ICON_SIZE = 16; // join-code popover "Share code" button icon
 // ──────────────────────────────────────────────────────────────────────────────
 
 // Quick add-time amounts (seconds). host_add_time bounds input to 1–600.
@@ -734,5 +748,20 @@ const styles = StyleSheet.create({
   popoverHint: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.textSecondary,
+  },
+  popoverShareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginTop: SPACING.sm,
+    backgroundColor: COLORS.buttonFilled,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+  },
+  popoverShareText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.medium,
+    color: COLORS.buttonFilledText,
   },
 });
