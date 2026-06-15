@@ -6,6 +6,17 @@
 
 ---
 
+## 0. Project Status — post-MVP, pre-production (read first)
+
+**The MVP is complete and device-verified.** The full game loop ships and works (see `plan.md` / `timeline.md`). The project is now in **pre-production**: the work between a finished MVP and App Store / Google Play submission.
+
+- **Active phases: 13–16** — Small Fixes + Polish → Phone-Level Notifications → Basic Settings Screen → Polish + App Store Readiness. Full scope in `plan.md` and `docs/planning/11-preproduction-roadmap.md`. **Phase 13 is next.**
+- **Post-production phases 17–24** — assigned admins, user accounts + saved history, party recaps, full settings, photo/video albums, web/TV display, stats, and the persistent-countdown spike — are planned in `docs/planning/12-postproduction-roadmap.md`. **Do not build any of them until its turn comes;** each gets fully scoped in `plan.md` only when reached.
+
+**This section supersedes the MVP-only framing below where they conflict.** §4.2 (out-of-scope) and §11 (hard "do not" rules) were written for the MVP build — read them through this roadmap now. **Notifications (Phase 14)** and a **basic settings screen incl. "Reset this device" (Phase 15)** are active pre-production work and **no longer out of scope.** **Full user accounts, party albums, web/TV display, referees, and advanced stats remain out of scope until their post-production phase (17–24).** When a task implies a feature, confirm it belongs to the current phase before building it.
+
+---
+
 ## 1. What This Project Is
 
 Shot O'Clock is a **mobile-first drinking-game app for legal-drinking-age groups**. The core experience: a host creates a party, players join by code, a synced countdown runs, a full-screen **SHOT O'CLOCK** moment triggers, players mark **Done** or **I'm Out**, the roster updates, and the game continues into the next round.
