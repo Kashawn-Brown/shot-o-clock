@@ -20,6 +20,7 @@
 // falling back to session.current_round.id for a reconnect straight into the halt,
 // where current_round_number hasn't advanced.
 
+import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -54,21 +55,25 @@ const GROUP_ACCENT: Record<ResultGroupKey, string> = {
   kicked: COLORS.danger,
 };
 
-// Emoji shown before each section label: ✅ done, 🛡️ grace, ❌ missed/out.
-const GROUP_EMOJI: Record<ResultGroupKey, string> = {
-  took_shot: '✅',
-  used_grace: '🛡️',
-  skipped: '⏭️',
-  missed: '❌',
-  out: '❌',
-  left: '🚪',
-  kicked: '🚫',
+// Vector icon shown before each section label (Ionicons — not emoji, so the
+// shield renders blue on every platform and the rest stay consistently tinted to
+// the group accent). checkmark = done, shield = grace, close = missed/out.
+const GROUP_ICON: Record<ResultGroupKey, React.ComponentProps<typeof Ionicons>['name']> = {
+  took_shot: 'checkmark-circle',
+  used_grace: 'shield-outline',
+  skipped: 'play-skip-forward',
+  missed: 'close-circle',
+  out: 'close-circle',
+  left: 'exit-outline',
+  kicked: 'remove-circle',
 };
+
+const GROUP_ICON_SIZE = 18;
 
 // Personalised hero copy for the caller's own outcome.
 const HERO_COPY: Record<ResultGroupKey, string> = {
   took_shot: 'You took the shot',
-  used_grace: 'Grace used — still in',
+  used_grace: 'Used Grace',
   skipped: 'You skipped this round',
   missed: 'You missed — still in',
   out: "You're out",
@@ -238,9 +243,16 @@ export default function ResultsScreen(): React.JSX.Element {
 
         {view.groups.map((group) => (
           <View key={group.key} style={styles.group}>
-            <Text style={[styles.groupTitle, { color: GROUP_ACCENT[group.key] }]}>
-              {GROUP_EMOJI[group.key]} {group.label} ({group.rows.length})
-            </Text>
+            <View style={styles.groupTitleRow}>
+              <Ionicons
+                name={GROUP_ICON[group.key]}
+                size={GROUP_ICON_SIZE}
+                color={GROUP_ACCENT[group.key]}
+              />
+              <Text style={[styles.groupTitle, { color: GROUP_ACCENT[group.key] }]}>
+                {group.label} ({group.rows.length})
+              </Text>
+            </View>
             {group.rows.map((row: ResultRow) => (
               <View key={row.playerId} style={[styles.playerRow, { borderLeftColor: GROUP_ACCENT[group.key] }]}>
                 <View style={styles.avatar} />
@@ -326,6 +338,11 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   group: {
+    gap: SPACING.sm,
+  },
+  groupTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: SPACING.sm,
   },
   groupTitle: {

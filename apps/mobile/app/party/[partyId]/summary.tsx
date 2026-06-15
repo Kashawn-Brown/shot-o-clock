@@ -174,10 +174,10 @@ export default function SummaryScreen(): React.JSX.Element {
         </View>
 
         <Text style={styles.sectionTitle}>Final Standings</Text>
-        {view.standings.map((standing, index) => {
-          // Position rank among non-removed players; removed players show no rank
-          // (they're out of contention) and a "Removed" badge instead of shots.
-          const rank = standing.isRemoved ? null : index + 1;
+        {view.standings.map((standing) => {
+          // Olympic rank from derivePartySummary (tied players share a rank);
+          // removed players carry null and show a "Removed" badge instead.
+          const rank = standing.rank;
           return (
             <View
               key={standing.playerId}

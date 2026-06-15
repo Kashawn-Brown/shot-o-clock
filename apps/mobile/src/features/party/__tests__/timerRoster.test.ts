@@ -85,19 +85,9 @@ const player = makePlayer({
 });
 
 describe('deriveTimerRoster', () => {
-  it('maps name, status, shots, and host/self flags', () => {
+  it('maps name, status, shots, and host/self flags (self floated first)', () => {
     const rows = deriveTimerRoster([host, player], 'u-guest', 'disabled');
     expect(rows).toEqual([
-      {
-        id: 'p-host',
-        displayName: 'Player',
-        status: 'active',
-        shotsCompleted: 0,
-        isHost: true,
-        isSelf: false,
-        graceAvailable: false,
-        reinstatable: false,
-      },
       {
         id: 'p-guest',
         displayName: 'Guest',
@@ -105,6 +95,16 @@ describe('deriveTimerRoster', () => {
         shotsCompleted: 3,
         isHost: false,
         isSelf: true,
+        graceAvailable: false,
+        reinstatable: false,
+      },
+      {
+        id: 'p-host',
+        displayName: 'Player',
+        status: 'active',
+        shotsCompleted: 0,
+        isHost: true,
+        isSelf: false,
         graceAvailable: false,
         reinstatable: false,
       },
@@ -118,9 +118,20 @@ describe('deriveTimerRoster', () => {
     expect(rows.map((r) => r.id)).toEqual(['p-host', 'p-guest', 'p-out']);
   });
 
-  it('preserves the server ordering (host first)', () => {
+  it('preserves the server ordering (host first) when the caller is the host', () => {
     const rows = deriveTimerRoster([host, player], 'u-host', 'disabled');
     expect(rows.map((r) => r.id)).toEqual(['p-host', 'p-guest']);
+  });
+
+  it('floats the caller above the host when the caller is a player', () => {
+    const rows = deriveTimerRoster([host, player], 'u-guest', 'disabled');
+    expect(rows.map((r) => r.id)).toEqual(['p-guest', 'p-host']);
+  });
+
+  it('floats self to the front of a larger roster, others keep server order', () => {
+    const other = makePlayer({ id: 'p-other', user_id: 'u-other', display_name: 'Other' });
+    const rows = deriveTimerRoster([host, other, player], 'u-guest', 'disabled');
+    expect(rows.map((r) => r.id)).toEqual(['p-guest', 'p-host', 'p-other']);
   });
 
   it('flags no row as self when there is no authenticated user', () => {

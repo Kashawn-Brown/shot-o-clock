@@ -189,4 +189,48 @@ describe('derivePartySummary', () => {
     expect(view.standings.find((s) => s.playerId === 'me')?.isYou).toBe(true);
     expect(view.standings.find((s) => s.playerId === 'other')?.isYou).toBe(false);
   });
+
+  it('assigns Olympic ranks — tied players share a rank, the next rank skips', () => {
+    const players = [
+      makePlayer({ id: 'a', display_name: 'Alex', total_shots_completed: 8 }),
+      makePlayer({ id: 'b', display_name: 'Bo', total_shots_completed: 8 }),
+      makePlayer({ id: 'c', display_name: 'Cy', total_shots_completed: 3 }),
+    ];
+    const view = derivePartySummary(players, null, OPTS);
+    // Two tied at the top both show #1; the next player shows #3, not #2.
+    expect(view.standings.map((s) => [s.playerId, s.rank])).toEqual([
+      ['a', 1],
+      ['b', 1],
+      ['c', 3],
+    ]);
+  });
+
+  it('puts the caller first within their tied group in their own view', () => {
+    const players = [
+      makePlayer({ id: 'a', display_name: 'Alex', total_shots_completed: 5 }),
+      makePlayer({ id: 'me', display_name: 'Zed', total_shots_completed: 5 }),
+      makePlayer({ id: 'c', display_name: 'Cy', total_shots_completed: 5 }),
+    ];
+    const view = derivePartySummary(players, 'me', OPTS);
+    // All tied → all rank 1; the caller (Zed) floats to the top despite a name
+    // that would otherwise sort last.
+    expect(view.standings.map((s) => s.playerId)).toEqual(['me', 'a', 'c']);
+    expect(view.standings.every((s) => s.rank === 1)).toBe(true);
+  });
+
+  it('gives removed players a null rank', () => {
+    const players = [
+      makePlayer({ id: 'a', display_name: 'Alex', total_shots_completed: 4 }),
+      makePlayer({
+        id: 'k',
+        display_name: 'Kit',
+        status: 'removed',
+        removed_at: '2026-06-13T01:00:00Z',
+        total_shots_completed: 9,
+      }),
+    ];
+    const view = derivePartySummary(players, null, OPTS);
+    expect(view.standings.find((s) => s.playerId === 'a')?.rank).toBe(1);
+    expect(view.standings.find((s) => s.playerId === 'k')?.rank).toBeNull();
+  });
 });

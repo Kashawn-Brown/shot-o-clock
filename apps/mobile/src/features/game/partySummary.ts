@@ -54,6 +54,9 @@ export interface SummaryStanding {
   isLeader: boolean;
   // Kicked by the host: rendered at the bottom, greyed, never a leader.
   isRemoved: boolean;
+  // Olympic/competition rank among eligible players (tied players share a rank,
+  // the next rank skips — 1,1,3). null for removed players (out of contention).
+  rank: number | null;
 }
 
 export interface PartySummaryView {
@@ -75,12 +78,13 @@ export interface PartySummaryView {
   standings: SummaryStanding[];
 }
 
-// Shots desc, then name asc — deterministic ordering for ties.
-function byShotsThenName(
-  a: { shotCount: number; displayName: string },
-  b: { shotCount: number; displayName: string },
-): number {
-  return b.shotCount - a.shotCount || a.displayName.localeCompare(b.displayName);
+// Shots desc, then the caller's own row first within a tie (so "you" sit at the
+// top of your tied group in your own view), then name asc for a deterministic
+// order among the rest. Tie order doesn't affect the shared rank below.
+function byShotsThenYouThenName(a: SummaryStanding, b: SummaryStanding): number {
+  if (b.shotCount !== a.shotCount) return b.shotCount - a.shotCount;
+  if (a.isYou !== b.isYou) return a.isYou ? -1 : 1;
+  return a.displayName.localeCompare(b.displayName);
 }
 
 export function derivePartySummary(
@@ -130,11 +134,28 @@ export function derivePartySummary(
     shotCount: player.total_shots_completed,
     isLeader: !isRemoved && hasLeaders && player.total_shots_completed === topShotCount,
     isRemoved,
+    rank: null,
+  });
+
+  // Eligible players ranked Olympic-style: each rung's rank is its position among
+  // all eligible (1-based), so a tie shares the lower rank and the next rung skips
+  // (two tied at 1 → both #1, next → #3). Computed after the you-first sort, but
+  // the rank keys off shotCount only, so intra-tie order can't change it.
+  const eligibleStandings = eligible.map((player) => toStanding(player, false)).sort(byShotsThenYouThenName);
+  let lastShotCount: number | null = null;
+  let lastRank = 0;
+  eligibleStandings.forEach((standing, index) => {
+    if (lastShotCount === null || standing.shotCount !== lastShotCount) {
+      lastRank = index + 1;
+      lastShotCount = standing.shotCount;
+    }
+    standing.rank = lastRank;
   });
 
   const standings: SummaryStanding[] = [
-    ...eligible.map((player) => toStanding(player, false)).sort(byShotsThenName),
-    ...removed.map((player) => toStanding(player, true)).sort(byShotsThenName),
+    ...eligibleStandings,
+    // Removed players stay rank null (out of contention), shown at the bottom.
+    ...removed.map((player) => toStanding(player, true)).sort(byShotsThenYouThenName),
   ];
 
   return {
