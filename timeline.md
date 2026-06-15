@@ -1,9 +1,9 @@
 # Timeline
 
 ## Current Status
-*Last updated: 2026-06-14*
+*Last updated: 2026-06-15*
 
-**MVP complete.** Phase 12 closed the hardening pass, and the full game loop — create/join, realtime lobby, server-authoritative timer, Shot O'Clock window, grace + round results, host controls, mid-game joining, final summary, and single-phone host-only mode — is built and device-verified end to end. The complete phase-by-phase build history follows below.
+**MVP complete and verified.** The full game loop — create/join, realtime lobby, server-authoritative timer, Shot O'Clock window, grace + round results, host controls, mid-game joining, final summary, and single-phone host-only mode — is built and device-verified end to end (Phases 0–12). The project is now in **pre-production**: Phases 13–16 — small fixes + polish, phone-level notifications, a basic settings screen, and polish + App Store readiness — are planned and ready to build, taking the app to App Store / Google Play submission. **Phase 13 — Small Fixes + Polish — is next.** The complete phase-by-phase build history follows below.
 
 ---
 
