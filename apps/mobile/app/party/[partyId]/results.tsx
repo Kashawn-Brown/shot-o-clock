@@ -46,12 +46,23 @@ const AUTO_ADVANCE_SECONDS = 10;
 
 const GROUP_ACCENT: Record<ResultGroupKey, string> = {
   took_shot: COLORS.success,
-  used_grace: COLORS.warning,
+  used_grace: COLORS.grace,
   skipped: COLORS.textSecondary,
   missed: COLORS.textSecondary,
   out: COLORS.danger,
   left: COLORS.textSecondary,
   kicked: COLORS.danger,
+};
+
+// Emoji shown before each section label: ✅ done, 🛡️ grace, ❌ missed/out.
+const GROUP_EMOJI: Record<ResultGroupKey, string> = {
+  took_shot: '✅',
+  used_grace: '🛡️',
+  skipped: '⏭️',
+  missed: '❌',
+  out: '❌',
+  left: '🚪',
+  kicked: '🚫',
 };
 
 // Personalised hero copy for the caller's own outcome.
@@ -228,7 +239,7 @@ export default function ResultsScreen(): React.JSX.Element {
         {view.groups.map((group) => (
           <View key={group.key} style={styles.group}>
             <Text style={[styles.groupTitle, { color: GROUP_ACCENT[group.key] }]}>
-              {group.label} ({group.rows.length})
+              {GROUP_EMOJI[group.key]} {group.label} ({group.rows.length})
             </Text>
             {group.rows.map((row: ResultRow) => (
               <View key={row.playerId} style={[styles.playerRow, { borderLeftColor: GROUP_ACCENT[group.key] }]}>

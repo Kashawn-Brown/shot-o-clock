@@ -256,7 +256,7 @@ export function RosterSheet({
             {entry.isHost ? <Text style={styles.hostPill}>Host</Text> : null}
             {entry.isSelf && !entry.isHost ? <Text style={styles.youTag}>You</Text> : null}
             {/* Grace only matters while a player is still in — don't tag an out/left row. */}
-            {!muted && entry.graceAvailable ? <Text style={styles.graceTag}>Grace</Text> : null}
+            {!muted && entry.graceAvailable ? <Text style={styles.graceTag}>🛡️ Grace</Text> : null}
             <Text style={styles.shotsTag}>
               {entry.shotsCompleted} {entry.shotsCompleted === 1 ? 'shot' : 'shots'}
             </Text>
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
   },
   graceTag: {
     fontSize: FONT_SIZE.xs,
-    color: COLORS.warning,
+    color: COLORS.grace,
   },
   shotsTag: {
     fontSize: FONT_SIZE.xs,
