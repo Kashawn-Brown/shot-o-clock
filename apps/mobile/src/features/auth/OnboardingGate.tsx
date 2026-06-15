@@ -1,8 +1,7 @@
 // Single first-launch onboarding screen: display name + the two age/terms
 // confirmations together. Renders after auth resolves and before the navigator
 // until all three are satisfied. Persistence is unchanged — the root layout wires
-// onComplete to useDisplayName.save + useConsent.confirm. No router navigation
-// here (it mounts outside the Stack), so "Sign In" is a placeholder for now.
+// onComplete to useDisplayName.save + useConsent.confirm.
 
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -12,6 +11,11 @@ import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { DISPLAY_NAME_MAX_LENGTH, isValidDisplayName } from '@/features/auth/api/displayName';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
+
+// Full accounts (sign in / register) are post-production — see plan.md Phase 17+.
+// The sign-in entry point is hidden until then (kept in place, flag-gated, so it's
+// a one-line re-enable rather than a rebuild). plan.md Phase 13.
+const SHOW_SIGN_IN = false;
 
 type OnboardingGateProps = {
   onComplete: (name: string) => void;
@@ -28,7 +32,8 @@ export function OnboardingGate({ onComplete }: OnboardingGateProps): React.JSX.E
   };
 
   const handleSignIn = (): void => {
-    // Placeholder — sign-in / full accounts are post-MVP. Intentionally a no-op.
+    // Placeholder — sign-in / full accounts are post-production (currently hidden
+    // behind SHOW_SIGN_IN). Intentionally a no-op until accounts ship.
   };
 
   return (
@@ -73,9 +78,12 @@ export function OnboardingGate({ onComplete }: OnboardingGateProps): React.JSX.E
 
       <View style={styles.footer}>
         <Button label="Continue" onPress={submit} disabled={!canContinue} />
-        <Pressable onPress={handleSignIn} accessibilityRole="button" hitSlop={SPACING.sm}>
-          <Text style={styles.signIn}>Already have an account? Sign In</Text>
-        </Pressable>
+        {/* Sign-in hidden until accounts ship (post-production). See SHOW_SIGN_IN. */}
+        {SHOW_SIGN_IN ? (
+          <Pressable onPress={handleSignIn} accessibilityRole="button" hitSlop={SPACING.sm}>
+            <Text style={styles.signIn}>Already have an account? Sign In</Text>
+          </Pressable>
+        ) : null}
       </View>
     </SafeAreaView>
   );
