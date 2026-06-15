@@ -86,10 +86,13 @@ export default function LobbyScreen(): React.JSX.Element {
   }, [session?.join_code]);
 
   // One-tap native share sheet (iMessage / WhatsApp / etc.) for the join code.
-  const handleShare = useCallback(() => {
+  // Also copies the code to the clipboard so the host has it regardless of which
+  // share target (or none) they pick.
+  const handleShare = useCallback(async () => {
     const code = session?.join_code;
     if (!code) return;
-    void shareJoinCode(session?.name, code);
+    await Clipboard.setStringAsync(code);
+    await shareJoinCode(session?.name, code);
   }, [session?.join_code, session?.name]);
 
   // The host removed us — surface why, then return home. (plan.md Phase 6.)
@@ -263,7 +266,6 @@ export default function LobbyScreen(): React.JSX.Element {
               >
                 <Text style={styles.code}>{session?.join_code}</Text>
               </Pressable>
-              <Text style={styles.codeHint} onPress={handleCopy}>Tap to copy</Text>
               <Pressable
                 onPress={handleShare}
                 accessibilityRole="button"
@@ -408,11 +410,6 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 4,
     color: COLORS.buttonFilledText,
-  },
-  codeHint: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.buttonFilledText,
-    opacity: 0.7,
   },
   shareButton: {
     flexDirection: 'row',

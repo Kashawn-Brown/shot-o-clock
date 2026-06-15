@@ -474,7 +474,6 @@ export default function TimerScreen(): React.JSX.Element {
         >
           <Pressable style={styles.popoverBackdrop} onPress={() => setJoinCodeOpen(false)}>
             <Pressable style={styles.popoverCard} onPress={() => {}}>
-              <Text style={styles.popoverLabel}>JOIN CODE</Text>
               <Text style={styles.popoverCode}>{session?.join_code}</Text>
               <Text style={styles.popoverHint}>Share this code so others can join.</Text>
               <Pressable
@@ -733,11 +732,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     alignItems: 'center',
     gap: SPACING.xs,
-  },
-  popoverLabel: {
-    fontSize: FONT_SIZE.xs,
-    letterSpacing: 1,
-    color: COLORS.textSecondary,
   },
   popoverCode: {
     fontSize: FONT_SIZE.lg,
