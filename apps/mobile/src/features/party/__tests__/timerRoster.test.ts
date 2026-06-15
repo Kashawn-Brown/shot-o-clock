@@ -229,16 +229,40 @@ describe('deriveTimerRoster', () => {
     expect(rows[0].reinstatable).toBe(true);
   });
 
-  it('dims a pending self-out (not yet finalized, out_round_number null)', () => {
-    const selfOut = makePlayer({
-      id: 'p-s',
-      user_id: 'u-s',
-      status: 'out',
-      out_reason: 'self_opted_out',
-      out_round_number: null,
-    });
-    const rows = deriveTimerRoster([selfOut], null, 'disabled', [], 2);
+  it('dims a pending self-out this round (active row + a current-round self_out outcome)', () => {
+    // The realistic not-yet-finalized shape: the player row is still active, but the
+    // current round carries their self_out outcome (shown as Out via the override).
+    const pending = makePlayer({ id: 'p-s', user_id: 'u-s', status: 'active' });
+    const rows = deriveTimerRoster([pending], null, 'disabled', [selfOutOutcome('p-s')], 2);
+    expect(rows[0].status).toBe('out');
     expect(rows[0].reinstatable).toBe(false);
+  });
+
+  it('keeps Reinstate full weight for a grace-used-then-missed elimination, even that round', () => {
+    // Used grace earlier, then missed this round → out via missed_after_grace in the
+    // current round. Not a self-out, so the host can undo it at full weight.
+    const missedAfterGrace = makePlayer({
+      id: 'p-m',
+      user_id: 'u-m',
+      status: 'out',
+      out_reason: 'missed_after_grace',
+      out_round_number: 5,
+      used_grace: true,
+    });
+    const rows = deriveTimerRoster([missedAfterGrace], null, 'enabled', [], 5);
+    expect(rows[0].reinstatable).toBe(true);
+  });
+
+  it('keeps Reinstate full weight for a plain missed-out elimination', () => {
+    const missed = makePlayer({
+      id: 'p-x',
+      user_id: 'u-x',
+      status: 'out',
+      out_reason: 'missed_round',
+      out_round_number: 3,
+    });
+    const rows = deriveTimerRoster([missed], null, 'disabled', [], 3);
+    expect(rows[0].reinstatable).toBe(true);
   });
 
   it('marks a rejoined-after-out player reinstatable even on a self-out', () => {
