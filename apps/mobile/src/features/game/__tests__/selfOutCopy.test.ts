@@ -27,15 +27,16 @@ describe('selfOutCopy', () => {
   });
 
   describe('elimination on, grace in hand', () => {
-    it('labels the action "Skip this shot", confirms, and mentions grace', () => {
+    it('labels the action "Use Grace", confirms, and mentions grace', () => {
       const copy = selfOutCopy({
         eliminationEnabled: true,
         graceMode: 'enabled',
         usedGrace: false,
         selfOutRecorded: false,
       });
-      expect(copy.label).toBe('Skip this shot');
-      expect(copy.confirmButton).toBe('Skip');
+      expect(copy.label).toBe('Use Grace');
+      expect(copy.confirmButton).toBe('Use Grace');
+      expect(copy.confirmTitle).toBe('Use your grace?');
       expect(copy.requiresConfirm).toBe(true);
       expect(copy.confirmMessage).toContain('grace');
     });
@@ -68,7 +69,7 @@ describe('selfOutCopy', () => {
   });
 
   describe('once recorded', () => {
-    it('reads "Skipped" when the action was a skip', () => {
+    it('reads "Skipped" when the action was a no-consequence skip', () => {
       const copy = selfOutCopy({
         eliminationEnabled: false,
         graceMode: 'disabled',
@@ -76,6 +77,16 @@ describe('selfOutCopy', () => {
         selfOutRecorded: true,
       });
       expect(copy.label).toBe('Skipped');
+    });
+
+    it('reads "Grace used" when the action consumed grace', () => {
+      const copy = selfOutCopy({
+        eliminationEnabled: true,
+        graceMode: 'enabled',
+        usedGrace: false,
+        selfOutRecorded: true,
+      });
+      expect(copy.label).toBe('Grace used');
     });
 
     it('reads "You\'re out" when the action was a permanent out', () => {
