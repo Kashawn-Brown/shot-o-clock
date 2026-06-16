@@ -45,7 +45,7 @@ export function NotificationPermissionGate({
         <Text style={styles.title}>{"Don't miss Shot O'Clock"}</Text>
         <Text style={styles.copy}>
           {
-            "Turn on notifications and we'll alert you the moment Shot O'Clock strikes — even when the app is in the background or your phone is locked."
+            "Get alerted the moment it's time to take your shot — even when your phone is locked."
           }
         </Text>
         <Text style={styles.subcopy}>
