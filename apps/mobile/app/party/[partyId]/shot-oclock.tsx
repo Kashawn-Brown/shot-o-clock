@@ -73,17 +73,41 @@ export default function ShotOClockScreen(): React.JSX.Element {
     setActionError(null);
   }, [roundId]);
 
-  // Strong haptic pulse the instant the shot window opens — the screen only mounts
+  // Strong haptic burst the instant the shot window opens — the screen only mounts
   // once the phase is already 'shot_window', so this fires on entry. Keyed by round
-  // id and guarded by a ref so it pulses exactly once per window (not on re-renders),
-  // and re-arms for the next round's window. Fire-and-forget; impactAsync is a no-op
-  // on devices without a haptic engine, and the catch swallows any platform error.
+  // id and guarded by a ref so it bursts exactly once per window (not on re-renders),
+  // and re-arms for the next round's window. The burst is three dense runs of Heavy
+  // impacts with a pause between them (see HAPTIC_BURSTS — tuned to read as a
+  // sustained alarm, not a tap), awaited in sequence so the spacing holds. Fire-and-
+  // forget; impactAsync is a no-op without a haptic engine, the catch swallows any
+  // platform error, and the cleanup flag stops a partial burst if the window closes
+  // mid-sequence.
   const hapticRoundRef = useRef<string | null>(null);
   useEffect(() => {
     if (status !== 'ready' || session?.current_phase !== 'shot_window' || !roundId) return;
     if (hapticRoundRef.current === roundId) return;
     hapticRoundRef.current = roundId;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+
+    let cancelled = false;
+    const burst = async (): Promise<void> => {
+      for (let b = 0; b < HAPTIC_BURSTS.length; b += 1) {
+        const count = HAPTIC_BURSTS[b];
+        for (let i = 0; i < count; i += 1) {
+          if (cancelled) return;
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+          if (i < count - 1) {
+            await new Promise((resolve) => setTimeout(resolve, HAPTIC_IMPACT_GAP_MS));
+          }
+        }
+        if (b < HAPTIC_BURSTS.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, HAPTIC_BURST_PAUSE_MS));
+        }
+      }
+    };
+    void burst();
+    return () => {
+      cancelled = true;
+    };
   }, [status, session?.current_phase, roundId]);
 
   const isActive = me?.status === 'active';
@@ -329,6 +353,13 @@ export default function ShotOClockScreen(): React.JSX.Element {
     </SafeAreaView>
   );
 }
+
+// Shot-window-open haptic burst: three bursts of Heavy impacts with a pause between
+// them, so it reads as a sustained alarm rather than a single tap (expo-haptics has
+// no continuous-buzz API, so a dense run of transients is the closest we can get).
+const HAPTIC_BURSTS = [40, 40, 60]; // Heavy impacts per burst
+const HAPTIC_IMPACT_GAP_MS = 15; // between impacts within a burst
+const HAPTIC_BURST_PAUSE_MS = 150; // between bursts
 
 // Matches the timer ring size for visual consistency across the two screens.
 const RING_SIZE = 280;
