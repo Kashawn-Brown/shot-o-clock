@@ -310,6 +310,14 @@ export default function LobbyScreen(): React.JSX.Element {
                 </View>
               );
             })}
+
+            {/* Host alone — point them at the join-code card above rather than
+                leaving the list looking empty / like nothing happened. */}
+            {isHost && roster.length === 1 ? (
+              <Text style={styles.emptyHint}>
+                No one&apos;s joined yet — share the code above to invite players.
+              </Text>
+            ) : null}
           </ScrollView>
 
           <View style={styles.footer}>
@@ -438,6 +446,13 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: SPACING.lg,
     gap: SPACING.sm,
+  },
+  emptyHint: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
   },
   playerRow: {
     flexDirection: 'row',

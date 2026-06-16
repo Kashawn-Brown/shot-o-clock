@@ -6,8 +6,9 @@
 
 import { router } from 'expo-router';
 import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '@/components/ui/Button';
 import { useActiveParty } from '@/features/party/useActiveParty';
@@ -56,6 +57,19 @@ export default function HomeScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.screen}>
+      {/* Top-right settings gear — same pattern as the timer screen. Tappable but
+          a no-op for now; wired to the Settings route in Phase 15. */}
+      <View style={styles.header}>
+        <Pressable
+          onPress={() => {}}
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+          hitSlop={8}
+        >
+          <Ionicons name="settings-outline" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
+        </Pressable>
+      </View>
+
       <View style={styles.hero}>
         <Text style={styles.title}>{"Shot O'Clock"}</Text>
         <View style={styles.logo}>
@@ -76,12 +90,20 @@ export default function HomeScreen(): React.JSX.Element {
   );
 }
 
+const HEADER_ICON_SIZE = 22; // settings gear, matching the timer screen
+const HOME_TITLE_FONT_SIZE = 44; // launch hero title — larger than FONT_SIZE.lg
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
     paddingHorizontal: SPACING.lg,
     justifyContent: 'space-between',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingTop: SPACING.sm,
   },
   loading: {
     flex: 1,
@@ -95,9 +117,10 @@ const styles = StyleSheet.create({
     gap: SPACING.lg,
   },
   title: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: HOME_TITLE_FONT_SIZE,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
+    textAlign: 'center',
   },
   logo: {
     width: 96,
