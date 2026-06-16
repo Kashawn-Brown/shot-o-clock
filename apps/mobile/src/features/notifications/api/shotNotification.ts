@@ -6,9 +6,18 @@
 // a JS timer can't reach. The client never owns the timer (CLAUDE.md §2.1): this only
 // mirrors the server's phase_ends_at into an OS alarm and tears it down on any change.
 
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+// Submodule imports (not the 'expo-notifications' barrel) so the push-token
+// auto-registration side effect never loads — see api/expoNotifications.ts.
+import {
+  AndroidImportance,
+  cancelScheduledNotificationAsync,
+  scheduleNotificationAsync,
+  SchedulableTriggerInputTypes,
+  setNotificationChannelAsync,
+  setNotificationHandler,
+} from '@/features/notifications/api/expoNotifications';
 import { getNotificationPermission } from '@/features/notifications/api/notificationPermission';
 import {
   shotNotificationTrigger,
@@ -39,7 +48,7 @@ export async function configureNotifications(): Promise<void> {
   // + haptic, so presenting a banner over it would double the alert. The handler runs
   // only while the app is in the foreground; when it's backgrounded/suspended the OS
   // presents the scheduled notification normally (banner + sound).
-  Notifications.setNotificationHandler({
+  setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: false,
       shouldShowList: false,
@@ -51,9 +60,9 @@ export async function configureNotifications(): Promise<void> {
   // Android needs a high-importance channel or the notification makes no sound and
   // won't pop as a heads-up. No-op on iOS.
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+    await setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
       name: "Shot O'Clock",
-      importance: Notifications.AndroidImportance.MAX,
+      importance: AndroidImportance.MAX,
       sound: 'default',
       vibrationPattern: [0, 250, 250, 250],
     }).catch(() => {});
@@ -84,7 +93,7 @@ export async function scheduleShotNotification(
   // schedule a now-stale notification.
   if (generation !== scheduleGeneration) return;
 
-  await Notifications.scheduleNotificationAsync({
+  await scheduleNotificationAsync({
     identifier: SHOT_NOTIFICATION_ID,
     content: {
       title: "Shot O'Clock! 🥃",
@@ -92,7 +101,7 @@ export async function scheduleShotNotification(
       sound: 'default',
     },
     trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      type: SchedulableTriggerInputTypes.DATE,
       date: decision.fireAtMs,
       channelId: ANDROID_CHANNEL_ID,
     },
@@ -104,5 +113,5 @@ export async function cancelShotNotification(): Promise<void> {
   // Bump the generation so an in-flight schedule that resumes after this cancel
   // is recognized as superseded.
   scheduleGeneration += 1;
-  await Notifications.cancelScheduledNotificationAsync(SHOT_NOTIFICATION_ID).catch(() => {});
+  await cancelScheduledNotificationAsync(SHOT_NOTIFICATION_ID).catch(() => {});
 }

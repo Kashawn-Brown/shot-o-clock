@@ -1,6 +1,6 @@
-import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 
+import * as ExpoNotifications from '@/features/notifications/api/expoNotifications';
 import {
   getNotificationPermission,
   hasPromptedForNotifications,
@@ -21,15 +21,18 @@ jest.mock('expo-secure-store', () => {
   };
 });
 
-jest.mock('expo-notifications', () => ({
+// Mock our submodule wrapper (the seam the code imports from) rather than the
+// 'expo-notifications' barrel — the barrel is intentionally never imported (it runs
+// the push auto-registration side effect; see api/expoNotifications.ts).
+jest.mock('@/features/notifications/api/expoNotifications', () => ({
   PermissionStatus: { GRANTED: 'granted', DENIED: 'denied', UNDETERMINED: 'undetermined' },
   getPermissionsAsync: jest.fn(),
   requestPermissionsAsync: jest.fn(),
 }));
 
 const mockStore = (SecureStore as unknown as { __store: Map<string, string> }).__store;
-const mockGet = Notifications.getPermissionsAsync as jest.Mock;
-const mockRequest = Notifications.requestPermissionsAsync as jest.Mock;
+const mockGet = ExpoNotifications.getPermissionsAsync as jest.Mock;
+const mockRequest = ExpoNotifications.requestPermissionsAsync as jest.Mock;
 
 beforeEach(() => {
   mockStore.clear();

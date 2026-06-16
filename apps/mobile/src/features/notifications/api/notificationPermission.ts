@@ -13,19 +13,26 @@
 // OS and is read via getNotificationPermission). The per-player preference rows
 // (party_player_notification_settings) and the preference UI are Phase 15.
 
-import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
+
+// Submodule imports (not the 'expo-notifications' barrel) so the push-token
+// auto-registration side effect never loads — see api/expoNotifications.ts.
+import {
+  getPermissionsAsync,
+  PermissionStatus,
+  requestPermissionsAsync,
+} from '@/features/notifications/api/expoNotifications';
 
 const PROMPTED_KEY = 'shotoclock.notifications.prompted';
 
 /** Cross-platform permission state, normalized to a simple tri-state. */
 export type NotificationPermission = 'granted' | 'denied' | 'undetermined';
 
-function normalize(status: Notifications.PermissionStatus): NotificationPermission {
+function normalize(status: PermissionStatus): NotificationPermission {
   switch (status) {
-    case Notifications.PermissionStatus.GRANTED:
+    case PermissionStatus.GRANTED:
       return 'granted';
-    case Notifications.PermissionStatus.DENIED:
+    case PermissionStatus.DENIED:
       return 'denied';
     default:
       return 'undetermined';
@@ -45,7 +52,7 @@ export async function recordNotificationsPrompted(): Promise<void> {
 
 /** Current OS-level permission without prompting. */
 export async function getNotificationPermission(): Promise<NotificationPermission> {
-  const { status } = await Notifications.getPermissionsAsync();
+  const { status } = await getPermissionsAsync();
   return normalize(status);
 }
 
@@ -55,6 +62,6 @@ export async function getNotificationPermission(): Promise<NotificationPermissio
  * priming screen's "Enable" button), never silently on launch.
  */
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
-  const { status } = await Notifications.requestPermissionsAsync();
+  const { status } = await requestPermissionsAsync();
   return normalize(status);
 }
