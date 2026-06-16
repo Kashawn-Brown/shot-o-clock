@@ -42,14 +42,14 @@ export function NotificationPermissionGate({
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.body}>
-        <Text style={styles.title}>{"Don't miss Shot O'Clock"}</Text>
+        <Text style={styles.title}>{"Don't miss Shot O'Clock!"}</Text>
         <Text style={styles.copy}>
           {
-            "Get alerted the moment it's time to take your shot — even when your phone is locked."
+            "Get alerted the moment it's time to take your shot."
           }
         </Text>
         <Text style={styles.subcopy}>
-          {'You can change this anytime in Settings. It only affects your own phone.'}
+          {'You can change this anytime in Settings.'}
         </Text>
       </View>
 
@@ -80,16 +80,19 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.lg,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
+    textAlign: 'center',
   },
   copy: {
     fontSize: FONT_SIZE.md,
     color: COLORS.textPrimary,
     lineHeight: 24,
+    textAlign: 'center',
   },
   subcopy: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.textSecondary,
     lineHeight: 20,
+    textAlign: 'center',
   },
   footer: {
     gap: SPACING.md,
