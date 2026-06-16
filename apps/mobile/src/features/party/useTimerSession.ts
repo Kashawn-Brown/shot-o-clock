@@ -22,6 +22,7 @@ import { getRoundOutcomes } from '@/features/game/api/roundOutcomes';
 import { useAdvancePhase } from '@/features/game/useAdvancePhase';
 import { syncServerTime } from '@/features/game/syncServerTime';
 import { useShotNotification } from '@/features/notifications/useShotNotification';
+import { useForegroundEffect } from '@/features/party/useForegroundEffect';
 import { getPartyState } from '@/features/party/api/partyState';
 import { rpcErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
@@ -97,6 +98,9 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [membershipLost, setMembershipLost] = useState(false);
   const [partyEnded, setPartyEnded] = useState(false);
+  // Bumped on a foreground resume to force the realtime channel to tear down and
+  // resubscribe (the OS may have killed the socket while backgrounded).
+  const [realtimeNonce, setRealtimeNonce] = useState(0);
 
   // The silent refresh must not depend on userId (it would re-create on identity
   // change); read the latest off a ref to derive `me` instead.
@@ -251,6 +255,20 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   // server's phase_ends_at, never owns the timer).
   useShotNotification(session);
 
+  // On a foreground resume, realtime delivered nothing while we were suspended and
+  // the socket may be dead — so the screen would render stale state (a frozen
+  // countdown) until the old phase_ends_at expired and the advance poll refetched.
+  // Re-align the clock, re-pull the authoritative snapshot + outcomes, and bump the
+  // realtime nonce to resubscribe — so re-entry reflects live state immediately.
+  useForegroundEffect(
+    useCallback(() => {
+      void syncServerTime();
+      refreshRef.current();
+      refreshOutcomeRef.current();
+      setRealtimeNonce((nonce) => nonce + 1);
+    }, []),
+  );
+
   // Realtime sync for the live game state. One channel carries two streams:
   //   - party_sessions UPDATE: the advance poll only re-pulls while the timer is
   //     active and due, so a host control that doesn't move phase_ends_at — pause
@@ -316,7 +334,8 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [partyId]);
+    // realtimeNonce bumps on foreground resume to force a fresh channel (see above).
+  }, [partyId, realtimeNonce]);
 
   return {
     status,
