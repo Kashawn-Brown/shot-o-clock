@@ -21,6 +21,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { getRoundOutcomes } from '@/features/game/api/roundOutcomes';
 import { useAdvancePhase } from '@/features/game/useAdvancePhase';
 import { syncServerTime } from '@/features/game/syncServerTime';
+import { useShotNotification } from '@/features/notifications/useShotNotification';
 import { getPartyState } from '@/features/party/api/partyState';
 import { rpcErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
@@ -130,7 +131,8 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
         if (result.error_code === 'SESSION_NOT_FOUND') setMembershipLost(true);
         return;
       }
-      const mine = result.data.players.find((player) => player.user_id === userIdRef.current) ?? null;
+      const mine =
+        result.data.players.find((player) => player.user_id === userIdRef.current) ?? null;
       // Defensive: if the snapshot ever returns our own row marked removed (rather
       // than hiding the session), treat it the same as a membership loss.
       if (mine?.status === 'removed') {
@@ -242,6 +244,12 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     isActive: session?.status === 'active',
     onAdvance: refresh,
   });
+
+  // Schedule the local Shot O'Clock notification at the upcoming shot window, so it
+  // fires even when the app is backgrounded / the phone is locked. Self-cancels on
+  // pause / add-time / window-open / end and on unmount (Phase 14, §2.1 — mirrors the
+  // server's phase_ends_at, never owns the timer).
+  useShotNotification(session);
 
   // Realtime sync for the live game state. One channel carries two streams:
   //   - party_sessions UPDATE: the advance poll only re-pulls while the timer is

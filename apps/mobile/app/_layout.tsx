@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -8,6 +9,7 @@ import { OnboardingGate } from '@/features/auth/OnboardingGate';
 import { useConsent } from '@/features/auth/useConsent';
 import { useDisplayName } from '@/features/auth/useDisplayName';
 import { NotificationPermissionGate } from '@/features/notifications/NotificationPermissionGate';
+import { configureNotifications } from '@/features/notifications/api/shotNotification';
 import { useNotificationPrompt } from '@/features/notifications/useNotificationPrompt';
 import { COLORS, FONT_SIZE, SPACING } from '@/styles/tokens';
 
@@ -74,6 +76,12 @@ function RootNavigator(): React.JSX.Element {
 // match the wireframes. SafeAreaProvider backs the SafeAreaView used by the
 // screens (the non-deprecated one from react-native-safe-area-context).
 export default function RootLayout(): React.JSX.Element {
+  // Install the notification handler + Android channel once at startup, before any
+  // scheduled Shot O'Clock notification can fire (Phase 14).
+  useEffect(() => {
+    void configureNotifications();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
