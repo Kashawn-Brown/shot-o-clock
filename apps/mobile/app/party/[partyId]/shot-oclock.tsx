@@ -23,6 +23,7 @@
 // from the timer screen. useGameExit is still mounted only for its `leaving` guard
 // on the phase-routing effects (so an in-flight exit elsewhere doesn't re-route).
 
+import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -71,6 +72,19 @@ export default function ShotOClockScreen(): React.JSX.Element {
     setPendingAction(null);
     setActionError(null);
   }, [roundId]);
+
+  // Strong haptic pulse the instant the shot window opens — the screen only mounts
+  // once the phase is already 'shot_window', so this fires on entry. Keyed by round
+  // id and guarded by a ref so it pulses exactly once per window (not on re-renders),
+  // and re-arms for the next round's window. Fire-and-forget; impactAsync is a no-op
+  // on devices without a haptic engine, and the catch swallows any platform error.
+  const hapticRoundRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (status !== 'ready' || session?.current_phase !== 'shot_window' || !roundId) return;
+    if (hapticRoundRef.current === roundId) return;
+    hapticRoundRef.current = roundId;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+  }, [status, session?.current_phase, roundId]);
 
   const isActive = me?.status === 'active';
   const isOut = me?.status === 'out';
