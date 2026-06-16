@@ -23,6 +23,7 @@
 // from the timer screen. useGameExit is still mounted only for its `leaving` guard
 // on the phase-routing effects (so an in-flight exit elsewhere doesn't re-route).
 
+import { useAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -58,6 +59,13 @@ export default function ShotOClockScreen(): React.JSX.Element {
     refreshOutcome,
   } = useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
+
+  // Shot-window alert sound (placeholder, CC0 — see assets/sounds/CREDITS.md).
+  // Plays once when the window opens, alongside the haptic. Foreground only and
+  // respects the device silent switch — no playsInSilentMode is set (sound prefs
+  // land in Phase 15). The player is recreated per mount; the screen mounts fresh
+  // for each round's window, so it starts from the top each time.
+  const shotSound = useAudioPlayer(require('@/assets/sounds/shot-oclock-placeholder.mp3'));
   const { leaving } = useGameExit(partyId);
 
   // Optimistic action: set on tap for instant feedback, reconciled when myOutcome
@@ -88,6 +96,11 @@ export default function ShotOClockScreen(): React.JSX.Element {
     if (hapticRoundRef.current === roundId) return;
     hapticRoundRef.current = roundId;
 
+    // Alert sound fires on the same trigger as the haptic (fresh player per window,
+    // so play() starts from the top). Fire-and-forget; a no-op if the asset isn't
+    // ready or the device is on silent.
+    shotSound.play();
+
     let cancelled = false;
     const burst = async (): Promise<void> => {
       for (let b = 0; b < HAPTIC_BURSTS.length; b += 1) {
@@ -108,7 +121,7 @@ export default function ShotOClockScreen(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [status, session?.current_phase, roundId]);
+  }, [status, session?.current_phase, roundId, shotSound]);
 
   const isActive = me?.status === 'active';
   const isOut = me?.status === 'out';
