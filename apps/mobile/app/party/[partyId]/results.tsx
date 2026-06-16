@@ -28,6 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { getRoundIdByNumber } from '@/features/game/api/roundByNumber';
 import { getRoundWindow } from '@/features/game/api/roundWindow';
 import {
   deriveRoundResults,
@@ -99,15 +100,51 @@ export default function ResultsScreen(): React.JSX.Element {
   const isReview = review === '1';
   const isHost = me?.permission_role === 'host';
 
-  const shownRoundId = roundId ?? currentRound?.id;
   const shownRoundNumber =
-    roundNumber ?? (currentRound?.round_number != null ? String(currentRound.round_number) : undefined);
+    roundNumber ??
+    (currentRound?.round_number != null ? String(currentRound.round_number) : undefined);
+
+  // Round id resolution. Priority: an explicit roundId param (the normal
+  // shot-oclock → results hand-off) > a roundNumber param resolved to its id (the
+  // reconnect recap and the timer's "Round N Results" button, which know the number
+  // but not the id) > the current round (the halt, where no param is passed).
+  const needsLookup =
+    !roundId &&
+    roundNumber != null &&
+    currentRound?.round_number != null &&
+    Number(roundNumber) !== currentRound.round_number;
+  // undefined while looking up; null when not found — both keep shownRoundId off the
+  // current round so we never flash the wrong round's (empty) outcomes.
+  const [lookedUpRoundId, setLookedUpRoundId] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!needsLookup || !partyId || roundNumber == null) {
+      setLookedUpRoundId(undefined);
+      return;
+    }
+    let active = true;
+    setLookedUpRoundId(undefined);
+    getRoundIdByNumber(partyId, Number(roundNumber))
+      .then((id) => {
+        if (active) setLookedUpRoundId(id);
+      })
+      .catch(() => {
+        if (active) setLookedUpRoundId(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [needsLookup, partyId, roundNumber]);
+
+  const shownRoundId = roundId ?? (needsLookup ? (lookedUpRoundId ?? undefined) : currentRound?.id);
 
   const { outcomes } = useRoundOutcomes(partyId, shownRoundId);
 
   // The shown round's window, so Left / Kicked are scoped to the round they
   // happened in (they don't leak into later rounds' results).
-  const [roundWindow, setRoundWindow] = useState<RoundWindow>({ startedAt: null, completedAt: null });
+  const [roundWindow, setRoundWindow] = useState<RoundWindow>({
+    startedAt: null,
+    completedAt: null,
+  });
   useEffect(() => {
     if (!shownRoundId) {
       setRoundWindow({ startedAt: null, completedAt: null });
@@ -223,7 +260,9 @@ export default function ResultsScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Text style={styles.title}>{shownRoundNumber ? `Round ${shownRoundNumber} Results` : 'Round Results'}</Text>
+        <Text style={styles.title}>
+          {shownRoundNumber ? `Round ${shownRoundNumber} Results` : 'Round Results'}
+        </Text>
         <Text style={styles.subtitle}>
           {view.stillIn} still in
           {view.outThisRound > 0 ? ` · ${view.outThisRound} out this round` : ''}
@@ -254,7 +293,10 @@ export default function ResultsScreen(): React.JSX.Element {
               </Text>
             </View>
             {group.rows.map((row: ResultRow) => (
-              <View key={row.playerId} style={[styles.playerRow, { borderLeftColor: GROUP_ACCENT[group.key] }]}>
+              <View
+                key={row.playerId}
+                style={[styles.playerRow, { borderLeftColor: GROUP_ACCENT[group.key] }]}
+              >
                 <View style={styles.avatar} />
                 <View style={styles.playerNameGroup}>
                   <Text style={styles.playerName}>

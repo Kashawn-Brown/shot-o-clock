@@ -94,9 +94,7 @@ export default function TimerScreen(): React.JSX.Element {
   // a stale deadline — show the frozen paused_remaining_seconds instead, on every
   // device (the realtime session sub delivers the paused status). useCountdown
   // stays pure; we just pick which value to display.
-  const remainingMs = isPaused
-    ? (session?.paused_remaining_seconds ?? 0) * 1000
-    : liveRemainingMs;
+  const remainingMs = isPaused ? (session?.paused_remaining_seconds ?? 0) * 1000 : liveRemainingMs;
 
   // Host timer controls (pause/resume, add time) — integrated onto the ring, not a
   // sheet. One in-flight lock across them; add_time isn't idempotent, so the lock
@@ -137,25 +135,30 @@ export default function TimerScreen(): React.JSX.Element {
     [partyId, controlBusy, refreshSession],
   );
 
-  // "Round N Results" button: only when the handed-over round is genuinely the one
-  // just before this countdown (current_round_number - 1). This self-updates each
-  // cycle — the timer remounts per round with a fresh lastRound* — and stays hidden
-  // on round 1 and on a reconnect that never passed through results.
+  // "Round N Results" button → the previous round's recap (current_round_number - 1).
+  // Always available once a prior round exists, including after a reconnect that
+  // handed over no lastRound* params — results resolves the id from the number then.
+  // Hidden on round 1 (no previous round) and in single-phone mode.
   const lastRoundNum = lastRoundNumber ? Number(lastRoundNumber) : null;
-  const showLastResults =
-    !hostOnly &&
-    !!lastRoundId &&
-    lastRoundNum !== null &&
-    session?.current_round_number != null &&
-    lastRoundNum === session.current_round_number - 1;
+  const prevRoundNumber =
+    session?.current_round_number != null ? session.current_round_number - 1 : null;
+  const showLastResults = !hostOnly && prevRoundNumber !== null && prevRoundNumber >= 1;
 
   const viewLastResults = useCallback(() => {
-    if (!partyId || !lastRoundId) return;
+    if (!partyId || prevRoundNumber === null) return;
+    // Fast path: reuse the handed-over roundId when it IS the previous round; else
+    // pass just the number and let the results screen resolve the id.
+    const fastRoundId = lastRoundId && lastRoundNum === prevRoundNumber ? lastRoundId : undefined;
     router.push({
       pathname: '/party/[partyId]/results',
-      params: { partyId, roundId: lastRoundId, roundNumber: lastRoundNumber ?? '', review: '1' },
+      params: {
+        partyId,
+        roundNumber: String(prevRoundNumber),
+        review: '1',
+        ...(fastRoundId ? { roundId: fastRoundId } : {}),
+      },
     });
-  }, [partyId, lastRoundId, lastRoundNumber]);
+  }, [partyId, prevRoundNumber, lastRoundId, lastRoundNum]);
 
   // I'm Out during the countdown — mark_self_out is legal in countdown or
   // shot_window (rpc-contracts §7.3). Opting out here records a self_out for the
@@ -304,7 +307,7 @@ export default function TimerScreen(): React.JSX.Element {
             style={styles.lastResultsButton}
           >
             <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textSecondary} />
-            <Text style={styles.lastResultsText}>Round {lastRoundNumber} Results</Text>
+            <Text style={styles.lastResultsText}>Round {prevRoundNumber} Results</Text>
           </Pressable>
         ) : (
           <View />
@@ -485,7 +488,11 @@ export default function TimerScreen(): React.JSX.Element {
                 style={styles.popoverShareButton}
                 hitSlop={8}
               >
-                <Ionicons name="share-outline" size={POPOVER_SHARE_ICON_SIZE} color={COLORS.buttonFilledText} />
+                <Ionicons
+                  name="share-outline"
+                  size={POPOVER_SHARE_ICON_SIZE}
+                  color={COLORS.buttonFilledText}
+                />
                 <Text style={styles.popoverShareText}>Share code</Text>
               </Pressable>
             </Pressable>
