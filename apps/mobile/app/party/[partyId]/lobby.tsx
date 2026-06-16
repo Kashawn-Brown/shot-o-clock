@@ -38,6 +38,7 @@ import { leaveParty } from '@/features/party/api/leaveParty';
 import { startGame } from '@/features/party/api/startGame';
 import type { LobbyRosterEntry } from '@/features/party/lobbyView';
 import { routeForPhase } from '@/features/party/reconnectRoute';
+import { shareJoinCode } from '@/features/party/shareJoinCode';
 import { useLobby } from '@/features/party/useLobby';
 import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
@@ -83,6 +84,16 @@ export default function LobbyScreen(): React.JSX.Element {
     // Toast lingers ~2s — long enough to read, short enough to feel transient.
     copyTimer.current = setTimeout(() => setCopied(false), 2000);
   }, [session?.join_code]);
+
+  // One-tap native share sheet (iMessage / WhatsApp / etc.) for the join code.
+  // Also copies the code to the clipboard so the host has it regardless of which
+  // share target (or none) they pick.
+  const handleShare = useCallback(async () => {
+    const code = session?.join_code;
+    if (!code) return;
+    await Clipboard.setStringAsync(code);
+    await shareJoinCode(session?.name, code);
+  }, [session?.join_code, session?.name]);
 
   // The host removed us — surface why, then return home. (plan.md Phase 6.)
   useEffect(() => {
@@ -255,7 +266,16 @@ export default function LobbyScreen(): React.JSX.Element {
               >
                 <Text style={styles.code}>{session?.join_code}</Text>
               </Pressable>
-              <Text style={styles.codeHint} onPress={handleCopy}>Tap to copy</Text>
+              <Pressable
+                onPress={handleShare}
+                accessibilityRole="button"
+                accessibilityLabel="Share join code"
+                style={styles.shareButton}
+                hitSlop={8}
+              >
+                <Ionicons name="share-outline" size={SHARE_ICON_SIZE} color={COLORS.buttonFilledText} />
+                <Text style={styles.shareText}>Share code</Text>
+              </Pressable>
             </View>
           ) : null}
 
@@ -290,6 +310,14 @@ export default function LobbyScreen(): React.JSX.Element {
                 </View>
               );
             })}
+
+            {/* Host alone — point them at the join-code card above rather than
+                leaving the list looking empty / like nothing happened. */}
+            {isHost && roster.length === 1 ? (
+              <Text style={styles.emptyHint}>
+                No one&apos;s joined yet — share the code above to invite players.
+              </Text>
+            ) : null}
           </ScrollView>
 
           <View style={styles.footer}>
@@ -332,6 +360,7 @@ export default function LobbyScreen(): React.JSX.Element {
 const TOAST_BOTTOM_OFFSET = 150;
 
 const HEADER_ICON_SIZE = 22; // header back-arrow + settings-gear icons
+const SHARE_ICON_SIZE = 16; // join-code "Share code" button icon
 
 const styles = StyleSheet.create({
   screen: {
@@ -390,10 +419,21 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
     color: COLORS.buttonFilledText,
   },
-  codeHint: {
-    fontSize: FONT_SIZE.xs,
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginTop: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.buttonFilledText,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+  },
+  shareText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.medium,
     color: COLORS.buttonFilledText,
-    opacity: 0.7,
   },
   sectionTitle: {
     fontSize: FONT_SIZE.md,
@@ -406,6 +446,13 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: SPACING.lg,
     gap: SPACING.sm,
+  },
+  emptyHint: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
   },
   playerRow: {
     flexDirection: 'row',

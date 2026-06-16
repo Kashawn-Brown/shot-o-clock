@@ -85,19 +85,9 @@ const player = makePlayer({
 });
 
 describe('deriveTimerRoster', () => {
-  it('maps name, status, shots, and host/self flags', () => {
+  it('maps name, status, shots, and host/self flags (self floated first)', () => {
     const rows = deriveTimerRoster([host, player], 'u-guest', 'disabled');
     expect(rows).toEqual([
-      {
-        id: 'p-host',
-        displayName: 'Player',
-        status: 'active',
-        shotsCompleted: 0,
-        isHost: true,
-        isSelf: false,
-        graceAvailable: false,
-        reinstatable: false,
-      },
       {
         id: 'p-guest',
         displayName: 'Guest',
@@ -105,6 +95,16 @@ describe('deriveTimerRoster', () => {
         shotsCompleted: 3,
         isHost: false,
         isSelf: true,
+        graceAvailable: false,
+        reinstatable: false,
+      },
+      {
+        id: 'p-host',
+        displayName: 'Player',
+        status: 'active',
+        shotsCompleted: 0,
+        isHost: true,
+        isSelf: false,
         graceAvailable: false,
         reinstatable: false,
       },
@@ -118,9 +118,20 @@ describe('deriveTimerRoster', () => {
     expect(rows.map((r) => r.id)).toEqual(['p-host', 'p-guest', 'p-out']);
   });
 
-  it('preserves the server ordering (host first)', () => {
+  it('preserves the server ordering (host first) when the caller is the host', () => {
     const rows = deriveTimerRoster([host, player], 'u-host', 'disabled');
     expect(rows.map((r) => r.id)).toEqual(['p-host', 'p-guest']);
+  });
+
+  it('floats the caller above the host when the caller is a player', () => {
+    const rows = deriveTimerRoster([host, player], 'u-guest', 'disabled');
+    expect(rows.map((r) => r.id)).toEqual(['p-guest', 'p-host']);
+  });
+
+  it('floats self to the front of a larger roster, others keep server order', () => {
+    const other = makePlayer({ id: 'p-other', user_id: 'u-other', display_name: 'Other' });
+    const rows = deriveTimerRoster([host, other, player], 'u-guest', 'disabled');
+    expect(rows.map((r) => r.id)).toEqual(['p-guest', 'p-host', 'p-other']);
   });
 
   it('flags no row as self when there is no authenticated user', () => {
@@ -218,16 +229,40 @@ describe('deriveTimerRoster', () => {
     expect(rows[0].reinstatable).toBe(true);
   });
 
-  it('dims a pending self-out (not yet finalized, out_round_number null)', () => {
-    const selfOut = makePlayer({
-      id: 'p-s',
-      user_id: 'u-s',
-      status: 'out',
-      out_reason: 'self_opted_out',
-      out_round_number: null,
-    });
-    const rows = deriveTimerRoster([selfOut], null, 'disabled', [], 2);
+  it('dims a pending self-out this round (active row + a current-round self_out outcome)', () => {
+    // The realistic not-yet-finalized shape: the player row is still active, but the
+    // current round carries their self_out outcome (shown as Out via the override).
+    const pending = makePlayer({ id: 'p-s', user_id: 'u-s', status: 'active' });
+    const rows = deriveTimerRoster([pending], null, 'disabled', [selfOutOutcome('p-s')], 2);
+    expect(rows[0].status).toBe('out');
     expect(rows[0].reinstatable).toBe(false);
+  });
+
+  it('keeps Reinstate full weight for a grace-used-then-missed elimination, even that round', () => {
+    // Used grace earlier, then missed this round → out via missed_after_grace in the
+    // current round. Not a self-out, so the host can undo it at full weight.
+    const missedAfterGrace = makePlayer({
+      id: 'p-m',
+      user_id: 'u-m',
+      status: 'out',
+      out_reason: 'missed_after_grace',
+      out_round_number: 5,
+      used_grace: true,
+    });
+    const rows = deriveTimerRoster([missedAfterGrace], null, 'enabled', [], 5);
+    expect(rows[0].reinstatable).toBe(true);
+  });
+
+  it('keeps Reinstate full weight for a plain missed-out elimination', () => {
+    const missed = makePlayer({
+      id: 'p-x',
+      user_id: 'u-x',
+      status: 'out',
+      out_reason: 'missed_round',
+      out_round_number: 3,
+    });
+    const rows = deriveTimerRoster([missed], null, 'disabled', [], 3);
+    expect(rows[0].reinstatable).toBe(true);
   });
 
   it('marks a rejoined-after-out player reinstatable even on a self-out', () => {

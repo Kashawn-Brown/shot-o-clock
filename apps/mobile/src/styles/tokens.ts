@@ -27,9 +27,10 @@ export const COLORS = {
 
   // ─── Status (semantic — survives the monotone phase) ─────────────────────
   success: '#22C55E', // Completed, active players
-  warning: '#F59E0B', // Used Grace, waiting states
+  warning: '#F59E0B', // waiting states
   danger: '#EF4444', // I'm Out, Missed, Out players
   dangerSurface: '#FEE2E2',
+  grace: '#3B82F6', // Grace — distinct blue (Used Grace, grace badges)
 
   // ─── Shot O'Clock dark screen (only dark surface in the app) ─────────────
   shotBackground: '#000000',

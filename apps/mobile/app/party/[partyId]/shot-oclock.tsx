@@ -23,6 +23,8 @@
 // from the timer screen. useGameExit is still mounted only for its `leaving` guard
 // on the phase-routing effects (so an in-flight exit elsewhere doesn't re-route).
 
+import { useAudioPlayer } from 'expo-audio';
+import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -57,6 +59,13 @@ export default function ShotOClockScreen(): React.JSX.Element {
     refreshOutcome,
   } = useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
+
+  // Shot-window alert sound (placeholder, CC0 — see assets/sounds/CREDITS.md).
+  // Plays once when the window opens, alongside the haptic. Foreground only and
+  // respects the device silent switch — no playsInSilentMode is set (sound prefs
+  // land in Phase 15). The player is recreated per mount; the screen mounts fresh
+  // for each round's window, so it starts from the top each time.
+  const shotSound = useAudioPlayer(require('@/assets/sounds/shot-oclock-placeholder.mp3'));
   const { leaving } = useGameExit(partyId);
 
   // Optimistic action: set on tap for instant feedback, reconciled when myOutcome
@@ -71,6 +80,48 @@ export default function ShotOClockScreen(): React.JSX.Element {
     setPendingAction(null);
     setActionError(null);
   }, [roundId]);
+
+  // Strong haptic burst the instant the shot window opens — the screen only mounts
+  // once the phase is already 'shot_window', so this fires on entry. Keyed by round
+  // id and guarded by a ref so it bursts exactly once per window (not on re-renders),
+  // and re-arms for the next round's window. The burst is three dense runs of Heavy
+  // impacts with a pause between them (see HAPTIC_BURSTS — tuned to read as a
+  // sustained alarm, not a tap), awaited in sequence so the spacing holds. Fire-and-
+  // forget; impactAsync is a no-op without a haptic engine, the catch swallows any
+  // platform error, and the cleanup flag stops a partial burst if the window closes
+  // mid-sequence.
+  const hapticRoundRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (status !== 'ready' || session?.current_phase !== 'shot_window' || !roundId) return;
+    if (hapticRoundRef.current === roundId) return;
+    hapticRoundRef.current = roundId;
+
+    // Alert sound fires on the same trigger as the haptic (fresh player per window,
+    // so play() starts from the top). Fire-and-forget; a no-op if the asset isn't
+    // ready or the device is on silent.
+    shotSound.play();
+
+    let cancelled = false;
+    const burst = async (): Promise<void> => {
+      for (let b = 0; b < HAPTIC_BURSTS.length; b += 1) {
+        const count = HAPTIC_BURSTS[b];
+        for (let i = 0; i < count; i += 1) {
+          if (cancelled) return;
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+          if (i < count - 1) {
+            await new Promise((resolve) => setTimeout(resolve, HAPTIC_IMPACT_GAP_MS));
+          }
+        }
+        if (b < HAPTIC_BURSTS.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, HAPTIC_BURST_PAUSE_MS));
+        }
+      }
+    };
+    void burst();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, session?.current_phase, roundId, shotSound]);
 
   const isActive = me?.status === 'active';
   const isOut = me?.status === 'out';
@@ -315,6 +366,13 @@ export default function ShotOClockScreen(): React.JSX.Element {
     </SafeAreaView>
   );
 }
+
+// Shot-window-open haptic burst: three bursts of Heavy impacts with a pause between
+// them, so it reads as a sustained alarm rather than a single tap (expo-haptics has
+// no continuous-buzz API, so a dense run of transients is the closest we can get).
+const HAPTIC_BURSTS = [40, 40, 60]; // Heavy impacts per burst
+const HAPTIC_IMPACT_GAP_MS = 15; // between impacts within a burst
+const HAPTIC_BURST_PAUSE_MS = 150; // between bursts
 
 // Matches the timer ring size for visual consistency across the two screens.
 const RING_SIZE = 280;

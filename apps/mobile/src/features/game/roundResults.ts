@@ -11,8 +11,11 @@
 //               (left_at within the window, and left_at > last_seen_at)
 //   - Out     = eliminated this round (eliminated_this_round, or final_outcome out)
 //   - Missed  = final_outcome 'missed'
-//   - UsedGrace = final_outcome 'grace_used' (a miss the server forgave)
-//   - Skipped = final_outcome 'self_out' (voluntary skip — grace-spend or not)
+//   - UsedGrace = grace was consumed this round — a miss the server forgave
+//               (final_outcome 'grace_used') OR a voluntary skip that spent the
+//               player's one grace (final_outcome 'self_out' AND grace_applied)
+//   - Skipped = final_outcome 'self_out' with NO grace consumed (a no-consequence
+//               skip — elimination off, or unlimited grace)
 //   - TookShot = final_outcome 'completed'
 //
 // Left / Kicked are scoped to the round they actually happened in (the round's
@@ -152,7 +155,10 @@ function classify(
     case 'grace_used':
       return 'used_grace';
     case 'self_out':
-      return 'skipped';
+      // A voluntary skip that spent the player's one grace reads as "Used Grace"
+      // (grace_applied), matching the "Use Grace" button; a no-consequence skip
+      // (elimination off / unlimited) stays "Skipped". See game-rules.md §7.
+      return outcome.grace_applied ? 'used_grace' : 'skipped';
     case 'completed':
       return 'took_shot';
     default:

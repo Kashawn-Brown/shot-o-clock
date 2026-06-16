@@ -1,8 +1,11 @@
-// Pure derivation of the "I'm Out" / "Skip" button + confirmation copy, shared by
-// the timer and Shot O'Clock screens so the two never drift. The wording tracks
-// what opting out will actually DO this round (D034 grace-aware skip):
+// Pure derivation of the "I'm Out" / "Skip" / "Use Grace" button + confirmation
+// copy, shared by the timer and Shot O'Clock screens so the two never drift. The
+// wording tracks what opting out will actually DO this round (D034 grace-aware
+// skip):
 //   - elimination off       → "Skip", no consequence (misses are tracked, nobody out)
-//   - grace in hand          → "Skip this shot", which consumes the one grace
+//   - grace in hand          → "Use Grace", which consumes the one grace (the player
+//                              sits out and returns next round, shown as "Used Grace"
+//                              in Round Results — roundResults.ts)
 //   - otherwise              → "I'm Out", a permanent elimination
 //
 // Grace only matters when elimination is on (the finalizer's elimination-off branch
@@ -35,33 +38,41 @@ export function selfOutCopy(params: {
 }): SelfOutCopy {
   const eliminationOff = params.eliminationEnabled === false;
   const hasGrace = params.graceMode === 'enabled' && params.usedGrace === false;
-  // Both read as a "skip" rather than "I'm Out": opting out won't eliminate you
-  // this round.
-  const isSkip = eliminationOff || hasGrace;
+  // Three distinct cases — elimination-off is checked first (grace is irrelevant
+  // when elimination is off). 'skip' has no consequence; 'grace' consumes the one
+  // grace; 'out' is a permanent elimination. Both 'skip' and 'grace' return the
+  // player to active next round, so neither reads as "I'm Out".
+  const kind: 'skip' | 'grace' | 'out' = eliminationOff ? 'skip' : hasGrace ? 'grace' : 'out';
 
   const label = params.selfOutRecorded
-    ? isSkip
+    ? kind === 'skip'
       ? 'Skipped'
-      : "You're out"
-    : eliminationOff
+      : kind === 'grace'
+        ? 'Grace used'
+        : "You're out"
+    : kind === 'skip'
       ? 'Skip'
-      : hasGrace
-        ? 'Skip this shot'
+      : kind === 'grace'
+        ? 'Use Grace'
         : "I'm Out";
 
   // Elimination off skips the dialog (requiresConfirm = false), so its message is
   // never shown; the other two are one short line each — just what happens.
-  const confirmMessage = eliminationOff
-    ? 'Sit out this round.'
-    : hasGrace
-      ? 'Uses your grace for this round.'
-      : "You'll be out for the rest of the game.";
+  const confirmMessage =
+    kind === 'skip'
+      ? 'Sit out this round.'
+      : kind === 'grace'
+        ? 'Uses your one grace to sit out this round.'
+        : "You'll be out for the rest of the game.";
+
+  const confirmTitle = kind === 'grace' ? 'Use your grace?' : kind === 'skip' ? 'Skip this round?' : "I'm Out?";
+  const confirmButton = kind === 'grace' ? 'Use Grace' : kind === 'skip' ? 'Skip' : "I'm Out";
 
   return {
     label,
-    requiresConfirm: !eliminationOff,
-    confirmTitle: isSkip ? 'Skip this round?' : "I'm Out?",
+    requiresConfirm: kind !== 'skip',
+    confirmTitle,
     confirmMessage,
-    confirmButton: isSkip ? 'Skip' : "I'm Out",
+    confirmButton,
   };
 }

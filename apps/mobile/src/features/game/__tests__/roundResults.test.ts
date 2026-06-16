@@ -112,21 +112,21 @@ describe('deriveRoundResults — classification', () => {
     expect(groupOf(view, 'p-1')).toBe('used_grace');
   });
 
-  it('a self_out → Skipped whether or not it consumed grace (reads final_outcome, not grace)', () => {
+  it('a self_out that consumed grace → Used Grace (matches the "Use Grace" button)', () => {
     const view = deriveRoundResults(
       [
         makeOutcome({
           party_player_id: 'p-1',
           player_action: 'self_out',
           final_outcome: 'self_out',
-          grace_applied: true, // grace spend no longer reclassifies a self_out
+          grace_applied: true, // a voluntary skip that spent the player's one grace
           status_after_round: 'active',
         }),
       ],
       [player],
       null,
     );
-    expect(groupOf(view, 'p-1')).toBe('skipped');
+    expect(groupOf(view, 'p-1')).toBe('used_grace');
   });
 
   it('a no-consequence self_out (elimination off / unlimited) → Skipped', () => {

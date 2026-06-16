@@ -31,6 +31,8 @@ import {
   View,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { hostMarkPlayerActive } from '@/features/party/api/hostMarkPlayerActive';
@@ -51,6 +53,8 @@ const BACKDROP_COLOR = 'rgba(0, 0, 0, 0.4)';
 // Sheet covers most of the screen at full height; opens at half.
 const SHEET_SCREEN_FRACTION = 0.92;
 const SLIDE_DURATION_MS = 220;
+// Grace shield in the roster tag — sized to sit alongside the xs tag text.
+const GRACE_ICON_SIZE = 13;
 
 type RosterSheetProps = {
   visible: boolean;
@@ -254,9 +258,16 @@ export function RosterSheet({
           </Text>
           <View style={styles.tags}>
             {entry.isHost ? <Text style={styles.hostPill}>Host</Text> : null}
-            {entry.isSelf && !entry.isHost ? <Text style={styles.youTag}>You</Text> : null}
-            {/* Grace only matters while a player is still in — don't tag an out/left row. */}
-            {!muted && entry.graceAvailable ? <Text style={styles.graceTag}>Grace</Text> : null}
+            {entry.isSelf && !entry.isHost ? <Text style={styles.youPill}>You</Text> : null}
+            {/* Grace only matters while a player is still in — don't tag an out/left row.
+                Vector icon (not the 🛡️ emoji) so the shield renders blue on every
+                platform — Apple draws the emoji silver. */}
+            {!muted && entry.graceAvailable ? (
+              <View style={styles.graceTag}>
+                <Ionicons name="shield-outline" size={GRACE_ICON_SIZE} color={COLORS.grace} />
+                <Text style={styles.graceTagText}>Grace</Text>
+              </View>
+            ) : null}
             <Text style={styles.shotsTag}>
               {entry.shotsCompleted} {entry.shotsCompleted === 1 ? 'shot' : 'shots'}
             </Text>
@@ -471,13 +482,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
   },
-  youTag: {
+  // Mirrors hostPill so "You" reads as a bordered chip, not loose text.
+  youPill: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.textSecondary,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
   },
   graceTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  graceTagText: {
     fontSize: FONT_SIZE.xs,
-    color: COLORS.warning,
+    color: COLORS.grace,
   },
   shotsTag: {
     fontSize: FONT_SIZE.xs,
