@@ -151,7 +151,7 @@ function contentFor(slot: ShotNotificationSlot, preWarningMinutes: number) {
     };
   }
   return {
-    title: "It'sShot O'Clock! 🥃",
+    title: "It's Shot O'Clock! 🥃",
     body: 'Time to take your shot!',
     sound: 'default' as const,
   };
