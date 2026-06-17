@@ -3,6 +3,7 @@ import {
   scheduleNotificationAsync,
 } from '@/features/notifications/api/expoNotifications';
 import { getNotificationPermission } from '@/features/notifications/api/notificationPermission';
+import { getPreWarningMinutes } from '@/features/notifications/api/notificationPreferences';
 import {
   cancelShotNotifications,
   scheduleShotNotifications,
@@ -26,14 +27,21 @@ jest.mock('@/features/notifications/api/notificationPermission', () => ({
   getNotificationPermission: jest.fn(() => Promise.resolve('granted')),
 }));
 
+jest.mock('@/features/notifications/api/notificationPreferences', () => ({
+  getPreWarningMinutes: jest.fn(() => Promise.resolve(0)),
+}));
+
 jest.mock('@/lib/time', () => ({ getServerTimeOffset: () => 0 }));
 
 const mockSchedule = scheduleNotificationAsync as jest.Mock;
 const mockGetAll = getAllScheduledNotificationsAsync as jest.Mock;
 const mockPermission = getNotificationPermission as jest.Mock;
+const mockPreWarning = getPreWarningMinutes as jest.Mock;
 
 // Far-future deadline so the planned slots are always ahead of the real Date.now().
 const FUTURE = new Date(Date.now() + 60_000).toISOString();
+// Far enough out that a pre-warning lead is still in the future.
+const FAR_FUTURE = new Date(Date.now() + 10 * 60_000).toISOString();
 
 function input(
   overrides: Partial<ShotNotificationScheduleInput> = {},
@@ -53,6 +61,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockGetAll.mockResolvedValue([]);
   mockPermission.mockResolvedValue('granted');
+  mockPreWarning.mockResolvedValue(0);
 });
 
 describe('scheduleShotNotifications', () => {
@@ -60,8 +69,24 @@ describe('scheduleShotNotifications', () => {
   // it never reached scheduleNotificationAsync — notifications silently stopped firing.
   it('actually schedules the planned batch for a valid active game', async () => {
     await scheduleShotNotifications(input());
-    expect(mockSchedule).toHaveBeenCalledTimes(8); // MAX_SCHEDULED_ROUNDS
+    expect(mockSchedule).toHaveBeenCalledTimes(8); // MAX_SCHEDULED_ROUNDS, no pre-warning
     expect(mockSchedule.mock.calls[0][0].identifier).toBe('shot-oclock-r3');
+  });
+
+  it('also schedules pre-warning notifications when a lead time is configured', async () => {
+    mockPreWarning.mockResolvedValue(2);
+    await scheduleShotNotifications(
+      input({
+        session: { current_phase: 'countdown', phase_ends_at: FAR_FUTURE, status: 'active' },
+      }),
+    );
+    const ids = mockSchedule.mock.calls.map((c) => c[0].identifier);
+    expect(ids).toContain('shot-oclock-r3');
+    expect(ids).toContain('shot-oclock-prewarn-r3');
+    const prewarn = mockSchedule.mock.calls.find(
+      (c) => c[0].identifier === 'shot-oclock-prewarn-r3',
+    )![0];
+    expect(prewarn.content.body).toContain('2 minutes');
   });
 
   it('schedules nothing and clears when there is no active game', async () => {
@@ -80,7 +105,7 @@ describe('scheduleShotNotifications', () => {
   it('cancels only our own prefixed notifications, leaving others alone', async () => {
     mockGetAll.mockResolvedValue([
       { identifier: 'shot-oclock-r3' },
-      { identifier: 'shot-oclock-r4' },
+      { identifier: 'shot-oclock-prewarn-r3' },
       { identifier: 'some-other-app-notification' },
     ]);
     await cancelShotNotifications();
@@ -88,6 +113,6 @@ describe('scheduleShotNotifications', () => {
       '@/features/notifications/api/expoNotifications',
     );
     const cancelled = (cancelScheduledNotificationAsync as jest.Mock).mock.calls.map((c) => c[0]);
-    expect(cancelled).toEqual(['shot-oclock-r3', 'shot-oclock-r4']);
+    expect(cancelled).toEqual(['shot-oclock-r3', 'shot-oclock-prewarn-r3']);
   });
 });

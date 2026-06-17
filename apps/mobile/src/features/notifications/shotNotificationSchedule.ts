@@ -39,26 +39,37 @@ export interface ShotNotificationScheduleInput {
   currentRoundIntervalSeconds: number;
 }
 
+// 'open' = the shot window opening (the Shot O'Clock alert); 'prewarn' = the
+// configurable heads-up that fires `preWarningMinutes` before it.
+export type ShotNotificationKind = 'open' | 'prewarn';
+
 export interface ShotNotificationSlot {
   roundNumber: number;
+  kind: ShotNotificationKind;
   // Device-local epoch ms at which the notification should fire.
   fireAtMs: number;
 }
 
 /**
- * Up to `maxCount` upcoming shot-window-open instants (device-local), earliest first.
+ * Up to `maxCount` upcoming ROUNDS' notifications (device-local), earliest first —
+ * each scheduled round contributes its shot-window 'open' slot plus, when
+ * `preWarningMinutes > 0` and the instant is still future, a 'prewarn' slot
+ * `preWarningMinutes` before it.
  *
  * Schedules only for an ACTIVE game in countdown or shot_window — a paused timer, the
  * round_complete halt, and an ended party return [] (the caller cancels). Fire times
  * are skew-corrected (server instant − offset) so they coincide with this device's
  * own countdown reaching zero. Instants already in the past are skipped (the in-app
- * sound/haptic covers a window opening now), but later rounds are still planned.
+ * sound/haptic covers a window opening now; a pre-warning lead longer than the
+ * remaining countdown / a short interval simply doesn't schedule), but later rounds
+ * are still planned.
  */
 export function shotNotificationSchedule(
   input: ShotNotificationScheduleInput,
   offsetMs: number,
   nowMs: number,
   maxCount: number,
+  preWarningMinutes: number,
 ): ShotNotificationSlot[] {
   const { session } = input;
   if (session.status !== 'active') return [];
@@ -96,13 +107,26 @@ export function shotNotificationSchedule(
     intervalSecs = nextInterval;
   }
 
+  const preWarningMs = preWarningMinutes > 0 ? preWarningMinutes * 60 * 1000 : 0;
+
   const slots: ShotNotificationSlot[] = [];
-  // Bounded loop: at most maxCount future slots, with a small buffer so a skipped
-  // past first slot doesn't cost a future one. openMs strictly increases, so this
-  // terminates well within the cap.
-  for (let i = 0; i < maxCount + 4 && slots.length < maxCount; i += 1) {
-    const fireAtMs = openMs - offsetMs;
-    if (fireAtMs > nowMs) slots.push({ roundNumber, fireAtMs });
+  // Bounded loop: at most maxCount scheduled ROUNDS, with a small buffer so a skipped
+  // past round doesn't cost a future one. openMs strictly increases, so this
+  // terminates well within the cap. Each scheduled round adds its 'open' slot and,
+  // when it's still future, its 'prewarn' slot.
+  let roundsScheduled = 0;
+  for (let i = 0; i < maxCount + 4 && roundsScheduled < maxCount; i += 1) {
+    const openFireAtMs = openMs - offsetMs;
+    if (openFireAtMs > nowMs) {
+      slots.push({ roundNumber, kind: 'open', fireAtMs: openFireAtMs });
+      if (preWarningMs > 0) {
+        const prewarnFireAtMs = openFireAtMs - preWarningMs;
+        if (prewarnFireAtMs > nowMs) {
+          slots.push({ roundNumber, kind: 'prewarn', fireAtMs: prewarnFireAtMs });
+        }
+      }
+      roundsScheduled += 1;
+    }
 
     const nextInterval = clamp(intervalSecs + input.intervalIncrementSeconds);
     openMs += windowMs + nextInterval * 1000;
@@ -110,5 +134,7 @@ export function shotNotificationSchedule(
     roundNumber += 1;
   }
 
-  return slots;
+  // Earliest first — a round's pre-warning precedes its open, so sort rather than
+  // rely on push order.
+  return slots.sort((a, b) => a.fireAtMs - b.fireAtMs);
 }

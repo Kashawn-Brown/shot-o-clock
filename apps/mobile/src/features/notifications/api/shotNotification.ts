@@ -22,9 +22,11 @@ import {
   setNotificationHandler,
 } from '@/features/notifications/api/expoNotifications';
 import { getNotificationPermission } from '@/features/notifications/api/notificationPermission';
+import { getPreWarningMinutes } from '@/features/notifications/api/notificationPreferences';
 import {
   shotNotificationSchedule,
   type ShotNotificationScheduleInput,
+  type ShotNotificationSlot,
 } from '@/features/notifications/shotNotificationSchedule';
 import { getServerTimeOffset } from '@/lib/time';
 
@@ -88,8 +90,17 @@ export async function scheduleShotNotifications(
 ): Promise<void> {
   const generation = (scheduleGeneration += 1);
 
+  // The pre-warning lead time is a device preference (default 2 min); read it next to
+  // the other env reads. Only needed when we're actually scheduling.
+  const preWarningMinutes = input ? await getPreWarningMinutes() : 0;
   const slots = input
-    ? shotNotificationSchedule(input, getServerTimeOffset(), Date.now(), MAX_SCHEDULED_ROUNDS)
+    ? shotNotificationSchedule(
+        input,
+        getServerTimeOffset(),
+        Date.now(),
+        MAX_SCHEDULED_ROUNDS,
+        preWarningMinutes,
+      )
     : [];
 
   // Clear the prior batch first, so a shrinking schedule (pause, fewer future rounds)
@@ -103,19 +114,15 @@ export async function scheduleShotNotifications(
   // device-side preference toggle (shotOclockEnabled) drops in here in the prefs task.
   if ((await getNotificationPermission()) !== 'granted') return;
 
-  // Superseded by a NEWER schedule/cancel while we awaited the permission read (e.g.
-  // the host paused, or the screen unmounted) — don't schedule a now-stale batch.
+  // Superseded by a NEWER schedule/cancel while we awaited the reads above (e.g. the
+  // host paused, or the screen unmounted) — don't schedule a now-stale batch.
   if (generation !== scheduleGeneration) return;
 
   await Promise.all(
     slots.map((slot) =>
       scheduleNotificationAsync({
-        identifier: `${SHOT_NOTIFICATION_ID_PREFIX}-r${slot.roundNumber}`,
-        content: {
-          title: "Shot O'Clock! 🥃",
-          body: 'Time to take your shot.',
-          sound: 'default',
-        },
+        identifier: identifierFor(slot),
+        content: contentFor(slot, preWarningMinutes),
         trigger: {
           type: SchedulableTriggerInputTypes.DATE,
           date: slot.fireAtMs,
@@ -124,6 +131,30 @@ export async function scheduleShotNotifications(
       }).catch(() => {}),
     ),
   );
+}
+
+// Per-round, per-kind identifier. Both kinds share the SHOT_NOTIFICATION_ID_PREFIX so
+// clearScheduledBatch cancels them together.
+function identifierFor(slot: ShotNotificationSlot): string {
+  return slot.kind === 'prewarn'
+    ? `${SHOT_NOTIFICATION_ID_PREFIX}-prewarn-r${slot.roundNumber}`
+    : `${SHOT_NOTIFICATION_ID_PREFIX}-r${slot.roundNumber}`;
+}
+
+function contentFor(slot: ShotNotificationSlot, preWarningMinutes: number) {
+  if (slot.kind === 'prewarn') {
+    const unit = preWarningMinutes === 1 ? 'minute' : 'minutes';
+    return {
+      title: 'Shot O’Clock soon',
+      body: `Get ready — your next shot is in ${preWarningMinutes} ${unit}.`,
+      sound: 'default' as const,
+    };
+  }
+  return {
+    title: "Shot O'Clock! 🥃",
+    body: 'Time to take your shot.',
+    sound: 'default' as const,
+  };
 }
 
 /**
