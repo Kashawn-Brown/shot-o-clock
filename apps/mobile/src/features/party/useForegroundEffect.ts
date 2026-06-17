@@ -10,15 +10,18 @@ import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 
 /**
- * Calls `onForeground` on each real background→active transition. A pure
- * active→inactive→active flicker (iOS control center, a system prompt) never sets
- * the backgrounded flag, so it does NOT fire — only an actual app switch / lock does.
- * The latest callback is read off a ref, so passing a fresh closure each render is
- * fine (the listener is installed once).
+ * Calls `onForeground` on each real background→active transition (and the optional
+ * `onBackground` when the app actually backgrounds — e.g. to snapshot state to compare
+ * on resume). A pure active→inactive→active flicker (iOS control center, a system
+ * prompt) never sets the backgrounded flag, so neither fires — only an actual app
+ * switch / lock does. The latest callbacks are read off refs, so passing fresh closures
+ * each render is fine (the listener is installed once).
  */
-export function useForegroundEffect(onForeground: () => void): void {
-  const callbackRef = useRef(onForeground);
-  callbackRef.current = onForeground;
+export function useForegroundEffect(onForeground: () => void, onBackground?: () => void): void {
+  const onForegroundRef = useRef(onForeground);
+  onForegroundRef.current = onForeground;
+  const onBackgroundRef = useRef(onBackground);
+  onBackgroundRef.current = onBackground;
 
   // Only fire after a genuine background — ignores the transient 'inactive' state
   // iOS reports when the app is merely obscured but not switched away.
@@ -28,9 +31,10 @@ export function useForegroundEffect(onForeground: () => void): void {
     const subscription = AppState.addEventListener('change', (next) => {
       if (next === 'background') {
         wasBackgrounded.current = true;
+        onBackgroundRef.current?.();
       } else if (next === 'active' && wasBackgrounded.current) {
         wasBackgrounded.current = false;
-        callbackRef.current();
+        onForegroundRef.current();
       }
     });
 

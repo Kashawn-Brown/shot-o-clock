@@ -44,6 +44,7 @@ import { useCountdown } from '@/features/game/useCountdown';
 import { useGameExit } from '@/features/party/useGameExit';
 import { shareJoinCode } from '@/features/party/shareJoinCode';
 import { routeForPhase } from '@/features/party/reconnectRoute';
+import { useRecapOnResume } from '@/features/party/useRecapOnResume';
 import { useTimerSession } from '@/features/party/useTimerSession';
 import { rpcErrorMessage } from '@/lib/errors';
 import { formatDuration } from '@/lib/time';
@@ -74,6 +75,11 @@ export default function TimerScreen(): React.JSX.Element {
   } = useTimerSession(partyId);
   const { remainingMs: liveRemainingMs } = useCountdown(session?.phase_ends_at ?? null);
   const { leaving, confirmExit } = useGameExit(partyId);
+
+  // Warm-resume recap: if a round advanced while this screen was backgrounded, land on
+  // the previous round's recap on return (the cold-launch reconnect only runs on a
+  // fresh start). Suppressed mid-exit. See useRecapOnResume.
+  useRecapOnResume(partyId, session?.current_round_number ?? null, !leaving);
 
   // The caller's role drives the host-only roster controls (Mark Out / Reinstate /
   // Remove live in the Roster sheet) and the destructive bottom-left button: a
