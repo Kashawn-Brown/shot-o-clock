@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { getPartyState } from '@/features/party/api/partyState';
 import { deriveLobbyView, type LobbyView } from '@/features/party/lobbyView';
+import { useForegroundEffect } from '@/features/party/useForegroundEffect';
 import { rpcErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/db.generated';
@@ -57,6 +58,8 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
   const [view, setView] = useState<LobbyView | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [membershipLost, setMembershipLost] = useState(false);
+  // Bumped on a foreground resume to force the realtime channels to resubscribe.
+  const [realtimeNonce, setRealtimeNonce] = useState(0);
 
   // The realtime subscription must not resubscribe when identity changes, so the
   // silent-refresh handler reads the latest userId off a ref instead of closing
@@ -98,6 +101,15 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
       setView(deriveLobbyView(result.data.players, userIdRef.current));
     });
   }, [partyId]);
+
+  // On a foreground resume, re-pull the snapshot and resubscribe the realtime
+  // channels — otherwise a guest who backgrounded the lobby wouldn't see the host
+  // start the game (the start_game session UPDATE arrives only via realtime, which
+  // delivers nothing missed while suspended). Same fix as useTimerSession.
+  useForegroundEffect(() => {
+    refresh();
+    setRealtimeNonce((nonce) => nonce + 1);
+  });
 
   // Initial / identity load. callRpc never rejects — it folds transport/throw
   // failures into an UNEXPECTED_ERROR result — so one ok/!ok branch covers all.
@@ -147,12 +159,16 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
         },
         refresh,
       )
-      .subscribe();
+      .subscribe((channelStatus) => {
+        // Refetch once the channel is live — catches anything missed while suspended,
+        // including a state that emits no further events. See useTimerSession.
+        if (channelStatus === 'SUBSCRIBED') refresh();
+      });
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [partyId, refresh]);
+  }, [partyId, refresh, realtimeNonce]);
 
   // Realtime session sync. A party_players change never fires when the host starts
   // the game (start_game only mutates party_sessions), so the lobby also watches
@@ -178,12 +194,17 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
         },
         refresh,
       )
-      .subscribe();
+      .subscribe((channelStatus) => {
+        // Refetch once the channel is live — so a guest who backgrounded the lobby
+        // sees the host's start (a single party_sessions UPDATE) on resume even if it
+        // arrived while suspended. See useTimerSession.
+        if (channelStatus === 'SUBSCRIBED') refresh();
+      });
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [partyId, refresh]);
+  }, [partyId, refresh, realtimeNonce]);
 
   return { status, session, settings, view, errorMessage, membershipLost, reload, refresh };
 }

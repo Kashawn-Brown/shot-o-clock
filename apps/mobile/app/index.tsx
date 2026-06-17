@@ -12,7 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '@/components/ui/Button';
 import { useActiveParty } from '@/features/party/useActiveParty';
-import { routeForPhase } from '@/features/party/reconnectRoute';
+import { routeForPhase, shouldRecapOnReentry } from '@/features/party/reconnectRoute';
+import { serverNow } from '@/lib/time';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 export default function HomeScreen(): React.JSX.Element {
@@ -22,7 +23,24 @@ export default function HomeScreen(): React.JSX.Element {
 
   useEffect(() => {
     if (!activeParty) return;
-    const { partyId, phase } = activeParty;
+    const { partyId, phase, phaseStartedAt, currentRoundNumber } = activeParty;
+
+    // A reconnect into a fresh countdown lands on the previous round's recap (which
+    // then auto-advances into the timer), so a player who stepped away right at the
+    // round boundary sees what just happened. Compared against serverNow() (not the
+    // device clock) — useActiveParty syncs the offset before resolving, so the 30s
+    // age is skew-proof.
+    if (
+      routeForPhase(phase) === 'timer' &&
+      shouldRecapOnReentry(phase, currentRoundNumber, phaseStartedAt, serverNow().getTime())
+    ) {
+      router.replace({
+        pathname: '/party/[partyId]/results',
+        params: { partyId, roundNumber: String(currentRoundNumber - 1) },
+      });
+      return;
+    }
+
     switch (routeForPhase(phase)) {
       case 'timer':
         router.replace(`/party/${partyId}/timer`);

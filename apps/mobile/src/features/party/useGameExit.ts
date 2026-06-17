@@ -25,7 +25,6 @@ import { Alert } from 'react-native';
 
 import { endParty } from '@/features/party/api/endParty';
 import { markSelfLeft } from '@/features/party/api/markSelfLeft';
-import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { setLeftPartyId } from '@/features/party/leftParty';
 
 interface ConfirmExitOptions {
@@ -107,17 +106,15 @@ export function useGameExit(partyId: string | undefined): UseGameExitResult {
     }
 
     // Not the host (NOT_HOST), or the session is already gone (SESSION_NOT_FOUND).
-    // A guest leaving stays a party member (mark_self_out records them Out but
-    // doesn't remove them), so the launch reconnect would pull them straight back
-    // in — mark this party as intentionally-left first so useActiveParty suppresses
-    // that reconnect. mark_self_left stamps left_at so other devices show them as
-    // "Left" (mark_self_out alone is indistinguishable from "I'm Out"), and the
-    // self-out records the round skip (ignored on round_complete, where it returns
-    // ILLEGAL_TRANSITION, §7.3). Results are ignored — a guest must never be
-    // stranded, so we route home regardless.
+    // A guest leaving stays a party member (not removed), so the launch reconnect
+    // would pull them straight back in — mark this party as intentionally-left first
+    // so useActiveParty suppresses that reconnect. mark_self_left then stamps left_at
+    // (so other devices show them as "Left"), marks a mid-game active leaver Out, and
+    // runs the all-answered finalize check — so the game stops counting them from the
+    // point they leave (no more phantom "Missed", and the round can auto-advance).
+    // Result is ignored — a guest must never be stranded, so we route home regardless.
     await setLeftPartyId(partyId);
     await markSelfLeft({ partySessionId: partyId });
-    await markSelfOut({ partySessionId: partyId });
     router.replace('/');
   }, [partyId, leaving]);
 

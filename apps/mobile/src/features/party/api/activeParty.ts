@@ -18,17 +18,29 @@ const RECONNECTABLE_STATUSES: PartyStatus[] = ['lobby', 'active', 'paused'];
 export interface ActiveParty {
   partyId: string;
   phase: PartyPhase;
+  // When the current phase began (party_sessions.phase_started_at) and the current
+  // round number — used by the home screen to decide whether a reconnecting player
+  // lands on the previous round's recap (a fresh countdown) or the live timer.
+  phaseStartedAt: string | null;
+  currentRoundNumber: number;
 }
 
 export async function getActiveParty(): Promise<ActiveParty | null> {
   const { data, error } = await supabase
     .from('party_sessions')
-    .select('id, current_phase')
+    .select('id, current_phase, phase_started_at, current_round_number')
     .in('status', RECONNECTABLE_STATUSES)
     .limit(1);
 
   if (error) throw error;
 
   const row = data?.[0];
-  return row ? { partyId: row.id, phase: row.current_phase } : null;
+  return row
+    ? {
+        partyId: row.id,
+        phase: row.current_phase,
+        phaseStartedAt: row.phase_started_at,
+        currentRoundNumber: row.current_round_number,
+      }
+    : null;
 }
