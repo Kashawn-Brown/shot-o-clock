@@ -146,13 +146,13 @@ function contentFor(slot: ShotNotificationSlot, preWarningMinutes: number) {
     const unit = preWarningMinutes === 1 ? 'minute' : 'minutes';
     return {
       title: 'Shot O’Clock soon',
-      body: `Get ready — your next shot is in ${preWarningMinutes} ${unit}.`,
+      body: `Get ready, the next shot is in ${preWarningMinutes} ${unit}.`,
       sound: 'default' as const,
     };
   }
   return {
-    title: "Shot O'Clock! 🥃",
-    body: 'Time to take your shot.',
+    title: "It'sShot O'Clock! 🥃",
+    body: 'Time to take your shot!',
     sound: 'default' as const,
   };
 }
