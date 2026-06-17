@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { syncServerTime } from '@/features/game/syncServerTime';
 import { getActiveParty, type ActiveParty } from '@/features/party/api/activeParty';
 import { clearLeftPartyId, getLeftPartyId } from '@/features/party/leftParty';
 
@@ -29,7 +30,12 @@ export function useActiveParty(): UseActivePartyResult {
     let active = true;
 
     (async () => {
-      const party = await getActiveParty();
+      // Align the server-time offset before the home screen decides the reconnect
+      // route — the recap-on-reentry age compares phase_started_at (a server stamp)
+      // against serverNow(), which is meaningless until this sync runs (Bug fix:
+      // device-clock skew made the 30s recap threshold unreliable). Parallel with the
+      // party lookup so it adds no latency; never throws.
+      const [party] = await Promise.all([getActiveParty(), syncServerTime()]);
       const leftId = await getLeftPartyId();
       if (!active) return;
 
