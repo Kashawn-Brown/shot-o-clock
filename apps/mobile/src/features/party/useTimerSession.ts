@@ -249,11 +249,12 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     onAdvance: refresh,
   });
 
-  // Schedule the local Shot O'Clock notification at the upcoming shot window, so it
-  // fires even when the app is backgrounded / the phone is locked. Self-cancels on
-  // pause / add-time / window-open / end and on unmount (Phase 14, §2.1 — mirrors the
-  // server's phase_ends_at, never owns the timer).
-  useShotNotification(session);
+  // Schedule the local Shot O'Clock notifications (current round + the next several)
+  // so they fire even when the app is backgrounded / the phone is locked — a suspended
+  // app can't reschedule per round. Needs settings + currentRound for the round-loop
+  // math. Self-cancels on pause / end / unmount (Phase 14, §2.1 — mirrors the server's
+  // deterministic timing, never owns the timer).
+  useShotNotification(session, settings, currentRound);
 
   // On a foreground resume, realtime delivered nothing while we were suspended and
   // the socket may be dead — so the screen would render stale state (a frozen
@@ -329,7 +330,17 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
         },
         () => refreshOutcomeRef.current(),
       )
-      .subscribe();
+      .subscribe((channelStatus) => {
+        // Refetch once the channel is genuinely live (socket + auth handshake done).
+        // postgres_changes never replays what was missed while suspended, so a state
+        // that emits no further events — a paused game — would otherwise stay stale
+        // until the old countdown expired. SUBSCRIBED fires on every (re)subscribe,
+        // including the foreground resubscribe forced by realtimeNonce.
+        if (channelStatus === 'SUBSCRIBED') {
+          refreshRef.current();
+          refreshOutcomeRef.current();
+        }
+      });
 
     return () => {
       void supabase.removeChannel(channel);

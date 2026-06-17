@@ -19,6 +19,7 @@
 export { setNotificationHandler } from 'expo-notifications/build/NotificationsHandler';
 export { default as scheduleNotificationAsync } from 'expo-notifications/build/scheduleNotificationAsync';
 export { default as cancelScheduledNotificationAsync } from 'expo-notifications/build/cancelScheduledNotificationAsync';
+export { default as getAllScheduledNotificationsAsync } from 'expo-notifications/build/getAllScheduledNotificationsAsync';
 export { default as setNotificationChannelAsync } from 'expo-notifications/build/setNotificationChannelAsync';
 export {
   getPermissionsAsync,
