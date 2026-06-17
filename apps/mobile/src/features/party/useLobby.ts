@@ -159,7 +159,11 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
         },
         refresh,
       )
-      .subscribe();
+      .subscribe((channelStatus) => {
+        // Refetch once the channel is live — catches anything missed while suspended,
+        // including a state that emits no further events. See useTimerSession.
+        if (channelStatus === 'SUBSCRIBED') refresh();
+      });
 
     return () => {
       void supabase.removeChannel(channel);
@@ -190,7 +194,12 @@ export function useLobby(partyId: string | undefined): UseLobbyResult {
         },
         refresh,
       )
-      .subscribe();
+      .subscribe((channelStatus) => {
+        // Refetch once the channel is live — so a guest who backgrounded the lobby
+        // sees the host's start (a single party_sessions UPDATE) on resume even if it
+        // arrived while suspended. See useTimerSession.
+        if (channelStatus === 'SUBSCRIBED') refresh();
+      });
 
     return () => {
       void supabase.removeChannel(channel);
