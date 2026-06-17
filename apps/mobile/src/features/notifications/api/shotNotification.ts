@@ -81,7 +81,7 @@ export async function configureNotifications(): Promise<void> {
 /**
  * Reconcile the scheduled shot notifications with the current session state. Schedules
  * the upcoming rounds' shot windows for an active game; otherwise cancels everything.
- * Idempotent (always cancels the prior batch first) and permission-gated.
+ * Idempotent (always clears the prior batch first) and permission-gated.
  */
 export async function scheduleShotNotifications(
   input: ShotNotificationScheduleInput | null,
@@ -92,17 +92,19 @@ export async function scheduleShotNotifications(
     ? shotNotificationSchedule(input, getServerTimeOffset(), Date.now(), MAX_SCHEDULED_ROUNDS)
     : [];
 
-  // Always clear the prior batch first, so a shrinking schedule (pause, fewer future
-  // rounds) never leaves a stale notification behind.
-  await cancelShotNotifications();
+  // Clear the prior batch first, so a shrinking schedule (pause, fewer future rounds)
+  // never leaves a stale notification behind. This is our OWN cancel — clearScheduledBatch
+  // does NOT bump the generation, so it doesn't count as a superseding call against the
+  // guard below (that was the bug: the self-cancel always tripped its own guard).
+  await clearScheduledBatch();
   if (slots.length === 0) return;
 
   // Permission-gated (Phase 14): no point scheduling if the OS won't deliver it. The
   // device-side preference toggle (shotOclockEnabled) drops in here in the prefs task.
   if ((await getNotificationPermission()) !== 'granted') return;
 
-  // Superseded while we awaited the permission read (e.g. the host paused) — don't
-  // schedule a now-stale batch (cancelShotNotifications bumped the generation too).
+  // Superseded by a NEWER schedule/cancel while we awaited the permission read (e.g.
+  // the host paused, or the screen unmounted) — don't schedule a now-stale batch.
   if (generation !== scheduleGeneration) return;
 
   await Promise.all(
@@ -124,11 +126,22 @@ export async function scheduleShotNotifications(
   );
 }
 
-/** Cancel every pending shot notification (our prefix only). Safe when none exist. */
+/**
+ * Cancel every pending shot notification (our prefix only). Public entry point for an
+ * unmount / leave: bumps the generation so an in-flight schedule is superseded and
+ * won't land after us.
+ */
 export async function cancelShotNotifications(): Promise<void> {
-  // Bump the generation so an in-flight schedule that resumes after this cancel is
-  // recognized as superseded.
   scheduleGeneration += 1;
+  await clearScheduledBatch();
+}
+
+/**
+ * Cancel our scheduled batch (prefix-matched) WITHOUT bumping the generation counter.
+ * Used both by the public cancel (which bumps separately) and by scheduleShotNotifications
+ * for its own pre-clear — so that self-cancel never counts as a superseding call.
+ */
+async function clearScheduledBatch(): Promise<void> {
   try {
     const scheduled = await getAllScheduledNotificationsAsync();
     await Promise.all(
