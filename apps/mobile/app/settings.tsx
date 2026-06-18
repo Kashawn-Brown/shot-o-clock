@@ -175,15 +175,15 @@ export default function SettingsScreen(): React.JSX.Element {
         <SettingsSection title="Notifications">
           <ToggleRow
             title="Shot O'Clock alert"
-            description="Notify me when the shot window opens."
+            description="Notify me when it's Shot O'Clock."
             value={notif.shotOclockEnabled}
             onValueChange={setShotOclock}
             disabled={!notifLoaded}
           />
           <View style={styles.divider} />
           <ToggleRow
-            title="Pre-warning"
-            description="A heads-up before the next Shot O'Clock."
+            title="Heads-up"
+            description="Get a reminder before the next Shot O'Clock."
             value={notif.preWarningEnabled}
             onValueChange={setPreWarning}
             disabled={!notifLoaded}
@@ -204,21 +204,21 @@ export default function SettingsScreen(): React.JSX.Element {
         <SettingsSection title="Sound">
           <SettingRow
             title="Shot O'Clock sound"
-            description="Choose which sound plays when the window opens."
+            description="Choose which sound plays when it's Shot O'Clock."
           />
         </SettingsSection>
 
         <SettingsSection title="Party defaults">
           <SettingRow
             title="Default party settings"
-            description="Pre-fill Create Party with your preferred interval, shot window, grace, and elimination."
+            description="Your default Create Party settings."
           />
         </SettingsSection>
 
         <SettingsSection title="Device">
           <SettingRow
             title="Reset this device"
-            description="Sign out and clear this device, returning to a fresh first launch."
+            description="Clear this device and erase all saved app info."
             onPress={confirmReset}
             danger
           />

@@ -129,15 +129,13 @@ export default function PartySettingsScreen(): React.JSX.Element {
 
       <ScrollView contentContainerStyle={styles.content}>
         <SettingsSection
-          title="Notifications for this party"
-          caption="Applies to this party only. Your global settings stay as they are."
+          title="Notifications"
+          caption="Applies to this party only."
         >
           <ControlRow
-            title="Pre-warning lead time"
+            title="Heads-up lead time"
             description={
-              preWarningEnabled
-                ? 'How early the heads-up fires before the next Shot O’Clock.'
-                : 'Turn pre-warnings on in your global settings to use this.'
+              'How early the heads-up notification is sent before the next Shot O’Clock.'
             }
           >
             <OptionPicker
@@ -150,7 +148,7 @@ export default function PartySettingsScreen(): React.JSX.Element {
           <View style={styles.divider} />
           <ControlRow
             title="Sound or vibration"
-            description="How this game alerts you when the shot window opens."
+            description="Alert type for Shot O'Clock."
           >
             <OptionPicker
               options={ALERT_MODE_OPTIONS}
@@ -168,7 +166,7 @@ export default function PartySettingsScreen(): React.JSX.Element {
           >
             <SettingRow
               title="Lock party"
-              description="Stop new players from joining, even with the join code."
+              description="Stop any new players from joining."
             />
           </SettingsSection>
         ) : null}
