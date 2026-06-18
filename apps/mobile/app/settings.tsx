@@ -3,37 +3,48 @@
 // at the top level. Per-session overrides for an active party live on the
 // separate Surface B route (app/party/[partyId]/settings.tsx).
 //
-// Phase 15 scaffold (Task 1): a navigable sectioned shell only. Each row is an
-// inert placeholder that gets wired in its own Phase 15 item — display name,
-// global notification prefs, global sound options, party-creation defaults, and
-// the destructive Reset this device. Nothing here mutates anything yet.
+// Phase 15 — Task 2 wires the Display name row (edit + persist device-side via
+// useDisplayName). The remaining rows (notifications, sound, party defaults,
+// reset) are still inert placeholders, each wired in its own Phase 15 item.
 
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
+import { Button } from '@/components/ui/Button';
+import { DISPLAY_NAME_MAX_LENGTH, isValidDisplayName } from '@/features/auth/api/displayName';
+import { useDisplayName } from '@/features/auth/useDisplayName';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
-// One inert settings row: a title, a short description of what it will do, and a
-// chevron hinting it's tappable once wired. Placeholder for the Phase 15 scaffold.
+// One settings row: a title, a short value/description, and a chevron. Tappable
+// when given an onPress; inert (a Phase 15 placeholder) otherwise.
 function SettingRow({
   title,
   description,
+  onPress,
   danger = false,
 }: {
   title: string;
   description: string;
+  onPress?: () => void;
   danger?: boolean;
 }): React.JSX.Element {
-  return (
-    <View style={styles.row}>
+  const content = (
+    <>
       <View style={styles.rowText}>
         <Text style={[styles.rowTitle, danger && styles.rowTitleDanger]}>{title}</Text>
         <Text style={styles.rowDescription}>{description}</Text>
       </View>
       <Ionicons name="chevron-forward" size={CHEVRON_SIZE} color={COLORS.textSecondary} />
-    </View>
+    </>
+  );
+  if (!onPress) return <View style={styles.row}>{content}</View>;
+  return (
+    <Pressable style={styles.row} onPress={onPress} accessibilityRole="button">
+      {content}
+    </Pressable>
   );
 }
 
@@ -53,6 +64,24 @@ function SettingsSection({
 }
 
 export default function SettingsScreen(): React.JSX.Element {
+  const { displayName, save } = useDisplayName();
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const openNameEditor = (): void => {
+    setDraftName(displayName ?? '');
+    setEditingName(true);
+  };
+
+  const saveName = async (): Promise<void> => {
+    if (!isValidDisplayName(draftName) || saving) return;
+    setSaving(true);
+    await save(draftName);
+    setSaving(false);
+    setEditingName(false);
+  };
+
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -66,7 +95,8 @@ export default function SettingsScreen(): React.JSX.Element {
         <SettingsSection title="Profile">
           <SettingRow
             title="Display name"
-            description="The name other players see in the lobby and roster."
+            description={displayName ?? 'Not set'}
+            onPress={openNameEditor}
           />
         </SettingsSection>
 
@@ -104,6 +134,51 @@ export default function SettingsScreen(): React.JSX.Element {
           />
         </SettingsSection>
       </ScrollView>
+
+      {/* Display name editor — a small centered modal reusing the same validation
+          and persistence as first-launch onboarding (useDisplayName + the 1–40
+          bound). Save is disabled until the trimmed name is valid. */}
+      <Modal
+        visible={editingName}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditingName(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setEditingName(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Display name</Text>
+            <Text style={styles.modalSubtitle}>
+              The name other players see in the lobby and roster.
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={draftName}
+              onChangeText={setDraftName}
+              placeholder="Your name"
+              placeholderTextColor={COLORS.textSecondary}
+              maxLength={DISPLAY_NAME_MAX_LENGTH}
+              autoCapitalize="words"
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={saveName}
+            />
+            <View style={styles.modalActions}>
+              <Button
+                label="Cancel"
+                variant="outline"
+                onPress={() => setEditingName(false)}
+                style={styles.modalButton}
+              />
+              <Button
+                label={saving ? 'Saving…' : 'Save'}
+                onPress={saveName}
+                disabled={!isValidDisplayName(draftName) || saving}
+                style={styles.modalButton}
+              />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -174,5 +249,45 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: COLORS.border,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.lg,
+  },
+  modalCard: {
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.md,
+    padding: SPACING.lg,
+    gap: SPACING.md,
+  },
+  modalTitle: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.textPrimary,
+  },
+  modalSubtitle: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+  input: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.textPrimary,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: SPACING.md,
+  },
+  modalButton: {
+    flex: 1,
   },
 });
