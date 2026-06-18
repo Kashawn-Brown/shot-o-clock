@@ -1,15 +1,14 @@
-// Per-session in-game Settings (Surface B, D062) — reached from the timer gear
-// by EVERY player, host or not (no role branch). Holds notification overrides
-// scoped to THIS party only — they default from the global settings, persist
-// device-side keyed by partyId, and are discarded when the party ends; the
-// global defaults (Surface A, app/settings.tsx) are never touched. The host
-// additionally sees a Party lock row, conditionally rendered on the same screen.
+// Per-session in-game Settings (Surface B, D062) — reached from the timer gear by
+// EVERY player, host or not (no role branch). Holds notification overrides scoped to
+// THIS party only — they default from the global settings, persist device-side keyed
+// by partyId, and are discarded when the party ends; the global defaults (Surface A,
+// app/settings.tsx) are never touched. The host additionally sees a Party lock row,
+// conditionally rendered on the same screen.
 //
-// isHost is read via useTimerSession(partyId) — the same source the timer uses —
-// for consistency, accepting the extra subscription over a lighter role-only read.
-//
-// Phase 15 scaffold (Task 1): a navigable shell only. Rows are inert placeholders
-// wired in later Phase 15 items (per-session overrides; party-lock toggle + RPC).
+// Role comes from usePartyRole — a one-shot read, NOT useTimerSession: the latter
+// drives notification scheduling (whose unmount cancel would kill the timer's batch
+// when this pushed screen closes), the advance-phase poll, and realtime subs, none of
+// which this screen needs.
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -17,11 +16,32 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
-import { useTimerSession } from '@/features/party/useTimerSession';
+import { OptionPicker } from '@/components/ui/OptionPicker';
+import {
+  ALERT_MODES,
+  PRE_WARNING_OPTIONS,
+  type AlertMode,
+} from '@/features/notifications/api/notificationPreferences';
+import { useSessionOverride } from '@/features/notifications/useSessionOverride';
+import { usePartyRole } from '@/features/party/usePartyRole';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
-// One inert settings row: a title, a short description of what it will do, and a
-// chevron hinting it's tappable once wired. Placeholder for the Phase 15 scaffold.
+const LEAD_TIME_OPTIONS = PRE_WARNING_OPTIONS.map((minutes) => ({
+  label: `${minutes} min`,
+  value: minutes,
+}));
+
+const ALERT_MODE_LABELS: Record<AlertMode, string> = {
+  sound: 'Sound',
+  vibration: 'Vibration',
+};
+const ALERT_MODE_OPTIONS = ALERT_MODES.map((mode) => ({
+  label: ALERT_MODE_LABELS[mode],
+  value: mode,
+}));
+
+// One inert settings row: a title, a short description, and a chevron hinting it's
+// tappable once wired. Placeholder for the party-lock row (built in a later task).
 function SettingRow({
   title,
   description,
@@ -36,6 +56,24 @@ function SettingRow({
         <Text style={styles.rowDescription}>{description}</Text>
       </View>
       <Ionicons name="chevron-forward" size={CHEVRON_SIZE} color={COLORS.textSecondary} />
+    </View>
+  );
+}
+
+function ControlRow({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <View style={styles.controlRow}>
+      <Text style={styles.rowTitle}>{title}</Text>
+      <Text style={styles.rowDescription}>{description}</Text>
+      <View style={styles.controlPicker}>{children}</View>
     </View>
   );
 }
@@ -60,11 +98,9 @@ function SettingsSection({
 
 export default function PartySettingsScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
-  const { status, me, errorMessage } = useTimerSession(partyId);
-
-  // The party-lock row is host-only (PartyPlayer.permissionRole, §2.4); the
-  // per-session notification overrides above it are shown to every player.
-  const isHost = me?.permission_role === 'host';
+  const { status, isHost, errorMessage } = usePartyRole(partyId);
+  const { loaded, preWarningEnabled, leadMinutes, alertMode, setLeadMinutes, setAlertMode } =
+    useSessionOverride(partyId);
 
   if (status === 'loading') {
     return (
@@ -96,15 +132,33 @@ export default function PartySettingsScreen(): React.JSX.Element {
           title="Notifications for this party"
           caption="Applies to this party only. Your global settings stay as they are."
         >
-          <SettingRow
-            title="Pre-warning"
-            description="A heads-up a few minutes before the next Shot O'Clock, just for this game."
-          />
+          <ControlRow
+            title="Pre-warning lead time"
+            description={
+              preWarningEnabled
+                ? 'How early the heads-up fires before the next Shot O’Clock.'
+                : 'Turn pre-warnings on in your global settings to use this.'
+            }
+          >
+            <OptionPicker
+              options={LEAD_TIME_OPTIONS}
+              value={leadMinutes}
+              onChange={setLeadMinutes}
+              disabled={!loaded || !preWarningEnabled}
+            />
+          </ControlRow>
           <View style={styles.divider} />
-          <SettingRow
+          <ControlRow
             title="Sound or vibration"
             description="How this game alerts you when the shot window opens."
-          />
+          >
+            <OptionPicker
+              options={ALERT_MODE_OPTIONS}
+              value={alertMode}
+              onChange={setAlertMode}
+              disabled={!loaded}
+            />
+          </ControlRow>
         </SettingsSection>
 
         {isHost ? (
@@ -178,6 +232,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.md,
     paddingVertical: SPACING.md,
+  },
+  controlRow: {
+    gap: SPACING.sm,
+    paddingVertical: SPACING.md,
+  },
+  controlPicker: {
+    paddingTop: SPACING.xs,
   },
   rowText: {
     flex: 1,
