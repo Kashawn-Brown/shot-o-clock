@@ -9,15 +9,37 @@
 
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '@/components/ui/Button';
+import { OptionPicker } from '@/components/ui/OptionPicker';
 import { DISPLAY_NAME_MAX_LENGTH, isValidDisplayName } from '@/features/auth/api/displayName';
+import {
+  PRE_WARNING_OPTIONS,
+  type GlobalNotificationPrefs,
+} from '@/features/notifications/api/notificationPreferences';
 import { useDisplayName } from '@/features/auth/useDisplayName';
+import { useGlobalNotificationPrefs } from '@/features/notifications/useGlobalNotificationPrefs';
 import { useReset } from '@/features/auth/ResetProvider';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
+
+// 1/2/5 → the lead-time picker options, derived from the canonical PRE_WARNING_OPTIONS.
+const LEAD_TIME_OPTIONS = PRE_WARNING_OPTIONS.map((minutes) => ({
+  label: `${minutes} min`,
+  value: minutes,
+}));
 
 // One settings row: a title, a short value/description, and a chevron. Tappable
 // when given an onPress; inert (a Phase 15 placeholder) otherwise.
@@ -49,6 +71,31 @@ function SettingRow({
   );
 }
 
+// A row with a right-side on/off Switch (no chevron). For the notification toggles.
+function ToggleRow({
+  title,
+  description,
+  value,
+  onValueChange,
+  disabled = false,
+}: {
+  title: string;
+  description: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+  disabled?: boolean;
+}): React.JSX.Element {
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        <Text style={styles.rowDescription}>{description}</Text>
+      </View>
+      <Switch value={value} onValueChange={onValueChange} disabled={disabled} />
+    </View>
+  );
+}
+
 function SettingsSection({
   title,
   children,
@@ -66,6 +113,7 @@ function SettingsSection({
 
 export default function SettingsScreen(): React.JSX.Element {
   const { displayName, save } = useDisplayName();
+  const { prefs, setShotOclock, setPreWarning, setLeadMinutes } = useGlobalNotificationPrefs();
   const { reset } = useReset();
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -97,6 +145,15 @@ export default function SettingsScreen(): React.JSX.Element {
     setEditingName(false);
   };
 
+  // Show sensible defaults instantly; the toggles are disabled until storage loads
+  // (near-instant) so a tap can't race the initial read and clobber a stored value.
+  const notifLoaded = prefs !== null;
+  const notif: GlobalNotificationPrefs = prefs ?? {
+    shotOclockEnabled: true,
+    preWarningEnabled: true,
+    preWarningMinutes: 2,
+  };
+
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -116,15 +173,32 @@ export default function SettingsScreen(): React.JSX.Element {
         </SettingsSection>
 
         <SettingsSection title="Notifications">
-          <SettingRow
+          <ToggleRow
             title="Shot O'Clock alert"
             description="Notify me when the shot window opens."
+            value={notif.shotOclockEnabled}
+            onValueChange={setShotOclock}
+            disabled={!notifLoaded}
           />
           <View style={styles.divider} />
-          <SettingRow
+          <ToggleRow
             title="Pre-warning"
-            description="A heads-up a few minutes before the next Shot O'Clock."
+            description="A heads-up before the next Shot O'Clock."
+            value={notif.preWarningEnabled}
+            onValueChange={setPreWarning}
+            disabled={!notifLoaded}
           />
+          {notif.preWarningEnabled ? (
+            <View style={styles.subControl}>
+              <Text style={styles.subLabel}>Lead time</Text>
+              <OptionPicker
+                options={LEAD_TIME_OPTIONS}
+                value={notif.preWarningMinutes}
+                onChange={setLeadMinutes}
+                disabled={!notifLoaded}
+              />
+            </View>
+          ) : null}
         </SettingsSection>
 
         <SettingsSection title="Sound">
@@ -265,6 +339,15 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: COLORS.border,
+  },
+  subControl: {
+    gap: SPACING.sm,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.md,
+  },
+  subLabel: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
   },
   modalBackdrop: {
     flex: 1,
