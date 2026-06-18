@@ -75,11 +75,11 @@ export default function HomeScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.screen}>
-      {/* Top-right settings gear — same pattern as the timer screen. Tappable but
-          a no-op for now; wired to the Settings route in Phase 15. */}
+      {/* Top-right settings gear — opens the global, app-level settings (Surface A,
+          D062). The in-game timer gear opens the per-session party settings instead. */}
       <View style={styles.header}>
         <Pressable
-          onPress={() => {}}
+          onPress={() => router.push('/settings')}
           accessibilityRole="button"
           accessibilityLabel="Settings"
           hitSlop={8}
