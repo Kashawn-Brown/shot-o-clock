@@ -16,7 +16,12 @@
 import { clearConsent } from '@/features/auth/api/consent';
 import { clearDisplayName } from '@/features/auth/api/displayName';
 import { clearNotificationsPrompted } from '@/features/notifications/api/notificationPermission';
-import { clearPreWarningMinutes } from '@/features/notifications/api/notificationPreferences';
+import {
+  clearPreWarningEnabled,
+  clearPreWarningMinutes,
+  clearSessionOverride,
+  clearShotOclockEnabled,
+} from '@/features/notifications/api/notificationPreferences';
 import { cancelShotNotifications } from '@/features/notifications/api/shotNotification';
 import { clearLeftPartyId } from '@/features/party/leftParty';
 import { supabase } from '@/lib/supabase';
@@ -28,14 +33,15 @@ export async function resetDevice(): Promise<void> {
 
   // Clear every device-side store. Each module owns its key.
   // TODO(claude, 2026-06-17): add clear*() here as later Phase 15 tasks land —
-  //   sound preference (sound task), party-creation defaults (defaults task), and
-  //   per-session notification overrides (D062 per-session task, a single JSON
-  //   blob key so stale partyId entries are cleared in one delete).
+  //   sound preference (sound task) and party-creation defaults (defaults task).
   await Promise.all([
     clearDisplayName(),
     clearConsent(),
     clearNotificationsPrompted(),
     clearPreWarningMinutes(),
+    clearShotOclockEnabled(),
+    clearPreWarningEnabled(),
+    clearSessionOverride(),
     clearLeftPartyId(),
   ]);
 

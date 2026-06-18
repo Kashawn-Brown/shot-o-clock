@@ -254,7 +254,7 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
   // app can't reschedule per round. Needs settings + currentRound for the round-loop
   // math. Self-cancels on pause / end / unmount (Phase 14, §2.1 — mirrors the server's
   // deterministic timing, never owns the timer).
-  useShotNotification(session, settings, currentRound);
+  useShotNotification(session, settings, currentRound, partyId);
 
   // On a foreground resume, realtime delivered nothing while we were suspended and
   // the socket may be dead — so the screen would render stale state (a frozen
