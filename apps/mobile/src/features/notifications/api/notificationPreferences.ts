@@ -34,3 +34,8 @@ export async function getPreWarningMinutes(): Promise<PreWarningMinutes> {
 export async function setPreWarningMinutes(minutes: PreWarningMinutes): Promise<void> {
   await SecureStore.setItemAsync(PRE_WARNING_MINUTES_KEY, String(minutes));
 }
+
+/** Clear the stored pre-warning lead time — part of Reset this device (D018). */
+export async function clearPreWarningMinutes(): Promise<void> {
+  await SecureStore.deleteItemAsync(PRE_WARNING_MINUTES_KEY);
+}

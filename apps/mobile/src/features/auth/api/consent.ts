@@ -36,3 +36,11 @@ export async function recordConsent(): Promise<void> {
     SecureStore.setItemAsync(TERMS_ACCEPTED_KEY, 'true'),
   ]);
 }
+
+/** Clear both confirmation flags — part of Reset this device (D018). */
+export async function clearConsent(): Promise<void> {
+  await Promise.all([
+    SecureStore.deleteItemAsync(AGE_CONFIRMED_KEY),
+    SecureStore.deleteItemAsync(TERMS_ACCEPTED_KEY),
+  ]);
+}

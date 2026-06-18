@@ -9,13 +9,14 @@
 
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '@/components/ui/Button';
 import { DISPLAY_NAME_MAX_LENGTH, isValidDisplayName } from '@/features/auth/api/displayName';
 import { useDisplayName } from '@/features/auth/useDisplayName';
+import { useReset } from '@/features/auth/ResetProvider';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 // One settings row: a title, a short value/description, and a chevron. Tappable
@@ -65,9 +66,23 @@ function SettingsSection({
 
 export default function SettingsScreen(): React.JSX.Element {
   const { displayName, save } = useDisplayName();
+  const { reset } = useReset();
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Destructive: a single confirmation, then resetDevice() wipes all device-side
+  // state and the identity tree remounts into onboarding (ResetProvider / D018).
+  const confirmReset = (): void => {
+    Alert.alert(
+      'Reset this device?',
+      "This signs you out and erases everything saved on this device — your name, your preferences, and your link to any current party. You'll start fresh, like a new install. This can't be undone.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reset', style: 'destructive', onPress: () => void reset() },
+      ],
+    );
+  };
 
   const openNameEditor = (): void => {
     setDraftName(displayName ?? '');
@@ -130,6 +145,7 @@ export default function SettingsScreen(): React.JSX.Element {
           <SettingRow
             title="Reset this device"
             description="Sign out and clear this device, returning to a fresh first launch."
+            onPress={confirmReset}
             danger
           />
         </SettingsSection>
