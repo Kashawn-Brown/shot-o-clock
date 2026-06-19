@@ -1,9 +1,9 @@
-// Per-session in-game Settings (Surface B, D062) — reached from the timer gear by
-// EVERY player, host or not (no role branch). Holds notification overrides scoped to
-// THIS party only — they default from the global settings, persist device-side keyed
+// Per-session in-game Settings (Surface B, D062/D064) — reached from the timer gear by
+// EVERY player, host or not (no role branch). Holds alert + Heads-up overrides scoped
+// to THIS party only — they default from the global settings, persist device-side keyed
 // by partyId, and are discarded when the party ends; the global defaults (Surface A,
-// app/settings.tsx) are never touched. The host additionally sees a Party lock row,
-// conditionally rendered on the same screen.
+// app/settings.tsx) are never touched. The notification MASTER is global-only (not
+// here). The host additionally sees a Party lock row, conditionally rendered.
 //
 // Role comes from usePartyRole — a one-shot read, NOT useTimerSession: the latter
 // drives notification scheduling (whose unmount cancel would kill the timer's batch
@@ -11,13 +11,22 @@
 // which this screen needs.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { OptionPicker } from '@/components/ui/OptionPicker';
 import { PRE_WARNING_OPTIONS } from '@/features/notifications/api/notificationPreferences';
+import { SHOT_SOUNDS } from '@/features/notifications/api/shotSounds';
 import { useSessionOverride } from '@/features/notifications/useSessionOverride';
 import { usePartyRole } from '@/features/party/usePartyRole';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
@@ -26,6 +35,33 @@ const LEAD_TIME_OPTIONS = PRE_WARNING_OPTIONS.map((minutes) => ({
   label: `${minutes} min`,
   value: minutes,
 }));
+
+const SOUND_OPTIONS = SHOT_SOUNDS.map((sound) => ({ label: sound.label, value: sound.id }));
+
+// A row with a right-side on/off Switch (no chevron). For the per-session toggles.
+function ToggleRow({
+  title,
+  description,
+  value,
+  onValueChange,
+  disabled = false,
+}: {
+  title: string;
+  description: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+  disabled?: boolean;
+}): React.JSX.Element {
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        <Text style={styles.rowDescription}>{description}</Text>
+      </View>
+      <Switch value={value} onValueChange={onValueChange} disabled={disabled} />
+    </View>
+  );
+}
 
 // One inert settings row: a title, a short description, and a chevron hinting it's
 // tappable once wired. Placeholder for the party-lock row (built in a later task).
@@ -43,24 +79,6 @@ function SettingRow({
         <Text style={styles.rowDescription}>{description}</Text>
       </View>
       <Ionicons name="chevron-forward" size={CHEVRON_SIZE} color={COLORS.textSecondary} />
-    </View>
-  );
-}
-
-function ControlRow({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <View style={styles.controlRow}>
-      <Text style={styles.rowTitle}>{title}</Text>
-      <Text style={styles.rowDescription}>{description}</Text>
-      <View style={styles.controlPicker}>{children}</View>
     </View>
   );
 }
@@ -86,7 +104,19 @@ function SettingsSection({
 export default function PartySettingsScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
   const { status, isHost, errorMessage } = usePartyRole(partyId);
-  const { loaded, leadMinutes, setLeadMinutes } = useSessionOverride(partyId);
+  const {
+    loaded,
+    alertSoundEnabled,
+    alertHapticEnabled,
+    soundChoice,
+    preWarningEnabled,
+    leadMinutes,
+    setAlertSoundEnabled,
+    setAlertHapticEnabled,
+    setSoundChoice,
+    setPreWarningEnabled,
+    setLeadMinutes,
+  } = useSessionOverride(partyId);
 
   if (status === 'loading') {
     return (
@@ -115,22 +145,59 @@ export default function PartySettingsScreen(): React.JSX.Element {
 
       <ScrollView contentContainerStyle={styles.content}>
         <SettingsSection
-          title="Notifications"
-          caption="Applies to this party only."
+          title="Alert"
+          caption="For this party only. Plays in the app while you're watching."
         >
-          <ControlRow
-            title="Heads-up lead time"
-            description={
-              'How early the heads-up notification is sent before the next Shot O’Clock.'
-            }
-          >
-            <OptionPicker
-              options={LEAD_TIME_OPTIONS}
-              value={leadMinutes}
-              onChange={setLeadMinutes}
-              disabled={!loaded}
-            />
-          </ControlRow>
+          <ToggleRow
+            title="Alert sound"
+            description="Play a sound when it's Shot O'Clock."
+            value={alertSoundEnabled}
+            onValueChange={setAlertSoundEnabled}
+            disabled={!loaded}
+          />
+          {alertSoundEnabled ? (
+            <View style={styles.subControl}>
+              <Text style={styles.subLabel}>Sound</Text>
+              <OptionPicker
+                options={SOUND_OPTIONS}
+                value={soundChoice}
+                onChange={setSoundChoice}
+                disabled={!loaded}
+              />
+            </View>
+          ) : null}
+          <View style={styles.divider} />
+          <ToggleRow
+            title="Alert haptic"
+            description="Vibrate when it's Shot O'Clock."
+            value={alertHapticEnabled}
+            onValueChange={setAlertHapticEnabled}
+            disabled={!loaded}
+          />
+        </SettingsSection>
+
+        <SettingsSection
+          title="Notifications"
+          caption="For this party only. Alerts when the app is in the background."
+        >
+          <ToggleRow
+            title="Heads-up"
+            description="Get a reminder before the next Shot O'Clock."
+            value={preWarningEnabled}
+            onValueChange={setPreWarningEnabled}
+            disabled={!loaded}
+          />
+          {preWarningEnabled ? (
+            <View style={styles.subControl}>
+              <Text style={styles.subLabel}>Lead time</Text>
+              <OptionPicker
+                options={LEAD_TIME_OPTIONS}
+                value={leadMinutes}
+                onChange={setLeadMinutes}
+                disabled={!loaded}
+              />
+            </View>
+          ) : null}
         </SettingsSection>
 
         {isHost ? (
@@ -205,12 +272,14 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     paddingVertical: SPACING.md,
   },
-  controlRow: {
+  subControl: {
     gap: SPACING.sm,
-    paddingVertical: SPACING.md,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.md,
   },
-  controlPicker: {
-    paddingTop: SPACING.xs,
+  subLabel: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
   },
   rowText: {
     flex: 1,
