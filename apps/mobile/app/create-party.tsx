@@ -12,7 +12,16 @@
 
 import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -23,13 +32,10 @@ import { useDisplayName } from '@/features/auth/useDisplayName';
 import { createParty } from '@/features/party/api/createParty';
 import { startGame } from '@/features/party/api/startGame';
 import { clearLeftPartyId } from '@/features/party/leftParty';
+import { usePartyCreateDefaults } from '@/features/party/usePartyCreateDefaults';
+import type { PartyCreateDefaults } from '@/features/party/partyDefaults';
 import {
-  DEFAULT_ELIMINATION_ENABLED,
-  DEFAULT_GRACE_MODE,
   DEFAULT_HOST_ONLY,
-  DEFAULT_INTERVAL_INCREMENT_MINUTES,
-  DEFAULT_SHOT_WINDOW_SECONDS,
-  DEFAULT_STARTING_INTERVAL_MINUTES,
   ELIMINATION_OFF_HINT,
   ELIMINATION_ON_HINT,
   formatDefaultPartyName,
@@ -52,7 +58,28 @@ import {
 import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
+// Gate: load the host's saved party-creation defaults, then mount the form seeded
+// from them. The form initializes its state from props (synchronously available once
+// loaded), so the defaults pre-fill cleanly without a back-filling effect.
 export default function CreatePartyScreen(): React.JSX.Element {
+  const { defaults } = usePartyCreateDefaults();
+
+  if (!defaults) {
+    return (
+      <SafeAreaView style={[styles.screen, styles.loading]} edges={['top', 'bottom']}>
+        <ActivityIndicator color={COLORS.textPrimary} />
+      </SafeAreaView>
+    );
+  }
+
+  return <CreatePartyForm initialDefaults={defaults} />;
+}
+
+function CreatePartyForm({
+  initialDefaults,
+}: {
+  initialDefaults: PartyCreateDefaults;
+}): React.JSX.Element {
   const { displayName } = useDisplayName();
 
   // Held silently as the fallback name. The visible field stays empty (showing
@@ -60,15 +87,17 @@ export default function CreatePartyScreen(): React.JSX.Element {
   // empty field uses this default rather than failing — so we never submit empty.
   const defaultPartyName = useMemo(() => formatDefaultPartyName(new Date()), []);
   const [partyName, setPartyName] = useState('');
+  // Interval/shot-window/elimination/grace seed from the host's saved defaults
+  // (factory defaults when none saved). host-only + name are not saved defaults.
   const [startingIntervalMinutes, setStartingIntervalMinutes] = useState(
-    DEFAULT_STARTING_INTERVAL_MINUTES,
+    initialDefaults.startingIntervalMinutes,
   );
   const [intervalIncrementMinutes, setIntervalIncrementMinutes] = useState(
-    DEFAULT_INTERVAL_INCREMENT_MINUTES,
+    initialDefaults.intervalIncrementMinutes,
   );
-  const [shotWindowSeconds, setShotWindowSeconds] = useState(DEFAULT_SHOT_WINDOW_SECONDS);
-  const [eliminationEnabled, setEliminationEnabled] = useState(DEFAULT_ELIMINATION_ENABLED);
-  const [graceMode, setGraceMode] = useState<GraceMode>(DEFAULT_GRACE_MODE);
+  const [shotWindowSeconds, setShotWindowSeconds] = useState(initialDefaults.shotWindowSeconds);
+  const [eliminationEnabled, setEliminationEnabled] = useState(initialDefaults.eliminationEnabled);
+  const [graceMode, setGraceMode] = useState<GraceMode>(initialDefaults.graceMode);
   const [hostOnly, setHostOnly] = useState(DEFAULT_HOST_ONLY);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -286,6 +315,10 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  loading: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     flexDirection: 'row',
