@@ -29,6 +29,7 @@ import {
 } from '@/features/notifications/api/notificationPreferences';
 import { cancelShotNotifications } from '@/features/notifications/api/shotNotification';
 import { clearLeftPartyId } from '@/features/party/leftParty';
+import { clearPartyCreateDefaults } from '@/features/party/partyDefaults';
 import { supabase } from '@/lib/supabase';
 
 export async function resetDevice(): Promise<void> {
@@ -39,8 +40,6 @@ export async function resetDevice(): Promise<void> {
   // Clear every device-side store. Each module owns its key. The single
   // clearSessionOverride() wipes ALL per-session overrides (alert + Heads-up) — they
   // share one blob.
-  // TODO(claude, 2026-06-19): add clear*() here as the remaining Phase 15 task lands —
-  //   party-creation defaults (defaults task).
   await Promise.all([
     clearDisplayName(),
     clearConsent(),
@@ -52,6 +51,7 @@ export async function resetDevice(): Promise<void> {
     clearAlertHapticEnabled(),
     clearShotOclockSound(),
     clearSessionOverride(),
+    clearPartyCreateDefaults(),
     clearLeftPartyId(),
   ]);
 
