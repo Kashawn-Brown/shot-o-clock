@@ -258,6 +258,7 @@ export default function SettingsScreen(): React.JSX.Element {
           <SettingRow
             title="Default party settings"
             description="Your default Create Party settings."
+            onPress={() => router.push('/party-defaults')}
           />
         </SettingsSection>
 
