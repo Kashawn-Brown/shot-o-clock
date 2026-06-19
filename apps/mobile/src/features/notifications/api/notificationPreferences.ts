@@ -1,18 +1,21 @@
-// Device-side notification preferences (Phase 14 stored defaults; Phase 15 adds the
-// settings UI + the per-session overrides, D062). Two layers:
+// Device-side BACKGROUNDED-NOTIFICATION preferences (Phase 14 stored defaults;
+// Phase 15 adds the settings UI + the per-session overrides, D062/D064). The
+// foreground in-app ALERT (sound + haptic) is a separate concern — see
+// api/alertPreferences.ts. Two layers here:
 //
 //   GLOBAL (Surface A, app/settings.tsx) — the device-wide defaults: the Shot
-//   O'Clock alert on/off, the pre-warning on/off, and the pre-warning lead time.
-//   Each is its own SecureStore key (the existing one-key-per-pref pattern).
+//   O'Clock notification master on/off, the Heads-up on/off, and the Heads-up lead
+//   time. Each is its own SecureStore key (the existing one-key-per-pref pattern).
 //
 //   PER-SESSION OVERRIDE (Surface B, app/party/[partyId]/settings.tsx) — overrides
-//   the lead time and the sound-vs-vibration alert mode for the ACTIVE party only,
-//   defaulting from global. Stored as ONE key holding a single { partyId, ... }
-//   value: SecureStore has no key-listing API, so we can't clean up per-partyId
-//   keys; a guest is in at most one party at a time (same invariant leftParty.ts
-//   relies on), so we keep exactly one and guard reads by partyId — a stale entry
-//   from a party that ended uncleanly is ignored on mismatch and overwritten when
-//   the next party sets one. Reset clears the single key.
+//   the Heads-up on/off + lead time (and the alert fields, see alertPreferences) for
+//   the ACTIVE party only, defaulting from global. The notification MASTER is global
+//   only (not overridable per-session). Stored as ONE shared key holding a single
+//   { partyId, ... } value: SecureStore has no key-listing API, so we can't clean up
+//   per-partyId keys; a guest is in at most one party at a time (same invariant
+//   leftParty.ts relies on), so we keep exactly one and guard reads by partyId — a
+//   stale entry from a party that ended uncleanly is ignored on mismatch and
+//   overwritten when the next party sets one. Reset clears the single key.
 //
 // SecureStore, same pattern as the onboarding `prompted` flag (notificationPermission).
 
@@ -55,9 +58,9 @@ export async function clearPreWarningMinutes(): Promise<void> {
 }
 
 // ─── Global on/off toggles ──────────────────────────────────────────────────
-// Both default ON (the Phase 14 behaviour: alerts fire unless turned off).
+// Both default ON (the Phase 14 behaviour: notifications fire unless turned off).
 
-async function getBool(key: string, fallback: boolean): Promise<boolean> {
+export async function getBool(key: string, fallback: boolean): Promise<boolean> {
   try {
     const raw = await SecureStore.getItemAsync(key);
     return raw == null ? fallback : raw === 'true';
@@ -66,16 +69,20 @@ async function getBool(key: string, fallback: boolean): Promise<boolean> {
   }
 }
 
-/** Whether the Shot O'Clock window-open alert fires (global default; on unless set off). */
-export async function getShotOclockEnabled(): Promise<boolean> {
+/**
+ * The Shot O'Clock NOTIFICATION master (backgrounded/locked window-open alert) —
+ * global default, on unless set off. This is global-only (not overridable per-session,
+ * D064). Storage key keeps its original `…shotOclockEnabled` string (no migration).
+ */
+export async function getShotOclockNotificationEnabled(): Promise<boolean> {
   return getBool(SHOT_OCLOCK_ENABLED_KEY, true);
 }
 
-export async function setShotOclockEnabled(enabled: boolean): Promise<void> {
+export async function setShotOclockNotificationEnabled(enabled: boolean): Promise<void> {
   await SecureStore.setItemAsync(SHOT_OCLOCK_ENABLED_KEY, String(enabled));
 }
 
-export async function clearShotOclockEnabled(): Promise<void> {
+export async function clearShotOclockNotificationEnabled(): Promise<void> {
   await SecureStore.deleteItemAsync(SHOT_OCLOCK_ENABLED_KEY);
 }
 
@@ -92,36 +99,34 @@ export async function clearPreWarningEnabled(): Promise<void> {
   await SecureStore.deleteItemAsync(PRE_WARNING_ENABLED_KEY);
 }
 
-/** All three global notification preferences, read together. */
+/** The three global backgrounded-notification preferences, read together. */
 export interface GlobalNotificationPrefs {
-  shotOclockEnabled: boolean;
-  preWarningEnabled: boolean;
-  preWarningMinutes: PreWarningMinutes;
+  shotOclockNotificationEnabled: boolean; // backgrounded notification master
+  preWarningEnabled: boolean; // Heads-up on/off
+  preWarningMinutes: PreWarningMinutes; // Heads-up lead time
 }
 
 export async function getGlobalNotificationPrefs(): Promise<GlobalNotificationPrefs> {
-  const [shotOclockEnabled, preWarningEnabled, preWarningMinutes] = await Promise.all([
-    getShotOclockEnabled(),
+  const [shotOclockNotificationEnabled, preWarningEnabled, preWarningMinutes] = await Promise.all([
+    getShotOclockNotificationEnabled(),
     getPreWarningEnabled(),
     getPreWarningMinutes(),
   ]);
-  return { shotOclockEnabled, preWarningEnabled, preWarningMinutes };
+  return { shotOclockNotificationEnabled, preWarningEnabled, preWarningMinutes };
 }
 
-// ─── Per-session override (D062) ────────────────────────────────────────────
-// How a backgrounded notification alerts: 'sound' (default) plays a sound; 'vibration'
-// is silent and vibrates (a dedicated Android channel; see api/shotNotification.ts).
-export const ALERT_MODES = ['sound', 'vibration'] as const;
-export type AlertMode = (typeof ALERT_MODES)[number];
-
-function isAlertMode(value: unknown): value is AlertMode {
-  return typeof value === 'string' && (ALERT_MODES as readonly string[]).includes(value);
-}
-
-/** The overridable per-session fields. Absent field = fall back to global. */
+// ─── Per-session override (D062/D064) ───────────────────────────────────────
+// The overridable per-session fields. Absent field = fall back to global. Covers
+// the Heads-up on/off + lead time here, plus the foreground alert fields layered in
+// by api/alertPreferences.ts (alertSoundEnabled / alertHapticEnabled / shotOclockSound)
+// — all share this one stored blob. The notification master is NOT here (global only).
 export interface SessionOverride {
-  leadMinutes?: PreWarningMinutes;
-  alertMode?: AlertMode;
+  preWarningEnabled?: boolean; // Heads-up on/off
+  leadMinutes?: PreWarningMinutes; // Heads-up lead time
+  // Foreground alert overrides (validated/consumed in api/alertPreferences.ts):
+  alertSoundEnabled?: boolean;
+  alertHapticEnabled?: boolean;
+  shotOclockSound?: string; // a ShotSoundId (validated in alertPreferences)
 }
 
 // Stored shape: the override tagged with the party it belongs to.
@@ -133,7 +138,9 @@ interface StoredSessionOverride extends SessionOverride {
  * The per-session override for `partyId`, or null if none applies (no override
  * stored, or the stored one belongs to a different party — a guest is in at most
  * one party at a time, so a mismatch means it's stale and is ignored). Invalid
- * fields are dropped so a corrupt value can't poison scheduling.
+ * fields are dropped so a corrupt value can't poison scheduling. The alert fields
+ * are sanitized by alertPreferences (which owns their validity); here we pass them
+ * through and validate only the notification fields.
  */
 export async function getSessionOverride(partyId: string): Promise<SessionOverride | null> {
   try {
@@ -142,8 +149,14 @@ export async function getSessionOverride(partyId: string): Promise<SessionOverri
     const parsed = JSON.parse(raw) as StoredSessionOverride;
     if (parsed.partyId !== partyId) return null;
     const override: SessionOverride = {};
+    if (typeof parsed.preWarningEnabled === 'boolean')
+      override.preWarningEnabled = parsed.preWarningEnabled;
     if (isValidPreWarning(Number(parsed.leadMinutes))) override.leadMinutes = parsed.leadMinutes;
-    if (isAlertMode(parsed.alertMode)) override.alertMode = parsed.alertMode;
+    if (typeof parsed.alertSoundEnabled === 'boolean')
+      override.alertSoundEnabled = parsed.alertSoundEnabled;
+    if (typeof parsed.alertHapticEnabled === 'boolean')
+      override.alertHapticEnabled = parsed.alertHapticEnabled;
+    if (typeof parsed.shotOclockSound === 'string') override.shotOclockSound = parsed.shotOclockSound;
     return override;
   } catch {
     return null;
@@ -169,27 +182,26 @@ export async function clearSessionOverride(): Promise<void> {
 
 /** The scheduling-ready prefs after layering a per-session override over global. */
 export interface EffectiveNotificationPrefs {
-  // Whether to schedule the shot-window 'open' alert at all (global toggle).
+  // Whether to schedule the shot-window 'open' notification at all (global master).
   includeOpen: boolean;
-  // Effective pre-warning lead time in minutes; 0 means no pre-warning (toggle off).
+  // Effective Heads-up lead time in minutes; 0 means no Heads-up (toggle off).
   preWarningMinutes: number;
-  alertMode: AlertMode;
 }
 
 /**
  * Layer a per-session override over the global defaults. Pure (unit-tested): the
- * lead time comes from the override when set else global, but only when the global
- * pre-warning toggle is on; the alert mode comes from the override else 'sound';
- * the shot-window 'open' alert follows the global toggle.
+ * shot-window 'open' notification follows the global master (not overridable); the
+ * Heads-up fires when the effective on/off (override else global) is on, at the
+ * effective lead time (override else global).
  */
 export function resolveEffectivePrefs(
   global: GlobalNotificationPrefs,
   override: SessionOverride | null,
 ): EffectiveNotificationPrefs {
+  const headsUpEnabled = override?.preWarningEnabled ?? global.preWarningEnabled;
   const lead = override?.leadMinutes ?? global.preWarningMinutes;
   return {
-    includeOpen: global.shotOclockEnabled,
-    preWarningMinutes: global.preWarningEnabled ? lead : 0,
-    alertMode: override?.alertMode ?? 'sound',
+    includeOpen: global.shotOclockNotificationEnabled,
+    preWarningMinutes: headsUpEnabled ? lead : 0,
   };
 }

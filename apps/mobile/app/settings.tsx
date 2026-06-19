@@ -149,7 +149,7 @@ export default function SettingsScreen(): React.JSX.Element {
   // (near-instant) so a tap can't race the initial read and clobber a stored value.
   const notifLoaded = prefs !== null;
   const notif: GlobalNotificationPrefs = prefs ?? {
-    shotOclockEnabled: true,
+    shotOclockNotificationEnabled: true,
     preWarningEnabled: true,
     preWarningMinutes: 2,
   };
@@ -174,9 +174,9 @@ export default function SettingsScreen(): React.JSX.Element {
 
         <SettingsSection title="Notifications">
           <ToggleRow
-            title="Shot O'Clock alert"
-            description="Notify me when it's Shot O'Clock."
-            value={notif.shotOclockEnabled}
+            title="Shot O'Clock notification"
+            description="Notify me when it's Shot O'Clock and the app is in the background."
+            value={notif.shotOclockNotificationEnabled}
             onValueChange={setShotOclock}
             disabled={!notifLoaded}
           />

@@ -54,7 +54,11 @@ jest.mock('@/features/notifications/api/notificationPreferences', () => {
   return {
     ...actual,
     getGlobalNotificationPrefs: jest.fn(() =>
-      Promise.resolve({ shotOclockEnabled: true, preWarningEnabled: true, preWarningMinutes: 0 }),
+      Promise.resolve({
+        shotOclockNotificationEnabled: true,
+        preWarningEnabled: true,
+        preWarningMinutes: 0,
+      }),
     ),
     getSessionOverride: jest.fn(() => Promise.resolve(null)),
   };
@@ -92,7 +96,7 @@ beforeEach(() => {
   mockGetAll.mockResolvedValue([]);
   mockPermission.mockResolvedValue('granted');
   mockGlobalPrefs.mockResolvedValue({
-    shotOclockEnabled: true,
+    shotOclockNotificationEnabled: true,
     preWarningEnabled: true,
     preWarningMinutes: 0,
   });
@@ -110,7 +114,7 @@ describe('scheduleShotNotifications', () => {
 
   it('also schedules pre-warning notifications when a lead time is configured', async () => {
     mockGlobalPrefs.mockResolvedValue({
-      shotOclockEnabled: true,
+      shotOclockNotificationEnabled: true,
       preWarningEnabled: true,
       preWarningMinutes: 2,
     });
@@ -128,9 +132,9 @@ describe('scheduleShotNotifications', () => {
     expect(prewarn.content.body).toContain('2 minutes');
   });
 
-  it('omits the open alert when the global Shot O’Clock toggle is off', async () => {
+  it('omits the open notification when the global master is off', async () => {
     mockGlobalPrefs.mockResolvedValue({
-      shotOclockEnabled: false,
+      shotOclockNotificationEnabled: false,
       preWarningEnabled: true,
       preWarningMinutes: 2,
     });
@@ -140,23 +144,15 @@ describe('scheduleShotNotifications', () => {
       }),
     );
     const ids = mockSchedule.mock.calls.map((c) => c[0].identifier);
-    expect(ids).toContain('shot-oclock-prewarn-r3'); // pre-warning still fires
-    expect(ids).not.toContain('shot-oclock-r3'); // open alert suppressed
+    expect(ids).toContain('shot-oclock-prewarn-r3'); // Heads-up still fires
+    expect(ids).not.toContain('shot-oclock-r3'); // open notification suppressed
   });
 
-  it('uses the sound channel and a sound by default', async () => {
+  it('always uses the single channel and the OS default sound', async () => {
     await scheduleShotNotifications(input());
     const call = mockSchedule.mock.calls[0][0];
     expect(call.trigger.channelId).toBe('shot-oclock');
     expect(call.content.sound).toBe('default');
-  });
-
-  it('uses the vibrate channel and no sound when the override alert mode is vibration', async () => {
-    mockSessionOverride.mockResolvedValue({ alertMode: 'vibration' });
-    await scheduleShotNotifications(input(), 'party-a');
-    const call = mockSchedule.mock.calls[0][0];
-    expect(call.trigger.channelId).toBe('shot-oclock-vibrate');
-    expect(call.content.sound).toBeUndefined();
   });
 
   it('schedules nothing and clears when there is no active game', async () => {

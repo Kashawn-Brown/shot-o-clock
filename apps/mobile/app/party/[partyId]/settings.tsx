@@ -17,11 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { OptionPicker } from '@/components/ui/OptionPicker';
-import {
-  ALERT_MODES,
-  PRE_WARNING_OPTIONS,
-  type AlertMode,
-} from '@/features/notifications/api/notificationPreferences';
+import { PRE_WARNING_OPTIONS } from '@/features/notifications/api/notificationPreferences';
 import { useSessionOverride } from '@/features/notifications/useSessionOverride';
 import { usePartyRole } from '@/features/party/usePartyRole';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
@@ -29,15 +25,6 @@ import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens
 const LEAD_TIME_OPTIONS = PRE_WARNING_OPTIONS.map((minutes) => ({
   label: `${minutes} min`,
   value: minutes,
-}));
-
-const ALERT_MODE_LABELS: Record<AlertMode, string> = {
-  sound: 'Sound',
-  vibration: 'Vibration',
-};
-const ALERT_MODE_OPTIONS = ALERT_MODES.map((mode) => ({
-  label: ALERT_MODE_LABELS[mode],
-  value: mode,
 }));
 
 // One inert settings row: a title, a short description, and a chevron hinting it's
@@ -99,8 +86,7 @@ function SettingsSection({
 export default function PartySettingsScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
   const { status, isHost, errorMessage } = usePartyRole(partyId);
-  const { loaded, preWarningEnabled, leadMinutes, alertMode, setLeadMinutes, setAlertMode } =
-    useSessionOverride(partyId);
+  const { loaded, leadMinutes, setLeadMinutes } = useSessionOverride(partyId);
 
   if (status === 'loading') {
     return (
@@ -142,18 +128,6 @@ export default function PartySettingsScreen(): React.JSX.Element {
               options={LEAD_TIME_OPTIONS}
               value={leadMinutes}
               onChange={setLeadMinutes}
-              disabled={!loaded || !preWarningEnabled}
-            />
-          </ControlRow>
-          <View style={styles.divider} />
-          <ControlRow
-            title="Sound or vibration"
-            description="Alert type for Shot O'Clock."
-          >
-            <OptionPicker
-              options={ALERT_MODE_OPTIONS}
-              value={alertMode}
-              onChange={setAlertMode}
               disabled={!loaded}
             />
           </ControlRow>

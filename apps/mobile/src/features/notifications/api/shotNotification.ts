@@ -26,7 +26,6 @@ import {
   getGlobalNotificationPrefs,
   getSessionOverride,
   resolveEffectivePrefs,
-  type AlertMode,
 } from '@/features/notifications/api/notificationPreferences';
 import {
   shotNotificationSchedule,
@@ -39,15 +38,10 @@ import { getServerTimeOffset } from '@/lib/time';
 // `shot-oclock-r{n}`), so we can cancel exactly our own batch without touching any
 // other scheduled notification.
 const SHOT_NOTIFICATION_ID_PREFIX = 'shot-oclock';
-// Two Android channels — channels are immutable once created, so sound-vs-vibration
-// (the per-session alert mode, D062) needs a dedicated silent+vibrate channel rather
-// than toggling one channel's sound at schedule time.
-const ANDROID_CHANNEL_ID = 'shot-oclock'; // sound + vibration (default alert mode)
-const ANDROID_CHANNEL_VIBRATE_ID = 'shot-oclock-vibrate'; // silent, vibration only
-
-function androidChannelFor(alertMode: AlertMode): string {
-  return alertMode === 'vibration' ? ANDROID_CHANNEL_VIBRATE_ID : ANDROID_CHANNEL_ID;
-}
+// One Android channel. The backgrounded notification always uses the OS default sound
+// (D064): sound-vs-vibration is left to the phone's own ring/silent/vibrate mode, not
+// the app — so there is no dedicated vibrate channel.
+const ANDROID_CHANNEL_ID = 'shot-oclock';
 
 // How many upcoming rounds to pre-schedule. The further out, the more an estimate can
 // drift (host pause / add-time) before the next foreground recompute; 8 covers a long
@@ -89,21 +83,13 @@ export async function configureNotifications(): Promise<void> {
   });
 
   // Android needs a high-importance channel or the notification makes no sound and
-  // won't pop as a heads-up. No-op on iOS. Two channels (immutable once created) back
-  // the per-session sound-vs-vibration alert mode (D062): the default plays a sound,
-  // the vibrate channel is silent and only vibrates.
+  // won't pop as a heads-up. No-op on iOS. One channel using the OS default sound;
+  // the phone's ring/silent/vibrate mode governs sound-vs-vibration (D064).
   if (Platform.OS === 'android') {
     await setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
       name: "Shot O'Clock",
       importance: AndroidImportance.MAX,
       sound: 'default',
-      vibrationPattern: [0, 250, 250, 250],
-    }).catch(() => {});
-    await setNotificationChannelAsync(ANDROID_CHANNEL_VIBRATE_ID, {
-      name: "Shot O'Clock (vibration only)",
-      importance: AndroidImportance.MAX,
-      // No sound — silent heads-up that still vibrates.
-      sound: null,
       vibrationPattern: [0, 250, 250, 250],
     }).catch(() => {});
   }
@@ -127,14 +113,12 @@ export async function scheduleShotNotifications(
 
   // Layer this party's per-session override (D062) over the global defaults, then plan
   // the batch. Only needed when actually scheduling (input present).
-  let alertMode: AlertMode = 'sound';
   let preWarningMinutes = 0;
   let slots: ShotNotificationSlot[] = [];
   if (input) {
     const global = await getGlobalNotificationPrefs();
     const override = partyId ? await getSessionOverride(partyId) : null;
     const effective = resolveEffectivePrefs(global, override);
-    alertMode = effective.alertMode;
     preWarningMinutes = effective.preWarningMinutes;
     slots = shotNotificationSchedule(
       input,
@@ -143,8 +127,8 @@ export async function scheduleShotNotifications(
       MAX_SCHEDULED_ROUNDS,
       preWarningMinutes,
     );
-    // The shot-window 'open' alert follows the global Shot O'Clock toggle; pre-warning
-    // slots are already gated by preWarningMinutes (0 when the toggle is off => none).
+    // The shot-window 'open' notification follows the global master; Heads-up slots are
+    // already gated by preWarningMinutes (0 when off => none).
     if (!effective.includeOpen) slots = slots.filter((slot) => slot.kind !== 'open');
   }
 
@@ -162,16 +146,15 @@ export async function scheduleShotNotifications(
   // host paused, or the screen unmounted) — don't schedule a now-stale batch.
   if (generation !== scheduleGeneration) return;
 
-  const channelId = androidChannelFor(alertMode);
   await Promise.all(
     slots.map((slot) =>
       scheduleNotificationAsync({
         identifier: identifierFor(slot),
-        content: contentFor(slot, preWarningMinutes, alertMode),
+        content: contentFor(slot, preWarningMinutes),
         trigger: {
           type: SchedulableTriggerInputTypes.DATE,
           date: slot.fireAtMs,
-          channelId,
+          channelId: ANDROID_CHANNEL_ID,
         },
       }).catch(() => {}),
     ),
@@ -180,8 +163,8 @@ export async function scheduleShotNotifications(
 
 /**
  * Re-run the last schedule with the current preferences. Called after a per-session
- * preference change (Surface B / D062) so the new lead time or alert mode takes effect
- * immediately rather than at the next round. No-op when there's no active game.
+ * preference change (Surface B / D062) so the new Heads-up on/off or lead time takes
+ * effect immediately rather than at the next round. No-op when there's no active game.
  */
 export async function reapplyShotNotifications(): Promise<void> {
   await scheduleShotNotifications(lastInput, lastPartyId);
@@ -195,22 +178,21 @@ function identifierFor(slot: ShotNotificationSlot): string {
     : `${SHOT_NOTIFICATION_ID_PREFIX}-r${slot.roundNumber}`;
 }
 
-function contentFor(slot: ShotNotificationSlot, preWarningMinutes: number, alertMode: AlertMode) {
-  // 'vibration' mode omits the sound so the OS delivers a silent (vibrate-only) alert;
-  // on Android the channel reinforces this, on iOS omitting sound is the silent path.
-  const sound = alertMode === 'sound' ? ('default' as const) : undefined;
+function contentFor(slot: ShotNotificationSlot, preWarningMinutes: number) {
+  // The backgrounded notification always uses the OS default sound (D064); the phone's
+  // ring/silent/vibrate mode decides whether that plays a sound or vibrates.
   if (slot.kind === 'prewarn') {
     const unit = preWarningMinutes === 1 ? 'minute' : 'minutes';
     return {
       title: 'Shot O’Clock soon',
       body: `Get ready, the next shot is in ${preWarningMinutes} ${unit}.`,
-      sound,
+      sound: 'default' as const,
     };
   }
   return {
     title: "It's Shot O'Clock! 🥃",
     body: 'Time to take your shot!',
-    sound,
+    sound: 'default' as const,
   };
 }
 

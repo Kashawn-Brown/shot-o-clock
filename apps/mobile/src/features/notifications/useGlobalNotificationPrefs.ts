@@ -9,7 +9,7 @@ import {
   getGlobalNotificationPrefs,
   setPreWarningEnabled,
   setPreWarningMinutes,
-  setShotOclockEnabled,
+  setShotOclockNotificationEnabled,
   type GlobalNotificationPrefs,
   type PreWarningMinutes,
 } from '@/features/notifications/api/notificationPreferences';
@@ -35,8 +35,8 @@ export function useGlobalNotificationPrefs(): UseGlobalNotificationPrefsResult {
   }, []);
 
   const setShotOclock = useCallback((enabled: boolean) => {
-    setPrefs((prev) => (prev ? { ...prev, shotOclockEnabled: enabled } : prev));
-    void setShotOclockEnabled(enabled);
+    setPrefs((prev) => (prev ? { ...prev, shotOclockNotificationEnabled: enabled } : prev));
+    void setShotOclockNotificationEnabled(enabled);
   }, []);
 
   const setPreWarning = useCallback((enabled: boolean) => {

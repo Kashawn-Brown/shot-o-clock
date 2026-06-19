@@ -33,7 +33,7 @@ beforeEach(() => {
 });
 
 const GLOBAL_DEFAULT: GlobalNotificationPrefs = {
-  shotOclockEnabled: true,
+  shotOclockNotificationEnabled: true,
   preWarningEnabled: true,
   preWarningMinutes: 2,
 };
@@ -43,27 +43,44 @@ describe('resolveEffectivePrefs', () => {
     expect(resolveEffectivePrefs(GLOBAL_DEFAULT, null)).toEqual({
       includeOpen: true,
       preWarningMinutes: 2,
-      alertMode: 'sound',
     });
   });
 
-  it('lets the override replace the lead time and alert mode', () => {
-    expect(
-      resolveEffectivePrefs(GLOBAL_DEFAULT, { leadMinutes: 5, alertMode: 'vibration' }),
-    ).toEqual({ includeOpen: true, preWarningMinutes: 5, alertMode: 'vibration' });
+  it('lets the override replace the lead time', () => {
+    expect(resolveEffectivePrefs(GLOBAL_DEFAULT, { leadMinutes: 5 })).toEqual({
+      includeOpen: true,
+      preWarningMinutes: 5,
+    });
   });
 
-  it('zeroes the lead time when the global pre-warning toggle is off, even with an override', () => {
+  it('zeroes the lead time when the global Heads-up toggle is off', () => {
     const global: GlobalNotificationPrefs = { ...GLOBAL_DEFAULT, preWarningEnabled: false };
     expect(resolveEffectivePrefs(global, { leadMinutes: 5 })).toEqual({
       includeOpen: true,
       preWarningMinutes: 0,
-      alertMode: 'sound',
     });
   });
 
-  it('drops the open alert when the global Shot O’Clock toggle is off', () => {
-    const global: GlobalNotificationPrefs = { ...GLOBAL_DEFAULT, shotOclockEnabled: false };
+  it('zeroes the lead time when the per-session Heads-up override is off', () => {
+    expect(resolveEffectivePrefs(GLOBAL_DEFAULT, { preWarningEnabled: false })).toEqual({
+      includeOpen: true,
+      preWarningMinutes: 0,
+    });
+  });
+
+  it('honours a per-session Heads-up override turning it back on over a global-off', () => {
+    const global: GlobalNotificationPrefs = { ...GLOBAL_DEFAULT, preWarningEnabled: false };
+    expect(resolveEffectivePrefs(global, { preWarningEnabled: true, leadMinutes: 1 })).toEqual({
+      includeOpen: true,
+      preWarningMinutes: 1,
+    });
+  });
+
+  it('drops the open notification when the global master is off', () => {
+    const global: GlobalNotificationPrefs = {
+      ...GLOBAL_DEFAULT,
+      shotOclockNotificationEnabled: false,
+    };
     expect(resolveEffectivePrefs(global, null).includeOpen).toBe(false);
   });
 });
@@ -74,10 +91,10 @@ describe('getSessionOverride (partyId guard)', () => {
   });
 
   it('returns the override for the matching party', async () => {
-    await setSessionOverride('party-a', { leadMinutes: 5, alertMode: 'vibration' });
+    await setSessionOverride('party-a', { leadMinutes: 5, preWarningEnabled: false });
     expect(await getSessionOverride('party-a')).toEqual({
       leadMinutes: 5,
-      alertMode: 'vibration',
+      preWarningEnabled: false,
     });
   });
 
@@ -87,27 +104,27 @@ describe('getSessionOverride (partyId guard)', () => {
   });
 
   it('overwrites a stale entry when a new party sets one', async () => {
-    await setSessionOverride('party-a', { leadMinutes: 5, alertMode: 'vibration' });
-    await setSessionOverride('party-b', { alertMode: 'sound' });
+    await setSessionOverride('party-a', { leadMinutes: 5, preWarningEnabled: false });
+    await setSessionOverride('party-b', { leadMinutes: 1 });
     // party-a is gone (single-value store); party-b has only what it set.
     expect(await getSessionOverride('party-a')).toBeNull();
-    expect(await getSessionOverride('party-b')).toEqual({ alertMode: 'sound' });
+    expect(await getSessionOverride('party-b')).toEqual({ leadMinutes: 1 });
   });
 
   it('merges patches within the same party', async () => {
     await setSessionOverride('party-a', { leadMinutes: 5 });
-    await setSessionOverride('party-a', { alertMode: 'vibration' });
+    await setSessionOverride('party-a', { preWarningEnabled: false });
     expect(await getSessionOverride('party-a')).toEqual({
       leadMinutes: 5,
-      alertMode: 'vibration',
+      preWarningEnabled: false,
     });
   });
 
   it('drops invalid stored fields', async () => {
-    // Hand-write a corrupt value with an out-of-range lead + bad alert mode.
+    // Hand-write a corrupt value with an out-of-range lead time.
     mockStore.set(
       'shotoclock.notifications.sessionOverride',
-      JSON.stringify({ partyId: 'party-a', leadMinutes: 99, alertMode: 'flash' }),
+      JSON.stringify({ partyId: 'party-a', leadMinutes: 99 }),
     );
     expect(await getSessionOverride('party-a')).toEqual({});
   });
