@@ -1,11 +1,11 @@
-// App-level Settings (Surface A, D062) — the global, device-wide settings,
-// reached from the Home-header gear. App-global, not party-scoped, so it lives
-// at the top level. Per-session overrides for an active party live on the
-// separate Surface B route (app/party/[partyId]/settings.tsx).
+// App-level Settings (Surface A, D062/D064) — the global, device-wide settings,
+// reached from the Home-header gear. App-global, not party-scoped, so it lives at the
+// top level. Per-session overrides for an active party live on the separate Surface B
+// route (app/party/[partyId]/settings.tsx).
 //
-// Phase 15 — Task 2 wires the Display name row (edit + persist device-side via
-// useDisplayName). The remaining rows (notifications, sound, party defaults,
-// reset) are still inert placeholders, each wired in its own Phase 15 item.
+// Two alert concepts (D064): the foreground ALERT (in-app sound + haptic + sound file)
+// and the backgrounded NOTIFICATION (OS-delivered master + Heads-up). Party-creation
+// defaults remain an inert placeholder until their Phase 15 task.
 
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -26,11 +26,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { OptionPicker } from '@/components/ui/OptionPicker';
 import { DISPLAY_NAME_MAX_LENGTH, isValidDisplayName } from '@/features/auth/api/displayName';
+import type { GlobalAlertPrefs } from '@/features/notifications/api/alertPreferences';
 import {
   PRE_WARNING_OPTIONS,
   type GlobalNotificationPrefs,
 } from '@/features/notifications/api/notificationPreferences';
+import { SHOT_SOUNDS } from '@/features/notifications/api/shotSounds';
 import { useDisplayName } from '@/features/auth/useDisplayName';
+import { useGlobalAlertPrefs } from '@/features/notifications/useGlobalAlertPrefs';
 import { useGlobalNotificationPrefs } from '@/features/notifications/useGlobalNotificationPrefs';
 import { useReset } from '@/features/auth/ResetProvider';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
@@ -40,6 +43,9 @@ const LEAD_TIME_OPTIONS = PRE_WARNING_OPTIONS.map((minutes) => ({
   label: `${minutes} min`,
   value: minutes,
 }));
+
+// The available in-app Alert sounds, as picker options.
+const SOUND_OPTIONS = SHOT_SOUNDS.map((sound) => ({ label: sound.label, value: sound.id }));
 
 // One settings row: a title, a short value/description, and a chevron. Tappable
 // when given an onPress; inert (a Phase 15 placeholder) otherwise.
@@ -98,15 +104,18 @@ function ToggleRow({
 
 function SettingsSection({
   title,
+  caption,
   children,
 }: {
   title: string;
+  caption?: string;
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
       <View style={styles.card}>{children}</View>
+      {caption ? <Text style={styles.sectionCaption}>{caption}</Text> : null}
     </View>
   );
 }
@@ -114,6 +123,12 @@ function SettingsSection({
 export default function SettingsScreen(): React.JSX.Element {
   const { displayName, save } = useDisplayName();
   const { prefs, setShotOclock, setPreWarning, setLeadMinutes } = useGlobalNotificationPrefs();
+  const {
+    prefs: alertPrefs,
+    setSoundEnabled,
+    setHapticEnabled,
+    setSoundChoice,
+  } = useGlobalAlertPrefs();
   const { reset } = useReset();
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -153,6 +168,12 @@ export default function SettingsScreen(): React.JSX.Element {
     preWarningEnabled: true,
     preWarningMinutes: 2,
   };
+  const alertLoaded = alertPrefs !== null;
+  const alert: GlobalAlertPrefs = alertPrefs ?? {
+    soundEnabled: false,
+    hapticEnabled: true,
+    soundChoice: 'classic',
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
@@ -172,7 +193,39 @@ export default function SettingsScreen(): React.JSX.Element {
           />
         </SettingsSection>
 
-        <SettingsSection title="Notifications">
+        <SettingsSection title="Alert" caption="Plays in the app while you're watching.">
+          <ToggleRow
+            title="Alert sound"
+            description="Play a sound when it's Shot O'Clock."
+            value={alert.soundEnabled}
+            onValueChange={setSoundEnabled}
+            disabled={!alertLoaded}
+          />
+          {alert.soundEnabled ? (
+            <View style={styles.subControl}>
+              <Text style={styles.subLabel}>Sound</Text>
+              <OptionPicker
+                options={SOUND_OPTIONS}
+                value={alert.soundChoice}
+                onChange={setSoundChoice}
+                disabled={!alertLoaded}
+              />
+            </View>
+          ) : null}
+          <View style={styles.divider} />
+          <ToggleRow
+            title="Alert haptic"
+            description="Vibrate when it's Shot O'Clock."
+            value={alert.hapticEnabled}
+            onValueChange={setHapticEnabled}
+            disabled={!alertLoaded}
+          />
+        </SettingsSection>
+
+        <SettingsSection
+          title="Notifications"
+          caption="Alerts when the app is in the background."
+        >
           <ToggleRow
             title="Shot O'Clock notification"
             description="Notify me when it's Shot O'Clock and the app is in the background."
@@ -199,13 +252,6 @@ export default function SettingsScreen(): React.JSX.Element {
               />
             </View>
           ) : null}
-        </SettingsSection>
-
-        <SettingsSection title="Sound">
-          <SettingRow
-            title="Shot O'Clock sound"
-            description="Choose which sound plays when it's Shot O'Clock."
-          />
         </SettingsSection>
 
         <SettingsSection title="Party defaults">
@@ -307,6 +353,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     paddingHorizontal: SPACING.xs,
+  },
+  sectionCaption: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.textSecondary,
+    paddingHorizontal: SPACING.xs,
+    lineHeight: 16,
   },
   card: {
     backgroundColor: COLORS.surface,
