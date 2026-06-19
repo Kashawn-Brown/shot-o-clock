@@ -15,6 +15,11 @@
 
 import { clearConsent } from '@/features/auth/api/consent';
 import { clearDisplayName } from '@/features/auth/api/displayName';
+import {
+  clearAlertHapticEnabled,
+  clearAlertSoundEnabled,
+  clearShotOclockSound,
+} from '@/features/notifications/api/alertPreferences';
 import { clearNotificationsPrompted } from '@/features/notifications/api/notificationPermission';
 import {
   clearPreWarningEnabled,
@@ -31,9 +36,11 @@ export async function resetDevice(): Promise<void> {
   // is still scheduled — otherwise a stale Shot O'Clock alarm could fire post-reset.
   await cancelShotNotifications();
 
-  // Clear every device-side store. Each module owns its key.
-  // TODO(claude, 2026-06-17): add clear*() here as later Phase 15 tasks land —
-  //   sound preference (sound task) and party-creation defaults (defaults task).
+  // Clear every device-side store. Each module owns its key. The single
+  // clearSessionOverride() wipes ALL per-session overrides (alert + Heads-up) — they
+  // share one blob.
+  // TODO(claude, 2026-06-19): add clear*() here as the remaining Phase 15 task lands —
+  //   party-creation defaults (defaults task).
   await Promise.all([
     clearDisplayName(),
     clearConsent(),
@@ -41,6 +48,9 @@ export async function resetDevice(): Promise<void> {
     clearPreWarningMinutes(),
     clearShotOclockNotificationEnabled(),
     clearPreWarningEnabled(),
+    clearAlertSoundEnabled(),
+    clearAlertHapticEnabled(),
+    clearShotOclockSound(),
     clearSessionOverride(),
     clearLeftPartyId(),
   ]);
