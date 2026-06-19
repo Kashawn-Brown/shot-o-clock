@@ -33,6 +33,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
+import { shotSoundAsset } from '@/features/notifications/api/shotSounds';
+import { useEffectiveAlertPrefs } from '@/features/notifications/useEffectiveAlertPrefs';
 import { markDone } from '@/features/party/api/markDone';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { selfOutCopy } from '@/features/game/selfOutCopy';
@@ -60,12 +62,16 @@ export default function ShotOClockScreen(): React.JSX.Element {
   } = useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
 
-  // Shot-window alert sound (placeholder, CC0 — see assets/sounds/CREDITS.md).
-  // Plays once when the window opens, alongside the haptic. Foreground only and
-  // respects the device silent switch — no playsInSilentMode is set (sound prefs
-  // land in Phase 15). The player is recreated per mount; the screen mounts fresh
-  // for each round's window, so it starts from the top each time.
-  const shotSound = useAudioPlayer(require('@/assets/sounds/shot-oclock-placeholder.mp3'));
+  // Foreground ALERT prefs for this party (sound on/off, haptic on/off, which sound) —
+  // global layered with the per-session override (D064). `loaded` lets the window-open
+  // effect wait for the real values rather than firing on the defaults.
+  const alertPrefs = useEffectiveAlertPrefs(partyId);
+
+  // Shot-window alert sound — the chosen sound file (D064; one option today, the CC0
+  // placeholder — see assets/sounds/CREDITS.md). Plays once when the window opens IF
+  // Alert sound is on. Foreground only and respects the device silent switch (no
+  // playsInSilentMode set). The player is recreated per mount / on a sound change.
+  const shotSound = useAudioPlayer(shotSoundAsset(alertPrefs.soundChoice));
   const { leaving } = useGameExit(partyId);
 
   // Optimistic action: set on tap for instant feedback, reconciled when myOutcome
@@ -93,14 +99,19 @@ export default function ShotOClockScreen(): React.JSX.Element {
   const hapticRoundRef = useRef<string | null>(null);
   useEffect(() => {
     if (status !== 'ready' || session?.current_phase !== 'shot_window' || !roundId) return;
+    // Wait for the real alert prefs so we fire with the right sound/haptic gates rather
+    // than the loading defaults; the ref-guard then ensures exactly once per window.
+    if (!alertPrefs.loaded) return;
     if (hapticRoundRef.current === roundId) return;
     hapticRoundRef.current = roundId;
 
-    // Alert sound fires on the same trigger as the haptic (fresh player per window,
-    // so play() starts from the top). Fire-and-forget; a no-op if the asset isn't
-    // ready or the device is on silent.
-    shotSound.play();
+    // Alert sound — only when enabled (default OFF, D064). Fresh player per window, so
+    // play() starts from the top. Fire-and-forget; a no-op if the asset isn't ready or
+    // the device is on silent.
+    if (alertPrefs.soundEnabled) shotSound.play();
 
+    // Alert haptic — only when enabled (default ON, D064).
+    if (!alertPrefs.hapticEnabled) return;
     let cancelled = false;
     const burst = async (): Promise<void> => {
       for (let b = 0; b < HAPTIC_BURSTS.length; b += 1) {
@@ -121,7 +132,15 @@ export default function ShotOClockScreen(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [status, session?.current_phase, roundId, shotSound]);
+  }, [
+    status,
+    session?.current_phase,
+    roundId,
+    shotSound,
+    alertPrefs.loaded,
+    alertPrefs.soundEnabled,
+    alertPrefs.hapticEnabled,
+  ]);
 
   const isActive = me?.status === 'active';
   const isOut = me?.status === 'out';
