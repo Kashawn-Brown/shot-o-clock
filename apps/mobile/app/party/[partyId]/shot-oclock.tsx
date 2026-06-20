@@ -110,21 +110,18 @@ export default function ShotOClockScreen(): React.JSX.Element {
     // the device is on silent.
     if (alertPrefs.soundEnabled) shotSound.play();
 
-    // Alert haptic — only when enabled (default ON, D064).
+    // Alert haptic — only when enabled (default ON, D064). A brief 3-pulse ramp
+    // (medium → heavy → heavy) that reads as a punchy alert, not a sustained alarm —
+    // this is the FOREGROUND in-app haptic, retuned for that role now that D064 split
+    // it from the backgrounded notification (which the OS owns).
     if (!alertPrefs.hapticEnabled) return;
     let cancelled = false;
     const burst = async (): Promise<void> => {
-      for (let b = 0; b < HAPTIC_BURSTS.length; b += 1) {
-        const count = HAPTIC_BURSTS[b];
-        for (let i = 0; i < count; i += 1) {
-          if (cancelled) return;
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-          if (i < count - 1) {
-            await new Promise((resolve) => setTimeout(resolve, HAPTIC_IMPACT_GAP_MS));
-          }
-        }
-        if (b < HAPTIC_BURSTS.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, HAPTIC_BURST_PAUSE_MS));
+      for (let i = 0; i < ALERT_HAPTIC_PULSES.length; i += 1) {
+        if (cancelled) return;
+        await Haptics.impactAsync(IMPACT_STYLE[ALERT_HAPTIC_PULSES[i]]).catch(() => {});
+        if (i < ALERT_HAPTIC_PULSES.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, ALERT_HAPTIC_GAP_MS));
         }
       }
     };
@@ -386,12 +383,15 @@ export default function ShotOClockScreen(): React.JSX.Element {
   );
 }
 
-// Shot-window-open haptic burst: three bursts of Heavy impacts with a pause between
-// them, so it reads as a sustained alarm rather than a single tap (expo-haptics has
-// no continuous-buzz API, so a dense run of transients is the closest we can get).
-const HAPTIC_BURSTS = [40, 40, 60]; // Heavy impacts per burst
-const HAPTIC_IMPACT_GAP_MS = 15; // between impacts within a burst
-const HAPTIC_BURST_PAUSE_MS = 150; // between bursts
+// Shot-window-open ALERT haptic (foreground, D064): a brief 3-pulse ramp that reads as
+// a punchy alert rather than a sustained alarm. Each entry is one impactAsync at the
+// given style, ALERT_HAPTIC_GAP_MS apart (~0.18s total).
+const ALERT_HAPTIC_PULSES = ['medium', 'heavy', 'heavy'] as const;
+const ALERT_HAPTIC_GAP_MS = 90; // between pulses
+const IMPACT_STYLE = {
+  medium: Haptics.ImpactFeedbackStyle.Medium,
+  heavy: Haptics.ImpactFeedbackStyle.Heavy,
+} as const;
 
 // Matches the timer ring size for visual consistency across the two screens.
 const RING_SIZE = 280;
