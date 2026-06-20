@@ -5,6 +5,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
+import { ResetProvider } from '@/features/auth/ResetProvider';
 import { OnboardingGate } from '@/features/auth/OnboardingGate';
 import { useConsent } from '@/features/auth/useConsent';
 import { useDisplayName } from '@/features/auth/useDisplayName';
@@ -82,11 +83,18 @@ export default function RootLayout(): React.JSX.Element {
     void configureNotifications();
   }, []);
 
+  // ResetProvider sits above the keyed AuthProvider: "Reset this device" (D018)
+  // bumps the identity epoch, remounting the whole identity tree so the onboarding
+  // gates re-read the now-cleared storage and a fresh anonymous guest is created.
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <RootNavigator />
-      </AuthProvider>
+      <ResetProvider>
+        {(epoch) => (
+          <AuthProvider key={epoch}>
+            <RootNavigator />
+          </AuthProvider>
+        )}
+      </ResetProvider>
       <StatusBar style="auto" />
     </SafeAreaProvider>
   );

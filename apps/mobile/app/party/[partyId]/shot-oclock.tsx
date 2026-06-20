@@ -33,6 +33,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
+import { shotSoundAsset } from '@/features/notifications/api/shotSounds';
+import { useEffectiveAlertPrefs } from '@/features/notifications/useEffectiveAlertPrefs';
 import { markDone } from '@/features/party/api/markDone';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { selfOutCopy } from '@/features/game/selfOutCopy';
@@ -60,12 +62,16 @@ export default function ShotOClockScreen(): React.JSX.Element {
   } = useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
 
-  // Shot-window alert sound (placeholder, CC0 — see assets/sounds/CREDITS.md).
-  // Plays once when the window opens, alongside the haptic. Foreground only and
-  // respects the device silent switch — no playsInSilentMode is set (sound prefs
-  // land in Phase 15). The player is recreated per mount; the screen mounts fresh
-  // for each round's window, so it starts from the top each time.
-  const shotSound = useAudioPlayer(require('@/assets/sounds/shot-oclock-placeholder.mp3'));
+  // Foreground ALERT prefs for this party (sound on/off, haptic on/off, which sound) —
+  // global layered with the per-session override (D064). `loaded` lets the window-open
+  // effect wait for the real values rather than firing on the defaults.
+  const alertPrefs = useEffectiveAlertPrefs(partyId);
+
+  // Shot-window alert sound — the chosen sound file (D064; one option today, the CC0
+  // placeholder — see assets/sounds/CREDITS.md). Plays once when the window opens IF
+  // Alert sound is on. Foreground only and respects the device silent switch (no
+  // playsInSilentMode set). The player is recreated per mount / on a sound change.
+  const shotSound = useAudioPlayer(shotSoundAsset(alertPrefs.soundChoice));
   const { leaving } = useGameExit(partyId);
 
   // Optimistic action: set on tap for instant feedback, reconciled when myOutcome
@@ -93,27 +99,29 @@ export default function ShotOClockScreen(): React.JSX.Element {
   const hapticRoundRef = useRef<string | null>(null);
   useEffect(() => {
     if (status !== 'ready' || session?.current_phase !== 'shot_window' || !roundId) return;
+    // Wait for the real alert prefs so we fire with the right sound/haptic gates rather
+    // than the loading defaults; the ref-guard then ensures exactly once per window.
+    if (!alertPrefs.loaded) return;
     if (hapticRoundRef.current === roundId) return;
     hapticRoundRef.current = roundId;
 
-    // Alert sound fires on the same trigger as the haptic (fresh player per window,
-    // so play() starts from the top). Fire-and-forget; a no-op if the asset isn't
-    // ready or the device is on silent.
-    shotSound.play();
+    // Alert sound — only when enabled (default OFF, D064). Fresh player per window, so
+    // play() starts from the top. Fire-and-forget; a no-op if the asset isn't ready or
+    // the device is on silent.
+    if (alertPrefs.soundEnabled) shotSound.play();
 
+    // Alert haptic — only when enabled (default ON, D064). A brief 3-pulse ramp
+    // (medium → heavy → heavy) that reads as a punchy alert, not a sustained alarm —
+    // this is the FOREGROUND in-app haptic, retuned for that role now that D064 split
+    // it from the backgrounded notification (which the OS owns).
+    if (!alertPrefs.hapticEnabled) return;
     let cancelled = false;
     const burst = async (): Promise<void> => {
-      for (let b = 0; b < HAPTIC_BURSTS.length; b += 1) {
-        const count = HAPTIC_BURSTS[b];
-        for (let i = 0; i < count; i += 1) {
-          if (cancelled) return;
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-          if (i < count - 1) {
-            await new Promise((resolve) => setTimeout(resolve, HAPTIC_IMPACT_GAP_MS));
-          }
-        }
-        if (b < HAPTIC_BURSTS.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, HAPTIC_BURST_PAUSE_MS));
+      for (let i = 0; i < ALERT_HAPTIC_PULSES.length; i += 1) {
+        if (cancelled) return;
+        await Haptics.impactAsync(IMPACT_STYLE[ALERT_HAPTIC_PULSES[i]]).catch(() => {});
+        if (i < ALERT_HAPTIC_PULSES.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, ALERT_HAPTIC_GAP_MS));
         }
       }
     };
@@ -121,7 +129,15 @@ export default function ShotOClockScreen(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [status, session?.current_phase, roundId, shotSound]);
+  }, [
+    status,
+    session?.current_phase,
+    roundId,
+    shotSound,
+    alertPrefs.loaded,
+    alertPrefs.soundEnabled,
+    alertPrefs.hapticEnabled,
+  ]);
 
   const isActive = me?.status === 'active';
   const isOut = me?.status === 'out';
@@ -367,12 +383,15 @@ export default function ShotOClockScreen(): React.JSX.Element {
   );
 }
 
-// Shot-window-open haptic burst: three bursts of Heavy impacts with a pause between
-// them, so it reads as a sustained alarm rather than a single tap (expo-haptics has
-// no continuous-buzz API, so a dense run of transients is the closest we can get).
-const HAPTIC_BURSTS = [40, 40, 60]; // Heavy impacts per burst
-const HAPTIC_IMPACT_GAP_MS = 15; // between impacts within a burst
-const HAPTIC_BURST_PAUSE_MS = 150; // between bursts
+// Shot-window-open ALERT haptic (foreground, D064): a brief 3-pulse ramp that reads as
+// a punchy alert rather than a sustained alarm. Each entry is one impactAsync at the
+// given style, ALERT_HAPTIC_GAP_MS apart (~0.18s total).
+const ALERT_HAPTIC_PULSES = ['medium', 'heavy', 'heavy'] as const;
+const ALERT_HAPTIC_GAP_MS = 90; // between pulses
+const IMPACT_STYLE = {
+  medium: Haptics.ImpactFeedbackStyle.Medium,
+  heavy: Haptics.ImpactFeedbackStyle.Heavy,
+} as const;
 
 // Matches the timer ring size for visual consistency across the two screens.
 const RING_SIZE = 280;

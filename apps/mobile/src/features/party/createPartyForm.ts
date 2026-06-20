@@ -80,7 +80,7 @@ export const ELIMINATION_ON_HINT = 'Players who don\'t take their shot are elimi
 export const ELIMINATION_OFF_HINT = 'Misses are tracked but nobody is eliminated';
 
 // Single-phone-toggle hint text, switched on the toggle's value (D040).
-export const HOST_ONLY_ON_HINT = 'Run and manage the game on this phone — no one else joins';
+export const HOST_ONLY_ON_HINT = 'Run and manage the game solo on this phone';
 export const HOST_ONLY_OFF_HINT = 'Others join by code on their own phones';
 
 export const DEFAULT_GRACE_MODE: GraceMode = 'disabled';

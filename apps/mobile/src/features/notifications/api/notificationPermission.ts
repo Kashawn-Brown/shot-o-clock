@@ -50,6 +50,16 @@ export async function recordNotificationsPrompted(): Promise<void> {
   await SecureStore.setItemAsync(PROMPTED_KEY, 'true');
 }
 
+/**
+ * Clear the "priming shown" record — part of Reset this device (D018), so the
+ * priming screen reappears on the next launch. NOTE: this does NOT revoke the
+ * OS-level permission grant (the OS owns it; only the user can change it in
+ * system settings) — it only forgets that we showed our own priming screen.
+ */
+export async function clearNotificationsPrompted(): Promise<void> {
+  await SecureStore.deleteItemAsync(PROMPTED_KEY);
+}
+
 /** Current OS-level permission without prompting. */
 export async function getNotificationPermission(): Promise<NotificationPermission> {
   const { status } = await getPermissionsAsync();

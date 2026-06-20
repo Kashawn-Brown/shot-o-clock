@@ -12,7 +12,16 @@
 
 import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -22,20 +31,16 @@ import { Stepper } from '@/components/ui/Stepper';
 import { useDisplayName } from '@/features/auth/useDisplayName';
 import { createParty } from '@/features/party/api/createParty';
 import { startGame } from '@/features/party/api/startGame';
+import { HostModePicker } from '@/features/party/HostModePicker';
 import { clearLeftPartyId } from '@/features/party/leftParty';
+import { usePartyCreateDefaults } from '@/features/party/usePartyCreateDefaults';
+import type { PartyCreateDefaults } from '@/features/party/partyDefaults';
 import {
-  DEFAULT_ELIMINATION_ENABLED,
-  DEFAULT_GRACE_MODE,
   DEFAULT_HOST_ONLY,
-  DEFAULT_INTERVAL_INCREMENT_MINUTES,
-  DEFAULT_SHOT_WINDOW_SECONDS,
-  DEFAULT_STARTING_INTERVAL_MINUTES,
   ELIMINATION_OFF_HINT,
   ELIMINATION_ON_HINT,
   formatDefaultPartyName,
   GRACE_MODE_OPTIONS,
-  HOST_ONLY_OFF_HINT,
-  HOST_ONLY_ON_HINT,
   INTERVAL_INCREMENT_MAX_MINUTES,
   INTERVAL_INCREMENT_MIN_MINUTES,
   INTERVAL_INCREMENT_STEP_MINUTES,
@@ -52,7 +57,28 @@ import {
 import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
+// Gate: load the host's saved party-creation defaults, then mount the form seeded
+// from them. The form initializes its state from props (synchronously available once
+// loaded), so the defaults pre-fill cleanly without a back-filling effect.
 export default function CreatePartyScreen(): React.JSX.Element {
+  const { defaults } = usePartyCreateDefaults();
+
+  if (!defaults) {
+    return (
+      <SafeAreaView style={[styles.screen, styles.loading]} edges={['top', 'bottom']}>
+        <ActivityIndicator color={COLORS.textPrimary} />
+      </SafeAreaView>
+    );
+  }
+
+  return <CreatePartyForm initialDefaults={defaults} />;
+}
+
+function CreatePartyForm({
+  initialDefaults,
+}: {
+  initialDefaults: PartyCreateDefaults;
+}): React.JSX.Element {
   const { displayName } = useDisplayName();
 
   // Held silently as the fallback name. The visible field stays empty (showing
@@ -60,15 +86,17 @@ export default function CreatePartyScreen(): React.JSX.Element {
   // empty field uses this default rather than failing — so we never submit empty.
   const defaultPartyName = useMemo(() => formatDefaultPartyName(new Date()), []);
   const [partyName, setPartyName] = useState('');
+  // Interval/shot-window/elimination/grace seed from the host's saved defaults
+  // (factory defaults when none saved). host-only + name are not saved defaults.
   const [startingIntervalMinutes, setStartingIntervalMinutes] = useState(
-    DEFAULT_STARTING_INTERVAL_MINUTES,
+    initialDefaults.startingIntervalMinutes,
   );
   const [intervalIncrementMinutes, setIntervalIncrementMinutes] = useState(
-    DEFAULT_INTERVAL_INCREMENT_MINUTES,
+    initialDefaults.intervalIncrementMinutes,
   );
-  const [shotWindowSeconds, setShotWindowSeconds] = useState(DEFAULT_SHOT_WINDOW_SECONDS);
-  const [eliminationEnabled, setEliminationEnabled] = useState(DEFAULT_ELIMINATION_ENABLED);
-  const [graceMode, setGraceMode] = useState<GraceMode>(DEFAULT_GRACE_MODE);
+  const [shotWindowSeconds, setShotWindowSeconds] = useState(initialDefaults.shotWindowSeconds);
+  const [eliminationEnabled, setEliminationEnabled] = useState(initialDefaults.eliminationEnabled);
+  const [graceMode, setGraceMode] = useState<GraceMode>(initialDefaults.graceMode);
   const [hostOnly, setHostOnly] = useState(DEFAULT_HOST_ONLY);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -163,6 +191,7 @@ export default function CreatePartyScreen(): React.JSX.Element {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+
         <View style={styles.field}>
           <Text style={styles.label}>Party Name</Text>
           <TextInput
@@ -175,6 +204,14 @@ export default function CreatePartyScreen(): React.JSX.Element {
           />
         </View>
 
+        {/* Mode picker anchored at the top, above everything — fixes the old
+            toggle's misclick bug (its position shifted with Grace Mode visibility).
+            Host-only hides Elimination/Grace below (D040/D050). */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Game Mode</Text>    
+          <HostModePicker hostOnly={hostOnly} onChange={setHostOnly} />
+        </View>
+
         <View style={styles.field}>
           <Text style={styles.label}>Starting Interval</Text>
           <Stepper
@@ -184,7 +221,7 @@ export default function CreatePartyScreen(): React.JSX.Element {
             max={STARTING_INTERVAL_MAX_MINUTES}
             step={STARTING_INTERVAL_STEP_MINUTES}
             unit="minutes"
-            hint="Time until first shot"
+            hint="Starting time until first shot"
             accessibilityLabel="Starting interval in minutes"
           />
         </View>
@@ -197,7 +234,7 @@ export default function CreatePartyScreen(): React.JSX.Element {
             min={INTERVAL_INCREMENT_MIN_MINUTES}
             max={INTERVAL_INCREMENT_MAX_MINUTES}
             step={INTERVAL_INCREMENT_STEP_MINUTES}
-            unit="minutes"
+            unit="minute(s)"
             hint="How much longer each round gets"
             accessibilityLabel="Interval increase in minutes"
           />
@@ -223,7 +260,7 @@ export default function CreatePartyScreen(): React.JSX.Element {
         {!hostOnly && (
           <View style={styles.toggleRow}>
             <View style={styles.toggleText}>
-              <Text style={styles.label}>Elimination Mode</Text>
+              <Text style={styles.label}>Elimination</Text>
               <Text style={styles.hint}>
                 {eliminationEnabled ? ELIMINATION_ON_HINT : ELIMINATION_OFF_HINT}
               </Text>
@@ -259,14 +296,6 @@ export default function CreatePartyScreen(): React.JSX.Element {
           </View>
         )}
 
-        <View style={styles.toggleRow}>
-          <View style={styles.toggleText}>
-            <Text style={styles.label}>Host-Only Mode</Text>
-            <Text style={styles.hint}>{hostOnly ? HOST_ONLY_ON_HINT : HOST_ONLY_OFF_HINT}</Text>
-          </View>
-          <Switch value={hostOnly} onValueChange={setHostOnly} />
-        </View>
-
         <ErrorBanner message={errorMessage} />
 
         <Button
@@ -286,6 +315,10 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  loading: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     flexDirection: 'row',

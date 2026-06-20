@@ -19,6 +19,7 @@ export function useShotNotification(
   session: SessionRow | null,
   settings: SettingsRow | null,
   currentRound: RoundRow | null,
+  partyId: string | undefined,
 ): void {
   const phase = session?.current_phase ?? null;
   const phaseEndsAt = session?.phase_ends_at ?? null;
@@ -39,17 +40,20 @@ export function useShotNotification(
       currentRoundNumber == null ||
       currentRoundIntervalSeconds == null
     ) {
-      void scheduleShotNotifications(null);
+      void scheduleShotNotifications(null, partyId);
       return;
     }
-    void scheduleShotNotifications({
-      session: { current_phase: phase, phase_ends_at: phaseEndsAt, status },
-      shotWindowSeconds,
-      intervalIncrementSeconds,
-      maxIntervalSeconds,
-      currentRoundNumber,
-      currentRoundIntervalSeconds,
-    });
+    void scheduleShotNotifications(
+      {
+        session: { current_phase: phase, phase_ends_at: phaseEndsAt, status },
+        shotWindowSeconds,
+        intervalIncrementSeconds,
+        maxIntervalSeconds,
+        currentRoundNumber,
+        currentRoundIntervalSeconds,
+      },
+      partyId,
+    );
   }, [
     phase,
     phaseEndsAt,
@@ -59,6 +63,7 @@ export function useShotNotification(
     maxIntervalSeconds,
     currentRoundNumber,
     currentRoundIntervalSeconds,
+    partyId,
   ]);
 
   // Cancel when the in-game screen unmounts — covers a guest leaving, a removed

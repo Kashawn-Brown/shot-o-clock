@@ -319,10 +319,12 @@ export default function TimerScreen(): React.JSX.Element {
           <View />
         )}
 
-        {/* Top-right: settings placeholder for all players — no-op for now, a hook
-            for future player settings. */}
+        {/* Top-right: per-session party settings (Surface B, D062), opened by every
+            player, host or not. Per-session notification overrides for all; the host
+            additionally gets the party-lock row there. (Distinct from the Home gear's
+            global app-level settings.) */}
         <Pressable
-          onPress={() => {}}
+          onPress={() => router.push({ pathname: '/party/[partyId]/settings', params: { partyId } })}
           accessibilityRole="button"
           accessibilityLabel="Settings"
           hitSlop={8}

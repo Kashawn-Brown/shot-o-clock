@@ -40,3 +40,8 @@ export async function setDisplayName(raw: string): Promise<void> {
   }
   await SecureStore.setItemAsync(DISPLAY_NAME_KEY, name);
 }
+
+/** Clear the stored display name — part of Reset this device (D018). */
+export async function clearDisplayName(): Promise<void> {
+  await SecureStore.deleteItemAsync(DISPLAY_NAME_KEY);
+}

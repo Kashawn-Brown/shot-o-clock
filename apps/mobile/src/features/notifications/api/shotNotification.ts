@@ -22,7 +22,11 @@ import {
   setNotificationHandler,
 } from '@/features/notifications/api/expoNotifications';
 import { getNotificationPermission } from '@/features/notifications/api/notificationPermission';
-import { getPreWarningMinutes } from '@/features/notifications/api/notificationPreferences';
+import {
+  getGlobalNotificationPrefs,
+  getSessionOverride,
+  resolveEffectivePrefs,
+} from '@/features/notifications/api/notificationPreferences';
 import {
   shotNotificationSchedule,
   type ShotNotificationScheduleInput,
@@ -34,6 +38,9 @@ import { getServerTimeOffset } from '@/lib/time';
 // `shot-oclock-r{n}`), so we can cancel exactly our own batch without touching any
 // other scheduled notification.
 const SHOT_NOTIFICATION_ID_PREFIX = 'shot-oclock';
+// One Android channel. The backgrounded notification always uses the OS default sound
+// (D064): sound-vs-vibration is left to the phone's own ring/silent/vibrate mode, not
+// the app — so there is no dedicated vibrate channel.
 const ANDROID_CHANNEL_ID = 'shot-oclock';
 
 // How many upcoming rounds to pre-schedule. The further out, the more an estimate can
@@ -46,6 +53,13 @@ const MAX_SCHEDULED_ROUNDS = 8;
 let scheduleGeneration = 0;
 
 let configured = false;
+
+// The last schedule request, cached so a per-session preference change (Surface B,
+// D062) can re-reconcile immediately via reapplyShotNotifications — the in-game screen
+// that owns scheduling stays mounted underneath and won't re-run on its own. A null
+// input means there is no active game to (re)schedule for.
+let lastInput: ShotNotificationScheduleInput | null = null;
+let lastPartyId: string | undefined;
 
 /**
  * One-time setup: install the foreground-suppression handler and (on Android) the
@@ -69,7 +83,8 @@ export async function configureNotifications(): Promise<void> {
   });
 
   // Android needs a high-importance channel or the notification makes no sound and
-  // won't pop as a heads-up. No-op on iOS.
+  // won't pop as a heads-up. No-op on iOS. One channel using the OS default sound;
+  // the phone's ring/silent/vibrate mode governs sound-vs-vibration (D064).
   if (Platform.OS === 'android') {
     await setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
       name: "Shot O'Clock",
@@ -87,21 +102,35 @@ export async function configureNotifications(): Promise<void> {
  */
 export async function scheduleShotNotifications(
   input: ShotNotificationScheduleInput | null,
+  partyId?: string,
 ): Promise<void> {
+  // Remember the request so reapplyShotNotifications can re-reconcile after a
+  // per-session preference change without the owning screen re-running.
+  lastInput = input;
+  lastPartyId = partyId;
+
   const generation = (scheduleGeneration += 1);
 
-  // The pre-warning lead time is a device preference (default 2 min); read it next to
-  // the other env reads. Only needed when we're actually scheduling.
-  const preWarningMinutes = input ? await getPreWarningMinutes() : 0;
-  const slots = input
-    ? shotNotificationSchedule(
-        input,
-        getServerTimeOffset(),
-        Date.now(),
-        MAX_SCHEDULED_ROUNDS,
-        preWarningMinutes,
-      )
-    : [];
+  // Layer this party's per-session override (D062) over the global defaults, then plan
+  // the batch. Only needed when actually scheduling (input present).
+  let preWarningMinutes = 0;
+  let slots: ShotNotificationSlot[] = [];
+  if (input) {
+    const global = await getGlobalNotificationPrefs();
+    const override = partyId ? await getSessionOverride(partyId) : null;
+    const effective = resolveEffectivePrefs(global, override);
+    preWarningMinutes = effective.preWarningMinutes;
+    slots = shotNotificationSchedule(
+      input,
+      getServerTimeOffset(),
+      Date.now(),
+      MAX_SCHEDULED_ROUNDS,
+      preWarningMinutes,
+    );
+    // The shot-window 'open' notification follows the global master; Heads-up slots are
+    // already gated by preWarningMinutes (0 when off => none).
+    if (!effective.includeOpen) slots = slots.filter((slot) => slot.kind !== 'open');
+  }
 
   // Clear the prior batch first, so a shrinking schedule (pause, fewer future rounds)
   // never leaves a stale notification behind. This is our OWN cancel — clearScheduledBatch
@@ -110,8 +139,7 @@ export async function scheduleShotNotifications(
   await clearScheduledBatch();
   if (slots.length === 0) return;
 
-  // Permission-gated (Phase 14): no point scheduling if the OS won't deliver it. The
-  // device-side preference toggle (shotOclockEnabled) drops in here in the prefs task.
+  // Permission-gated (Phase 14): no point scheduling if the OS won't deliver it.
   if ((await getNotificationPermission()) !== 'granted') return;
 
   // Superseded by a NEWER schedule/cancel while we awaited the reads above (e.g. the
@@ -133,6 +161,15 @@ export async function scheduleShotNotifications(
   );
 }
 
+/**
+ * Re-run the last schedule with the current preferences. Called after a per-session
+ * preference change (Surface B / D062) so the new Heads-up on/off or lead time takes
+ * effect immediately rather than at the next round. No-op when there's no active game.
+ */
+export async function reapplyShotNotifications(): Promise<void> {
+  await scheduleShotNotifications(lastInput, lastPartyId);
+}
+
 // Per-round, per-kind identifier. Both kinds share the SHOT_NOTIFICATION_ID_PREFIX so
 // clearScheduledBatch cancels them together.
 function identifierFor(slot: ShotNotificationSlot): string {
@@ -142,6 +179,8 @@ function identifierFor(slot: ShotNotificationSlot): string {
 }
 
 function contentFor(slot: ShotNotificationSlot, preWarningMinutes: number) {
+  // The backgrounded notification always uses the OS default sound (D064); the phone's
+  // ring/silent/vibrate mode decides whether that plays a sound or vibrates.
   if (slot.kind === 'prewarn') {
     const unit = preWarningMinutes === 1 ? 'minute' : 'minutes';
     return {
@@ -164,6 +203,10 @@ function contentFor(slot: ShotNotificationSlot, preWarningMinutes: number) {
  */
 export async function cancelShotNotifications(): Promise<void> {
   scheduleGeneration += 1;
+  // Forget the cached request so a later reapply (a stray Surface B save) can't
+  // resurrect a batch for a game we've left.
+  lastInput = null;
+  lastPartyId = undefined;
   await clearScheduledBatch();
 }
 
