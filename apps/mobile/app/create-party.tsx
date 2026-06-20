@@ -234,7 +234,7 @@ function CreatePartyForm({
             min={INTERVAL_INCREMENT_MIN_MINUTES}
             max={INTERVAL_INCREMENT_MAX_MINUTES}
             step={INTERVAL_INCREMENT_STEP_MINUTES}
-            unit="minutes"
+            unit="minute(s)"
             hint="How much longer each round gets"
             accessibilityLabel="Interval increase in minutes"
           />

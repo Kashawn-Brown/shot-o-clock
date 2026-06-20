@@ -2,9 +2,11 @@
 // by a fixed amount; the value in the middle is also tappable, opening a numeric
 // keyboard for direct entry that clamps to [min, max] on blur/submit.
 //
-// Layout: the box (− value +) is left-aligned, with the unit label floating just
-// to its right, so a field reads: [−  5  +] minutes. The hint sits below,
-// left-aligned to the same edge as the box.
+// Layout: the box spans the full width of its container (matching the other full-width
+// fields), sized to the same height. The − and + buttons are inset chips pinned to the
+// left and right edges; the value and its unit form one centered block — "5 minutes",
+// the unit smaller and secondary-colored, visually attached to the number:
+// [ (−)      5 minutes      (+) ]. The hint sits below, left-aligned to the box edge.
 //
 // Direct entry can land on any in-range integer (not just step multiples) — the
 // step only governs the buttons. Used by the Create Party screen. Colors/spacing
@@ -66,27 +68,28 @@ export function Stepper({
 
   return (
     <View>
-      <View style={styles.row}>
-        <View
-          style={styles.box}
-          accessibilityRole="adjustable"
-          accessibilityLabel={accessibilityLabel}
-          accessibilityValue={{ now: value, min, max }}
+      <View
+        style={styles.box}
+        accessibilityRole="adjustable"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityValue={{ now: value, min, max }}
+      >
+        <Pressable
+          onPress={decrement}
+          disabled={!canDecrement}
+          accessibilityRole="button"
+          accessibilityLabel="Decrease"
+          style={({ pressed }) => [
+            styles.button,
+            pressed && styles.pressed,
+            !canDecrement && styles.buttonDisabled,
+          ]}
         >
-          <Pressable
-            onPress={decrement}
-            disabled={!canDecrement}
-            accessibilityRole="button"
-            accessibilityLabel="Decrease"
-            style={({ pressed }) => [
-              styles.button,
-              pressed && styles.pressed,
-              !canDecrement && styles.buttonDisabled,
-            ]}
-          >
-            <Text style={styles.symbol}>−</Text>
-          </Pressable>
+          <Text style={styles.symbol}>−</Text>
+        </Pressable>
 
+        {/* Value + unit centered together, filling the space between the buttons. */}
+        <View style={styles.valueGroup}>
           <TextInput
             style={styles.value}
             value={text}
@@ -99,24 +102,22 @@ export function Stepper({
             maxLength={String(max).length}
             accessibilityLabel={accessibilityLabel}
           />
-
-          <Pressable
-            onPress={increment}
-            disabled={!canIncrement}
-            accessibilityRole="button"
-            accessibilityLabel="Increase"
-            style={({ pressed }) => [
-              styles.button,
-              pressed && styles.pressed,
-              !canIncrement && styles.buttonDisabled,
-            ]}
-          >
-            <Text style={styles.symbol}>+</Text>
-          </Pressable>
+          {unit ? <Text style={styles.unit}>{unit}</Text> : null}
         </View>
 
-        {/* Unit hangs just to the right of the box. */}
-        {unit ? <Text style={styles.unit}>{unit}</Text> : null}
+        <Pressable
+          onPress={increment}
+          disabled={!canIncrement}
+          accessibilityRole="button"
+          accessibilityLabel="Increase"
+          style={({ pressed }) => [
+            styles.button,
+            pressed && styles.pressed,
+            !canIncrement && styles.buttonDisabled,
+          ]}
+        >
+          <Text style={styles.symbol}>+</Text>
+        </Pressable>
       </View>
 
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
@@ -125,22 +126,30 @@ export function Stepper({
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   box: {
     flexDirection: 'row',
     alignItems: 'center',
+    // − chip | centered value+unit | + chip, full width.
+    justifyContent: 'space-between',
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: RADIUS.sm,
-    overflow: 'hidden',
+    // Small inset so the chips don't touch the rounded corners; the vertical inset
+    // sizes the box to about the height of the Party Name input.
+    padding: SPACING.sm,
   },
+  // The value + unit as one tight block, centered by the box's space-between.
+  valueGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  // Inset tap target: a small rounded chip a touch darker than the box surface.
   button: {
+    backgroundColor: COLORS.border,
+    borderRadius: RADIUS.sm,
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -152,21 +161,22 @@ const styles = StyleSheet.create({
   },
   symbol: {
     fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.bold,
+    fontWeight: FONT_WEIGHT.medium,
     color: COLORS.textPrimary,
   },
   value: {
-    minWidth: 100,
-    textAlign: 'center',
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.xs,
+    minWidth: 40,
+    textAlign: 'right',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.medium,
     color: COLORS.textPrimary,
   },
-  // Smaller than the value and in the secondary color, so it reads as a label.
+  // Smaller than the value and in the secondary color, sitting right beside the
+  // number so "5 minutes" reads as one element.
   unit: {
-    marginLeft: SPACING.sm,
+    marginLeft: SPACING.xs,
     fontSize: FONT_SIZE.sm,
     color: COLORS.textSecondary,
   },

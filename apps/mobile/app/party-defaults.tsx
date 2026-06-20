@@ -10,7 +10,6 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -70,17 +69,9 @@ export default function PartyDefaultsScreen(): React.JSX.Element {
     if (defaults && !draft) setDraft(defaults);
   }, [defaults, draft]);
 
-  const confirmRestore = (): void => {
-    Alert.alert(
-      'Restore party defaults?',
-      'This resets your party-creation defaults to the factory settings. Your other settings and current party are unaffected.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        // Reset the DRAFT only — not persisted until Save, like any other edit.
-        { text: 'Restore', style: 'destructive', onPress: () => setDraft(FACTORY_PARTY_CREATE_DEFAULTS) },
-      ],
-    );
-  };
+  // Restore resets the DRAFT to factory locally — no confirmation needed: nothing
+  // persists until Save (the draft preview + dirty-gated Save are the safety net).
+  const restoreDraft = (): void => setDraft(FACTORY_PARTY_CREATE_DEFAULTS);
 
   if (!defaults || !draft) {
     return (
@@ -102,7 +93,7 @@ export default function PartyDefaultsScreen(): React.JSX.Element {
         </Pressable>
         <Text style={styles.title}>Party defaults</Text>
         <Pressable
-          onPress={confirmRestore}
+          onPress={restoreDraft}
           accessibilityRole="button"
           accessibilityLabel="Restore defaults"
           hitSlop={8}
