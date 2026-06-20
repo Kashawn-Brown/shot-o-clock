@@ -31,6 +31,7 @@ import { Stepper } from '@/components/ui/Stepper';
 import { useDisplayName } from '@/features/auth/useDisplayName';
 import { createParty } from '@/features/party/api/createParty';
 import { startGame } from '@/features/party/api/startGame';
+import { HostModePicker } from '@/features/party/HostModePicker';
 import { clearLeftPartyId } from '@/features/party/leftParty';
 import { usePartyCreateDefaults } from '@/features/party/usePartyCreateDefaults';
 import type { PartyCreateDefaults } from '@/features/party/partyDefaults';
@@ -40,8 +41,6 @@ import {
   ELIMINATION_ON_HINT,
   formatDefaultPartyName,
   GRACE_MODE_OPTIONS,
-  HOST_ONLY_OFF_HINT,
-  HOST_ONLY_ON_HINT,
   INTERVAL_INCREMENT_MAX_MINUTES,
   INTERVAL_INCREMENT_MIN_MINUTES,
   INTERVAL_INCREMENT_STEP_MINUTES,
@@ -192,6 +191,11 @@ function CreatePartyForm({
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {/* Mode picker anchored at the top, above everything — fixes the old
+            toggle's misclick bug (its position shifted with Grace Mode visibility).
+            Host-only hides Elimination/Grace below (D040/D050). */}
+        <HostModePicker hostOnly={hostOnly} onChange={setHostOnly} />
+
         <View style={styles.field}>
           <Text style={styles.label}>Party Name</Text>
           <TextInput
@@ -287,14 +291,6 @@ function CreatePartyForm({
             <Text style={styles.hint}>{graceHint}</Text>
           </View>
         )}
-
-        <View style={styles.toggleRow}>
-          <View style={styles.toggleText}>
-            <Text style={styles.label}>Host-Only Mode</Text>
-            <Text style={styles.hint}>{hostOnly ? HOST_ONLY_ON_HINT : HOST_ONLY_OFF_HINT}</Text>
-          </View>
-          <Switch value={hostOnly} onValueChange={setHostOnly} />
-        </View>
 
         <ErrorBanner message={errorMessage} />
 
