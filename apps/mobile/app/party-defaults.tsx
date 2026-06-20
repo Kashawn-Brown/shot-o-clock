@@ -185,7 +185,14 @@ export default function PartyDefaultsScreen(): React.JSX.Element {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Button label="Save" onPress={() => save(draft)} disabled={!dirty} />
+        <Button
+          label="Save"
+          onPress={() => {
+            save(draft);
+            router.back();
+          }}
+          disabled={!dirty}
+        />
       </View>
     </SafeAreaView>
   );
