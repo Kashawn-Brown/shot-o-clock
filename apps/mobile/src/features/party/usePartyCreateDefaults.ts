@@ -1,15 +1,12 @@
-// Loads the party-creation defaults and exposes save + restore. Used two ways:
+// Loads the party-creation defaults and exposes save. Used two ways:
 //   - Create Party reads `defaults` to seed its form (via the outer/inner split).
-//   - The party-defaults editor renders controlled by `defaults`, calling save() on
-//     each change and restore() for the header "Restore defaults" action.
-// save/restore update local state optimistically so the editor's controls reflect a
-// change immediately while the write persists.
+//   - The party-defaults editor seeds a local draft from `defaults` and calls save()
+//     only when the user taps Save (edit-local / persist-on-Save). save() updates the
+//     local `defaults` snapshot too, so the editor's "dirty" check resets after saving.
 
 import { useCallback, useEffect, useState } from 'react';
 
 import {
-  clearPartyCreateDefaults,
-  FACTORY_PARTY_CREATE_DEFAULTS,
   getPartyCreateDefaults,
   setPartyCreateDefaults,
   type PartyCreateDefaults,
@@ -18,7 +15,6 @@ import {
 interface UsePartyCreateDefaultsResult {
   defaults: PartyCreateDefaults | null; // null while loading
   save: (next: PartyCreateDefaults) => void;
-  restore: () => void;
 }
 
 export function usePartyCreateDefaults(): UsePartyCreateDefaultsResult {
@@ -39,10 +35,5 @@ export function usePartyCreateDefaults(): UsePartyCreateDefaultsResult {
     void setPartyCreateDefaults(next);
   }, []);
 
-  const restore = useCallback(() => {
-    setLocal(FACTORY_PARTY_CREATE_DEFAULTS);
-    void clearPartyCreateDefaults();
-  }, []);
-
-  return { defaults, save, restore };
+  return { defaults, save };
 }
