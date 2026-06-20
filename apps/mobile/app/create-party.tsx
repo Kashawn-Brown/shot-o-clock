@@ -191,10 +191,6 @@ function CreatePartyForm({
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {/* Mode picker anchored at the top, above everything — fixes the old
-            toggle's misclick bug (its position shifted with Grace Mode visibility).
-            Host-only hides Elimination/Grace below (D040/D050). */}
-        <HostModePicker hostOnly={hostOnly} onChange={setHostOnly} />
 
         <View style={styles.field}>
           <Text style={styles.label}>Party Name</Text>
@@ -208,6 +204,14 @@ function CreatePartyForm({
           />
         </View>
 
+        {/* Mode picker anchored at the top, above everything — fixes the old
+            toggle's misclick bug (its position shifted with Grace Mode visibility).
+            Host-only hides Elimination/Grace below (D040/D050). */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Game Mode</Text>    
+          <HostModePicker hostOnly={hostOnly} onChange={setHostOnly} />
+        </View>
+
         <View style={styles.field}>
           <Text style={styles.label}>Starting Interval</Text>
           <Stepper
@@ -217,7 +221,7 @@ function CreatePartyForm({
             max={STARTING_INTERVAL_MAX_MINUTES}
             step={STARTING_INTERVAL_STEP_MINUTES}
             unit="minutes"
-            hint="Time until first shot"
+            hint="Starting time until first shot"
             accessibilityLabel="Starting interval in minutes"
           />
         </View>
@@ -256,7 +260,7 @@ function CreatePartyForm({
         {!hostOnly && (
           <View style={styles.toggleRow}>
             <View style={styles.toggleText}>
-              <Text style={styles.label}>Elimination Mode</Text>
+              <Text style={styles.label}>Elimination</Text>
               <Text style={styles.hint}>
                 {eliminationEnabled ? ELIMINATION_ON_HINT : ELIMINATION_OFF_HINT}
               </Text>

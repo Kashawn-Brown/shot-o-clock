@@ -81,6 +81,8 @@ const styles = StyleSheet.create({
     // border. The 1px inset keeps both states the same size (no layout shift).
     borderWidth: 1,
     borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardSelected: {
     borderWidth: 2,
@@ -88,13 +90,14 @@ const styles = StyleSheet.create({
     margin: -1, // absorb the extra 1px so selecting doesn't nudge the layout
   },
   cardLabel: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.bold,
+    fontSize: FONT_SIZE.custom_3,
+    fontWeight: FONT_WEIGHT.medium,
     color: COLORS.textPrimary,
+    textAlign: 'center',
   },
   cardDescription: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.textSecondary,
-    lineHeight: 16,
+    textAlign: 'center',
   },
 });
