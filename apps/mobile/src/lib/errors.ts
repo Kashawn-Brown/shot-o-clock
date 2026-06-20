@@ -27,7 +27,7 @@ export const RPC_ERROR_MESSAGES: Record<RpcErrorCode, string> = {
   // join off) AND for an ended party. Kept accurate for both rather than asserting
   // "started" (plan.md Phase 13 — stale/ended party messaging).
   PARTY_NOT_JOINABLE: 'This party is no longer open to join.',
-  PARTY_LOCKED: 'That party is locked and not accepting new players.',
+  PARTY_LOCKED: 'This party is locked and not accepting new players.',
   JOIN_CODE_NOT_FOUND: 'No party found with that join code.',
   JOIN_CODE_COLLISION: 'Could not generate a unique join code. Please try again.',
   ILLEGAL_TRANSITION: 'That action is not allowed right now.',

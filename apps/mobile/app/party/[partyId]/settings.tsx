@@ -150,7 +150,7 @@ export default function PartySettingsScreen(): React.JSX.Element {
       <ScrollView contentContainerStyle={styles.content}>
         <SettingsSection
           title="Alert"
-          caption="For this party only. Plays in the app while you're watching."
+          caption="In-game alerts you get when the app is open."
         >
           <ToggleRow
             title="Alert sound"
@@ -182,7 +182,6 @@ export default function PartySettingsScreen(): React.JSX.Element {
 
         <SettingsSection
           title="Notifications"
-          caption="For this party only. Alerts when the app is in the background."
         >
           <ToggleRow
             title="Heads-up"
@@ -209,11 +208,10 @@ export default function PartySettingsScreen(): React.JSX.Element {
         {isHost && !hostOnly ? (
           <SettingsSection
             title="Host controls"
-            caption="Only you, the host, can see and change this."
           >
             <ToggleRow
               title="Lock party"
-              description="Stop any new players from joining, even with the code."
+              description="Stop new players from joining."
               value={locked ?? false}
               onValueChange={(next) => void toggleLock(next)}
               disabled={locked === null}
