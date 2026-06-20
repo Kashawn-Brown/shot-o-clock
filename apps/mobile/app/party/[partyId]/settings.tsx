@@ -11,8 +11,10 @@
 // which this screen needs.
 
 import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,7 +30,9 @@ import { OptionPicker } from '@/components/ui/OptionPicker';
 import { PRE_WARNING_OPTIONS } from '@/features/notifications/api/notificationPreferences';
 import { SHOT_SOUNDS } from '@/features/notifications/api/shotSounds';
 import { useSessionOverride } from '@/features/notifications/useSessionOverride';
+import { hostSetPartyLock } from '@/features/party/api/hostSetPartyLock';
 import { usePartyRole } from '@/features/party/usePartyRole';
+import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 const LEAD_TIME_OPTIONS = PRE_WARNING_OPTIONS.map((minutes) => ({
@@ -63,26 +67,6 @@ function ToggleRow({
   );
 }
 
-// One inert settings row: a title, a short description, and a chevron hinting it's
-// tappable once wired. Placeholder for the party-lock row (built in a later task).
-function SettingRow({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}): React.JSX.Element {
-  return (
-    <View style={styles.row}>
-      <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowDescription}>{description}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={CHEVRON_SIZE} color={COLORS.textSecondary} />
-    </View>
-  );
-}
-
 function SettingsSection({
   title,
   caption,
@@ -103,7 +87,7 @@ function SettingsSection({
 
 export default function PartySettingsScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
-  const { status, isHost, errorMessage } = usePartyRole(partyId);
+  const { status, isHost, isLocked, hostOnly, errorMessage } = usePartyRole(partyId);
   const {
     loaded,
     alertSoundEnabled,
@@ -117,6 +101,26 @@ export default function PartySettingsScreen(): React.JSX.Element {
     setPreWarningEnabled,
     setLeadMinutes,
   } = useSessionOverride(partyId);
+
+  // Party lock — seed from the load, then own the value locally (the host is the only
+  // one toggling it; this screen has no realtime). null until usePartyRole resolves.
+  const [locked, setLocked] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (status === 'ready') setLocked(isLocked);
+  }, [status, isLocked]);
+
+  const toggleLock = async (next: boolean): Promise<void> => {
+    if (!partyId) return;
+    const previous = locked;
+    setLocked(next); // optimistic
+    const result = await hostSetPartyLock({ partySessionId: partyId, locked: next });
+    if (result.ok) {
+      setLocked(result.data.is_locked);
+      return;
+    }
+    setLocked(previous); // revert
+    Alert.alert("Couldn't update", rpcErrorMessage(result.error_code));
+  };
 
   if (status === 'loading') {
     return (
@@ -200,14 +204,19 @@ export default function PartySettingsScreen(): React.JSX.Element {
           ) : null}
         </SettingsSection>
 
-        {isHost ? (
+        {/* Host-only single-phone mode has no joiners, so the lock is meaningless and
+            the whole section is hidden (D040/D050). */}
+        {isHost && !hostOnly ? (
           <SettingsSection
             title="Host controls"
             caption="Only you, the host, can see and change this."
           >
-            <SettingRow
+            <ToggleRow
               title="Lock party"
-              description="Stop any new players from joining."
+              description="Stop any new players from joining, even with the code."
+              value={locked ?? false}
+              onValueChange={(next) => void toggleLock(next)}
+              disabled={locked === null}
             />
           </SettingsSection>
         ) : null}
@@ -217,7 +226,6 @@ export default function PartySettingsScreen(): React.JSX.Element {
 }
 
 const HEADER_ICON_SIZE = 22; // header back-arrow, matching the other screens
-const CHEVRON_SIZE = 20; // per-row tappable indicator
 
 const styles = StyleSheet.create({
   screen: {
