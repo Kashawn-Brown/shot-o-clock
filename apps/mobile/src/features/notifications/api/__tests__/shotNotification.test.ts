@@ -13,9 +13,9 @@ import {
 } from '@/features/notifications/api/shotNotification';
 import type { ShotNotificationScheduleInput } from '@/features/notifications/shotNotificationSchedule';
 
-// Mock the submodule wrapper (the seam shotNotification.ts imports from) — never the
-// 'expo-notifications' barrel (it runs the push auto-registration side effect). jest
-// hoists these above the imports, so the mocks apply.
+// Mock the wrapper module (the seam shotNotification.ts imports from), so the tests
+// never load the native 'expo-notifications' barrel. jest hoists these above the
+// imports, so the mocks apply.
 jest.mock('@/features/notifications/api/expoNotifications', () => ({
   AndroidImportance: { MAX: 7 },
   SchedulableTriggerInputTypes: { DATE: 'date' },

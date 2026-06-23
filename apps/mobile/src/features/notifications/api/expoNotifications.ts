@@ -1,32 +1,37 @@
-// Local-notification surface for expo-notifications, imported from its submodules
-// rather than the package barrel ('expo-notifications').
+// Single import surface for expo-notifications — the one place the rest of the app
+// pulls expo-notifications APIs through, so a future swap or shim lives here only.
 //
-// WHY NOT the barrel: importing 'expo-notifications' runs
-// DevicePushTokenAutoRegistration.fx as an import side effect. That module adds a
-// global device-push-token listener on load (TokenEmitter.addPushTokenListener),
-// which calls warnOfExpoGoPushUsage() — a console.error in Expo Go on Android about
-// remote push being removed from Expo Go in SDK 53. We use ONLY local scheduled
-// notifications — no push tokens, no remote registration — so that auto-registration
-// is pure noise here, and no public API can un-add the listener after import.
+// HISTORY: Phase 14 imported these from deep submodule paths (e.g.
+// 'expo-notifications/build/scheduleNotificationAsync') instead of the
+// 'expo-notifications' barrel. The sole reason was to avoid the barrel's
+// push-token auto-registration side effect, which calls warnOfExpoGoPushUsage()
+// — a console.error on Android in Expo Go, where remote push was removed in SDK
+// 53. We only used local scheduled notifications then, so that noise was pure cost.
 //
-// THE FIX: pull just the functions/enums we use directly from their submodules. Only
-// index.js, the .fx itself, and getExpoPushTokenAsync (unused) reference the .fx, so
-// none of these imports load it — the push auto-registration never runs. This is the
-// supported way to opt out of the push side effect, kept in one place so the deep
-// import paths (pinned to expo-notifications ~0.32.x / SDK 54) are documented and
-// revisited together on any SDK upgrade.
+// Phase 16 reverses the workaround (D063). The project now runs on an EAS
+// development build, where remote push IS supported and the Expo-Go warning never
+// fires (it is gated on isRunningInExpoGo(), which is false outside Expo Go). So
+// we import from the barrel again — version-robust (no pinned deep paths) and it
+// gives us the push-token API. Loading the barrel intentionally runs the device
+// push-token auto-registration side effect, which is now the desired behavior: it
+// keeps a rotated device token registered with Expo's push service.
 
-export { setNotificationHandler } from 'expo-notifications/build/NotificationsHandler';
-export { default as scheduleNotificationAsync } from 'expo-notifications/build/scheduleNotificationAsync';
-export { default as cancelScheduledNotificationAsync } from 'expo-notifications/build/cancelScheduledNotificationAsync';
-export { default as getAllScheduledNotificationsAsync } from 'expo-notifications/build/getAllScheduledNotificationsAsync';
-export { default as setNotificationChannelAsync } from 'expo-notifications/build/setNotificationChannelAsync';
 export {
+  setNotificationHandler,
+  scheduleNotificationAsync,
+  cancelScheduledNotificationAsync,
+  getAllScheduledNotificationsAsync,
+  setNotificationChannelAsync,
   getPermissionsAsync,
   requestPermissionsAsync,
-} from 'expo-notifications/build/NotificationPermissions';
-export { SchedulableTriggerInputTypes } from 'expo-notifications/build/Notifications.types';
-export { AndroidImportance } from 'expo-notifications/build/NotificationChannelManager.types';
-// PermissionStatus is the shared permissions enum from expo-modules-core (the barrel
-// re-exports it); importing it from the source keeps us off the barrel entirely.
+  SchedulableTriggerInputTypes,
+  AndroidImportance,
+  // Push (Phase 16): obtain the Expo push token for server-side delivery. Device
+  // token rotation is handled by the barrel's own auto-registration — the Expo
+  // push token itself is stable across rotation, so no listener is needed here.
+  getExpoPushTokenAsync,
+} from 'expo-notifications';
+
+// PermissionStatus is the shared permissions enum and lives in expo-modules-core —
+// the notifications barrel does NOT re-export it, so it keeps its own source.
 export { PermissionStatus } from 'expo-modules-core';
