@@ -354,7 +354,7 @@ References: docs/specs/<file>.md §<section>   (when relevant)
 
 Types: `feat` (new functionality), `fix` (bug fix), `chore` (tooling/deps/config), `refactor` (no behavior change), `docs` (documentation), `test` (tests only), `style` (formatting only), `wip` (intentionally incomplete checkpoint).
 
-Each commit must include at least 2 body bullets unless it's a trivial one-line change (`docs: fix typo in README` is fine without bullets). Bullets describe **what changed**, not narrate the process.
+Each commit must include at least 2 body bullets unless it's a trivial one-line change (`docs: fix typo in README` is fine without bullets). Each bullet is a single physical line — never insert a line break in the middle of a bullet, no matter how long the line gets. Do not hard-wrap bullet text at 72/80 characters the way commit-message convention sometimes does for prose; that convention is for paragraphs, not bullets, and a bullet split across two lines renders as two disconnected fragments in git log and on GitHub instead of one statement. Let the line run as long as it needs to. Bullets describe **what changed**, not narrate the process.
 
 `wip:` is only for intentionally incomplete checkpoints mid-task. The next commit should clear the WIP state. Do not leave `wip:` commits in `main` once the task is complete — squash or rewrite them.
 
