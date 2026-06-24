@@ -1,11 +1,15 @@
+import { getExpoPushTokenAsync } from '@/features/notifications/api/expoNotifications';
+import { getNotificationPermission } from '@/features/notifications/api/notificationPermission';
 import {
   getPushToken,
   registerPushToken,
   syncPushToken,
 } from '@/features/notifications/api/pushToken';
+import { callRpc } from '@/lib/rpcClient';
 
 // Mock the seams: the token-minting API, the permission read, the RPC layer, and
-// the EAS config that supplies projectId. Each test sets its own return values.
+// the EAS config that supplies projectId. jest hoists these above the imports. Each
+// test sets its own return values.
 jest.mock('@/features/notifications/api/expoNotifications', () => ({
   getExpoPushTokenAsync: jest.fn(),
 }));
@@ -19,10 +23,6 @@ jest.mock('expo-constants', () => ({
   __esModule: true,
   default: { expoConfig: { extra: { eas: { projectId: 'test-project-id' } } } },
 }));
-
-import { getExpoPushTokenAsync } from '@/features/notifications/api/expoNotifications';
-import { getNotificationPermission } from '@/features/notifications/api/notificationPermission';
-import { callRpc } from '@/lib/rpcClient';
 
 const mockGetToken = getExpoPushTokenAsync as jest.Mock;
 const mockPermission = getNotificationPermission as jest.Mock;

@@ -138,13 +138,20 @@ describe('shotNotificationSchedule — open slots', () => {
 });
 
 describe('shotNotificationSchedule — pre-warning slots', () => {
+  // A pre-warning only makes sense when the lead is shorter than the round's own
+  // countdown, so the valid-case tests use a long interval (5 min) against a 2-min
+  // lead. The lead>=interval skip is covered in its own block below.
+  const longInput = (o: Partial<ShotNotificationScheduleInput> = {}): ShotNotificationScheduleInput =>
+    input({ currentRoundIntervalSeconds: 300, ...o });
+
   it('adds a pre-warning before each round, sorted earliest-first', () => {
-    const slots = shotNotificationSchedule(input(), 0, EARLY_NOW, 2, 2); // 2 rounds, 2-min lead
+    const slots = shotNotificationSchedule(longInput(), 0, EARLY_NOW, 2, 2); // 2 rounds, 2-min lead
     expect(slots).toHaveLength(4); // 2 open + 2 prewarn
 
-    const open6 = ENDS_MS + 90_000; // round 6 window (20s window + 70s interval)
-    expect(slots).toContainEqual({ roundNumber: 5, kind: 'prewarn', fireAtMs: ENDS_MS - 120_000 });
-    expect(slots).toContainEqual({ roundNumber: 5, kind: 'open', fireAtMs: ENDS_MS });
+    const open5 = ENDS_MS;
+    const open6 = ENDS_MS + (20 + 310) * 1000; // window + round-6 interval (300 + 10)
+    expect(slots).toContainEqual({ roundNumber: 5, kind: 'prewarn', fireAtMs: open5 - 120_000 });
+    expect(slots).toContainEqual({ roundNumber: 5, kind: 'open', fireAtMs: open5 });
     expect(slots).toContainEqual({ roundNumber: 6, kind: 'prewarn', fireAtMs: open6 - 120_000 });
     expect(slots).toContainEqual({ roundNumber: 6, kind: 'open', fireAtMs: open6 });
 
@@ -153,9 +160,10 @@ describe('shotNotificationSchedule — pre-warning slots', () => {
   });
 
   it('skips a pre-warning whose lead time is already in the past', () => {
-    // now is 30s before the round-5 window, but a 2-min lead is before that → skip it,
-    // keep the open slot.
-    const slots = shotNotificationSchedule(input(), 0, NOW_MS, 1, 2);
+    // now is 30s before round 5's window; a 2-min lead is before that → skip it, keep
+    // the open. Lead (120s) < interval (300s) here, so this is the past-instant rule,
+    // not the lead>=interval rule below.
+    const slots = shotNotificationSchedule(longInput(), 0, NOW_MS, 1, 2);
     expect(slots).toEqual([{ roundNumber: 5, kind: 'open', fireAtMs: ENDS_MS }]);
   });
 
@@ -163,5 +171,35 @@ describe('shotNotificationSchedule — pre-warning slots', () => {
     const slots = shotNotificationSchedule(input(), 0, EARLY_NOW, 2, 0);
     expect(slots).toHaveLength(2);
     expect(slots.every((s) => s.kind === 'open')).toBe(true);
+  });
+});
+
+// Bug fix: a Heads-up lead >= the round's own interval would fire at or before the
+// round even starts, so it is skipped — equal counts as skip too, and the check is
+// per round (a lead too long early in the game can fit once the interval ramps up).
+describe('shotNotificationSchedule — lead vs interval guard', () => {
+  it('skips the pre-warning when the lead equals the round interval', () => {
+    // Flat 60s interval (no increment), 1-min lead → lead == interval every round →
+    // opens only, no pre-warning.
+    const slots = shotNotificationSchedule(input({ intervalIncrementSeconds: 0 }), 0, EARLY_NOW, 3, 1);
+    expect(slots.length).toBeGreaterThan(0);
+    expect(slots.every((s) => s.kind === 'open')).toBe(true);
+  });
+
+  it('skips the pre-warning when the lead exceeds the round interval', () => {
+    // Flat 60s interval, 2-min lead → lead > interval every round → opens only.
+    const slots = shotNotificationSchedule(input({ intervalIncrementSeconds: 0 }), 0, EARLY_NOW, 3, 2);
+    expect(slots.length).toBeGreaterThan(0);
+    expect(slots.every((s) => s.kind === 'open')).toBe(true);
+  });
+
+  it('applies the guard per round as the interval ramps past the lead', () => {
+    // +60s/round from 60s, 2-min (120s) lead: round 5=60 and 6=120 skip (<=120),
+    // round 7=180 and beyond schedule (>120). Confirms the guard is per-round.
+    const slots = shotNotificationSchedule(input({ intervalIncrementSeconds: 60 }), 0, EARLY_NOW, 5, 2);
+    const prewarnRounds = slots.filter((s) => s.kind === 'prewarn').map((s) => s.roundNumber);
+    expect(prewarnRounds).not.toContain(5);
+    expect(prewarnRounds).not.toContain(6);
+    expect(prewarnRounds).toContain(7);
   });
 });

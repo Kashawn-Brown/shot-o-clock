@@ -61,6 +61,19 @@ let configured = false;
 let lastInput: ShotNotificationScheduleInput | null = null;
 let lastPartyId: string | undefined;
 
+// Heads-up fires AT MOST ONCE per round (design decision). The recompute is otherwise
+// stateless — it re-derives eligibility from current remaining-time math each run — so
+// if a host adds time AFTER a round's Heads-up already fired and the countdown
+// re-crosses the lead threshold, a naive recompute would schedule a second one. We
+// remember the instant we last planned each round's pre-warning for; once that instant
+// has passed we treat the Heads-up as fired for that round and never reschedule it
+// (an add-time before it fires just updates the planned instant — still one fire).
+// Scoped to the current party; reset on party change / cancel. NOTE: in-memory only,
+// so a kill-and-relaunch mid-round loses the record — an accepted edge that the move
+// to server push (D063) eliminates entirely.
+let prewarnPlannedByRound = new Map<number, number>();
+let prewarnGuardPartyId: string | undefined;
+
 /**
  * One-time setup: install the foreground-suppression handler and (on Android) the
  * notification channel. Safe to call repeatedly — runs once. Call at app startup.
@@ -109,6 +122,12 @@ export async function scheduleShotNotifications(
   lastInput = input;
   lastPartyId = partyId;
 
+  // New party → forget the prior party's once-per-round Heads-up record.
+  if (partyId !== prewarnGuardPartyId) {
+    prewarnPlannedByRound = new Map();
+    prewarnGuardPartyId = partyId;
+  }
+
   const generation = (scheduleGeneration += 1);
 
   // Layer this party's per-session override (D062) over the global defaults, then plan
@@ -116,6 +135,7 @@ export async function scheduleShotNotifications(
   let preWarningMinutes = 0;
   let slots: ShotNotificationSlot[] = [];
   if (input) {
+    const nowMs = Date.now();
     const global = await getGlobalNotificationPrefs();
     const override = partyId ? await getSessionOverride(partyId) : null;
     const effective = resolveEffectivePrefs(global, override);
@@ -123,13 +143,26 @@ export async function scheduleShotNotifications(
     slots = shotNotificationSchedule(
       input,
       getServerTimeOffset(),
-      Date.now(),
+      nowMs,
       MAX_SCHEDULED_ROUNDS,
       preWarningMinutes,
     );
     // The shot-window 'open' notification follows the global master; Heads-up slots are
-    // already gated by preWarningMinutes (0 when off => none).
+    // already gated by preWarningMinutes (0 when off => none) and the per-round
+    // lead<interval rule in the planner.
     if (!effective.includeOpen) slots = slots.filter((slot) => slot.kind !== 'open');
+
+    // Once-per-round Heads-up guard: drop a pre-warning for a round whose Heads-up
+    // already fired (its last-planned instant has passed), and record the planned
+    // instant for the rest so a later add-time recompute can recognize it. See
+    // prewarnPlannedByRound. Only the prewarn kind is governed; opens are unaffected.
+    slots = slots.filter((slot) => {
+      if (slot.kind !== 'prewarn') return true;
+      const planned = prewarnPlannedByRound.get(slot.roundNumber);
+      if (planned !== undefined && nowMs >= planned) return false; // already fired this round
+      prewarnPlannedByRound.set(slot.roundNumber, slot.fireAtMs);
+      return true;
+    });
   }
 
   // Clear the prior batch first, so a shrinking schedule (pause, fewer future rounds)
@@ -207,6 +240,9 @@ export async function cancelShotNotifications(): Promise<void> {
   // resurrect a batch for a game we've left.
   lastInput = null;
   lastPartyId = undefined;
+  // Forget the once-per-round Heads-up record — a fresh game starts clean.
+  prewarnPlannedByRound = new Map();
+  prewarnGuardPartyId = undefined;
   await clearScheduledBatch();
 }
 

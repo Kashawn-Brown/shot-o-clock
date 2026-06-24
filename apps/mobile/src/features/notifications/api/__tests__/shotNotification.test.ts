@@ -120,6 +120,9 @@ describe('scheduleShotNotifications', () => {
     });
     await scheduleShotNotifications(
       input({
+        // 5-min interval so the 2-min lead fits inside round 3's countdown (lead <
+        // interval); otherwise the planner's per-round guard would skip the prewarn.
+        currentRoundIntervalSeconds: 300,
         session: { current_phase: 'countdown', phase_ends_at: FAR_FUTURE, status: 'active' },
       }),
     );
@@ -140,12 +143,54 @@ describe('scheduleShotNotifications', () => {
     });
     await scheduleShotNotifications(
       input({
+        currentRoundIntervalSeconds: 300, // lead < interval so the prewarn schedules
         session: { current_phase: 'countdown', phase_ends_at: FAR_FUTURE, status: 'active' },
       }),
     );
     const ids = mockSchedule.mock.calls.map((c) => c[0].identifier);
     expect(ids).toContain('shot-oclock-prewarn-r3'); // Heads-up still fires
     expect(ids).not.toContain('shot-oclock-r3'); // open notification suppressed
+  });
+
+  it('does not re-schedule a round\'s Heads-up once it has already fired (add-time)', async () => {
+    const realNow = Date.now();
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(realNow);
+    mockGlobalPrefs.mockResolvedValue({
+      shotOclockNotificationEnabled: true,
+      preWarningEnabled: true,
+      preWarningMinutes: 2,
+    });
+
+    // Round 3 window 600s out, 5-min interval, 2-min lead → prewarn 480s out (future).
+    const firstEnds = new Date(realNow + 600_000).toISOString();
+    await scheduleShotNotifications(
+      input({
+        currentRoundIntervalSeconds: 300,
+        session: { current_phase: 'countdown', phase_ends_at: firstEnds, status: 'active' },
+      }),
+      'party-once',
+    );
+    expect(mockSchedule.mock.calls.map((c) => c[0].identifier)).toContain('shot-oclock-prewarn-r3');
+
+    // Time advances past the prewarn's planned instant (it fired), then the host adds
+    // time: round 3's window — and a fresh prewarn instant — move later, future again.
+    mockSchedule.mockClear();
+    nowSpy.mockReturnValue(realNow + 500_000); // past the 480s prewarn instant
+    const laterEnds = new Date(realNow + 500_000 + 600_000).toISOString();
+    await scheduleShotNotifications(
+      input({
+        currentRoundIntervalSeconds: 300,
+        session: { current_phase: 'countdown', phase_ends_at: laterEnds, status: 'active' },
+      }),
+      'party-once',
+    );
+    // The math re-crosses the lead threshold, but round 3's Heads-up already fired —
+    // so it must NOT be scheduled again (once-per-round). The open still reschedules.
+    const ids = mockSchedule.mock.calls.map((c) => c[0].identifier);
+    expect(ids).not.toContain('shot-oclock-prewarn-r3');
+    expect(ids).toContain('shot-oclock-r3');
+
+    nowSpy.mockRestore();
   });
 
   it('always uses the single channel and the OS default sound', async () => {

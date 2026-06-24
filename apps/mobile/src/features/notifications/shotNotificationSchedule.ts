@@ -60,9 +60,9 @@ export interface ShotNotificationSlot {
  * round_complete halt, and an ended party return [] (the caller cancels). Fire times
  * are skew-corrected (server instant − offset) so they coincide with this device's
  * own countdown reaching zero. Instants already in the past are skipped (the in-app
- * sound/haptic covers a window opening now; a pre-warning lead longer than the
- * remaining countdown / a short interval simply doesn't schedule), but later rounds
- * are still planned.
+ * sound/haptic covers a window opening now), but later rounds are still planned. A
+ * round's pre-warning is skipped when its lead is >= that round's interval (it would
+ * fire at/before the round starts — no real warning), evaluated per round.
  */
 export function shotNotificationSchedule(
   input: ShotNotificationScheduleInput,
@@ -119,7 +119,13 @@ export function shotNotificationSchedule(
     const openFireAtMs = openMs - offsetMs;
     if (openFireAtMs > nowMs) {
       slots.push({ roundNumber, kind: 'open', fireAtMs: openFireAtMs });
-      if (preWarningMs > 0) {
+      // Heads-up only makes sense when its lead is SHORTER than this round's own
+      // countdown (intervalSecs). With lead >= interval the pre-warning instant lands
+      // at or before the round's countdown even starts — firing during the previous
+      // round, giving no real warning — so skip it. Equal (lead == interval) skips too
+      // (it would fire exactly at round start). Per-round: each round's interval grows
+      // as the game ramps, so a lead too long for round 5 may fit by round 9. (bug fix)
+      if (preWarningMs > 0 && preWarningMs < intervalSecs * 1000) {
         const prewarnFireAtMs = openFireAtMs - preWarningMs;
         if (prewarnFireAtMs > nowMs) {
           slots.push({ roundNumber, kind: 'prewarn', fireAtMs: prewarnFireAtMs });
