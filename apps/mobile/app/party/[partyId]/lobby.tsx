@@ -116,8 +116,10 @@ export default function LobbyScreen(): React.JSX.Element {
   useEffect(() => {
     if (status !== 'ready' || leaving || membershipLost || !partyId || !sessionStatus) return;
     if (sessionStatus === 'lobby') return; // still waiting for the host
-    if (sessionStatus === 'ended') {
-      router.replace('/'); // host cancelled from the lobby — go home
+    // Any terminal status closes the lobby: 'ended' (host cancelled) or 'expired'
+    // (the stale-lobby sweep, D069); 'cancelled' is covered for completeness.
+    if (sessionStatus === 'ended' || sessionStatus === 'expired' || sessionStatus === 'cancelled') {
+      router.replace('/');
       return;
     }
     // active/paused: the game is live — go to the current phase's screen.
