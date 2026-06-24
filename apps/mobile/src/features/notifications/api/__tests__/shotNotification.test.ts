@@ -55,9 +55,8 @@ jest.mock('@/features/notifications/api/notificationPreferences', () => {
     ...actual,
     getGlobalNotificationPrefs: jest.fn(() =>
       Promise.resolve({
-        shotOclockNotificationEnabled: true,
         preWarningEnabled: true,
-        preWarningMinutes: 0,
+        preWarningMinutes: 2,
       }),
     ),
     getSessionOverride: jest.fn(() => Promise.resolve(null)),
@@ -74,19 +73,21 @@ const mockSessionOverride = getSessionOverride as jest.Mock;
 
 // Far-future deadline so the planned slots are always ahead of the real Date.now().
 const FUTURE = new Date(Date.now() + 60_000).toISOString();
-// Far enough out that a pre-warning lead is still in the future.
+// Far enough out that the 2-min Heads-up lead is still in the future for round N.
 const FAR_FUTURE = new Date(Date.now() + 10 * 60_000).toISOString();
 
+// 5-min interval by default so a 2-min Heads-up lead fits inside the round (lead <
+// interval); otherwise the planner's per-round guard would skip the pre-warning.
 function input(
   overrides: Partial<ShotNotificationScheduleInput> = {},
 ): ShotNotificationScheduleInput {
   return {
-    session: { current_phase: 'countdown', phase_ends_at: FUTURE, status: 'active' },
+    session: { current_phase: 'countdown', phase_ends_at: FAR_FUTURE, status: 'active' },
     shotWindowSeconds: 20,
     intervalIncrementSeconds: 10,
     maxIntervalSeconds: null,
     currentRoundNumber: 3,
-    currentRoundIntervalSeconds: 60,
+    currentRoundIntervalSeconds: 300,
     ...overrides,
   };
 }
@@ -96,9 +97,8 @@ beforeEach(() => {
   mockGetAll.mockResolvedValue([]);
   mockPermission.mockResolvedValue('granted');
   mockGlobalPrefs.mockResolvedValue({
-    shotOclockNotificationEnabled: true,
     preWarningEnabled: true,
-    preWarningMinutes: 0,
+    preWarningMinutes: 2,
   });
   mockSessionOverride.mockResolvedValue(null);
 });
@@ -106,60 +106,30 @@ beforeEach(() => {
 describe('scheduleShotNotifications', () => {
   // Regression: the generation guard used to trip on the function's own pre-clear, so
   // it never reached scheduleNotificationAsync — notifications silently stopped firing.
-  it('actually schedules the planned batch for a valid active game', async () => {
+  it('schedules the planned Heads-up batch for a valid active game', async () => {
     await scheduleShotNotifications(input());
-    expect(mockSchedule).toHaveBeenCalledTimes(8); // MAX_SCHEDULED_ROUNDS, no pre-warning
-    expect(mockSchedule.mock.calls[0][0].identifier).toBe('shot-oclock-r3');
+    expect(mockSchedule).toHaveBeenCalledTimes(8); // MAX_SCHEDULED_ROUNDS, one Heads-up each
+    expect(mockSchedule.mock.calls[0][0].identifier).toBe('shot-oclock-prewarn-r3');
   });
 
-  it('also schedules pre-warning notifications when a lead time is configured', async () => {
-    mockGlobalPrefs.mockResolvedValue({
-      shotOclockNotificationEnabled: true,
-      preWarningEnabled: true,
-      preWarningMinutes: 2,
-    });
-    await scheduleShotNotifications(
-      input({
-        // 5-min interval so the 2-min lead fits inside round 3's countdown (lead <
-        // interval); otherwise the planner's per-round guard would skip the prewarn.
-        currentRoundIntervalSeconds: 300,
-        session: { current_phase: 'countdown', phase_ends_at: FAR_FUTURE, status: 'active' },
-      }),
-    );
-    const ids = mockSchedule.mock.calls.map((c) => c[0].identifier);
-    expect(ids).toContain('shot-oclock-r3');
-    expect(ids).toContain('shot-oclock-prewarn-r3');
+  it('uses the configured lead time in the Heads-up copy', async () => {
+    await scheduleShotNotifications(input());
     const prewarn = mockSchedule.mock.calls.find(
       (c) => c[0].identifier === 'shot-oclock-prewarn-r3',
     )![0];
     expect(prewarn.content.body).toContain('2 minutes');
   });
 
-  it('omits the open notification when the global master is off', async () => {
-    mockGlobalPrefs.mockResolvedValue({
-      shotOclockNotificationEnabled: false,
-      preWarningEnabled: true,
-      preWarningMinutes: 2,
-    });
-    await scheduleShotNotifications(
-      input({
-        currentRoundIntervalSeconds: 300, // lead < interval so the prewarn schedules
-        session: { current_phase: 'countdown', phase_ends_at: FAR_FUTURE, status: 'active' },
-      }),
-    );
+  it('schedules no window-open notification (it is server push now)', async () => {
+    await scheduleShotNotifications(input());
     const ids = mockSchedule.mock.calls.map((c) => c[0].identifier);
-    expect(ids).toContain('shot-oclock-prewarn-r3'); // Heads-up still fires
-    expect(ids).not.toContain('shot-oclock-r3'); // open notification suppressed
+    expect(ids.every((id) => id.startsWith('shot-oclock-prewarn-r'))).toBe(true);
+    expect(ids).not.toContain('shot-oclock-r3');
   });
 
   it('does not re-schedule a round\'s Heads-up once it has already fired (add-time)', async () => {
     const realNow = Date.now();
     const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(realNow);
-    mockGlobalPrefs.mockResolvedValue({
-      shotOclockNotificationEnabled: true,
-      preWarningEnabled: true,
-      preWarningMinutes: 2,
-    });
 
     // Round 3 window 600s out, 5-min interval, 2-min lead → prewarn 480s out (future).
     const firstEnds = new Date(realNow + 600_000).toISOString();
@@ -185,10 +155,9 @@ describe('scheduleShotNotifications', () => {
       'party-once',
     );
     // The math re-crosses the lead threshold, but round 3's Heads-up already fired —
-    // so it must NOT be scheduled again (once-per-round). The open still reschedules.
+    // so it must NOT be scheduled again (once-per-round).
     const ids = mockSchedule.mock.calls.map((c) => c[0].identifier);
     expect(ids).not.toContain('shot-oclock-prewarn-r3');
-    expect(ids).toContain('shot-oclock-r3');
 
     nowSpy.mockRestore();
   });

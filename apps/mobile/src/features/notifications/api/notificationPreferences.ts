@@ -22,7 +22,6 @@
 import * as SecureStore from 'expo-secure-store';
 
 const PRE_WARNING_MINUTES_KEY = 'shotoclock.notifications.preWarningMinutes';
-const SHOT_OCLOCK_ENABLED_KEY = 'shotoclock.notifications.shotOclockEnabled';
 const PRE_WARNING_ENABLED_KEY = 'shotoclock.notifications.preWarningEnabled';
 const SESSION_OVERRIDE_KEY = 'shotoclock.notifications.sessionOverride';
 
@@ -57,8 +56,10 @@ export async function clearPreWarningMinutes(): Promise<void> {
   await SecureStore.deleteItemAsync(PRE_WARNING_MINUTES_KEY);
 }
 
-// ─── Global on/off toggles ──────────────────────────────────────────────────
-// Both default ON (the Phase 14 behaviour: notifications fire unless turned off).
+// ─── Global Heads-up on/off ───────────────────────────────────────────────────
+// Defaults ON (the Phase 14 behaviour: fires unless turned off). The Shot O'Clock
+// window-OPEN alert no longer has a toggle — it moved to server push (D063) and is
+// always sent to active players.
 
 export async function getBool(key: string, fallback: boolean): Promise<boolean> {
   try {
@@ -67,23 +68,6 @@ export async function getBool(key: string, fallback: boolean): Promise<boolean> 
   } catch {
     return fallback;
   }
-}
-
-/**
- * The Shot O'Clock NOTIFICATION master (backgrounded/locked window-open alert) —
- * global default, on unless set off. This is global-only (not overridable per-session,
- * D064). Storage key keeps its original `…shotOclockEnabled` string (no migration).
- */
-export async function getShotOclockNotificationEnabled(): Promise<boolean> {
-  return getBool(SHOT_OCLOCK_ENABLED_KEY, true);
-}
-
-export async function setShotOclockNotificationEnabled(enabled: boolean): Promise<void> {
-  await SecureStore.setItemAsync(SHOT_OCLOCK_ENABLED_KEY, String(enabled));
-}
-
-export async function clearShotOclockNotificationEnabled(): Promise<void> {
-  await SecureStore.deleteItemAsync(SHOT_OCLOCK_ENABLED_KEY);
 }
 
 /** Whether the pre-warning alert fires (global default; on unless set off). */
@@ -99,20 +83,18 @@ export async function clearPreWarningEnabled(): Promise<void> {
   await SecureStore.deleteItemAsync(PRE_WARNING_ENABLED_KEY);
 }
 
-/** The three global backgrounded-notification preferences, read together. */
+/** The global backgrounded-notification preferences, read together. */
 export interface GlobalNotificationPrefs {
-  shotOclockNotificationEnabled: boolean; // backgrounded notification master
   preWarningEnabled: boolean; // Heads-up on/off
   preWarningMinutes: PreWarningMinutes; // Heads-up lead time
 }
 
 export async function getGlobalNotificationPrefs(): Promise<GlobalNotificationPrefs> {
-  const [shotOclockNotificationEnabled, preWarningEnabled, preWarningMinutes] = await Promise.all([
-    getShotOclockNotificationEnabled(),
+  const [preWarningEnabled, preWarningMinutes] = await Promise.all([
     getPreWarningEnabled(),
     getPreWarningMinutes(),
   ]);
-  return { shotOclockNotificationEnabled, preWarningEnabled, preWarningMinutes };
+  return { preWarningEnabled, preWarningMinutes };
 }
 
 // ─── Per-session override (D062/D064) ───────────────────────────────────────
@@ -182,17 +164,15 @@ export async function clearSessionOverride(): Promise<void> {
 
 /** The scheduling-ready prefs after layering a per-session override over global. */
 export interface EffectiveNotificationPrefs {
-  // Whether to schedule the shot-window 'open' notification at all (global master).
-  includeOpen: boolean;
   // Effective Heads-up lead time in minutes; 0 means no Heads-up (toggle off).
   preWarningMinutes: number;
 }
 
 /**
  * Layer a per-session override over the global defaults. Pure (unit-tested): the
- * shot-window 'open' notification follows the global master (not overridable); the
  * Heads-up fires when the effective on/off (override else global) is on, at the
- * effective lead time (override else global).
+ * effective lead time (override else global). (The window-open alert is server push
+ * now and has no client toggle — D063.)
  */
 export function resolveEffectivePrefs(
   global: GlobalNotificationPrefs,
@@ -201,7 +181,6 @@ export function resolveEffectivePrefs(
   const headsUpEnabled = override?.preWarningEnabled ?? global.preWarningEnabled;
   const lead = override?.leadMinutes ?? global.preWarningMinutes;
   return {
-    includeOpen: global.shotOclockNotificationEnabled,
     preWarningMinutes: headsUpEnabled ? lead : 0,
   };
 }

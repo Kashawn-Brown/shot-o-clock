@@ -1,8 +1,8 @@
-// Pure planner for the Shot O'Clock local notifications: given the session, the
-// party settings, the current round, the device→server clock offset and "now", it
-// returns the device-local instants to schedule notifications at — the current
-// round's shot window PLUS the next several rounds', computed from the deterministic
-// round loop.
+// Pure planner for the Shot O'Clock Heads-up local notifications: given the session,
+// the party settings, the current round, the device→server clock offset and "now", it
+// returns the device-local instants to schedule the pre-warning at — for the current
+// round and the next several, computed from the deterministic round loop. (The
+// window-OPEN alert is server push now, D063, and is not planned here.)
 //
 // Why a batch, not one: when the app is fully backgrounded the JS thread is frozen,
 // so the client never wakes to reschedule for the next round's phase_ends_at — only
@@ -39,9 +39,10 @@ export interface ShotNotificationScheduleInput {
   currentRoundIntervalSeconds: number;
 }
 
-// 'open' = the shot window opening (the Shot O'Clock alert); 'prewarn' = the
-// configurable heads-up that fires `preWarningMinutes` before it.
-export type ShotNotificationKind = 'open' | 'prewarn';
+// 'prewarn' = the configurable Heads-up that fires `preWarningMinutes` before a shot
+// window opens. (The window-open alert itself moved to server push — D063 — so it is
+// no longer scheduled locally; this planner now plans only the Heads-up.)
+export type ShotNotificationKind = 'prewarn';
 
 export interface ShotNotificationSlot {
   roundNumber: number;
@@ -118,7 +119,6 @@ export function shotNotificationSchedule(
   for (let i = 0; i < maxCount + 4 && roundsScheduled < maxCount; i += 1) {
     const openFireAtMs = openMs - offsetMs;
     if (openFireAtMs > nowMs) {
-      slots.push({ roundNumber, kind: 'open', fireAtMs: openFireAtMs });
       // Heads-up only makes sense when its lead is SHORTER than this round's own
       // countdown (intervalSecs). With lead >= interval the pre-warning instant lands
       // at or before the round's countdown even starts — firing during the previous

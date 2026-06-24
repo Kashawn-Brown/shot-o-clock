@@ -122,7 +122,7 @@ function SettingsSection({
 
 export default function SettingsScreen(): React.JSX.Element {
   const { displayName, save } = useDisplayName();
-  const { prefs, setShotOclock, setPreWarning, setLeadMinutes } = useGlobalNotificationPrefs();
+  const { prefs, setPreWarning, setLeadMinutes } = useGlobalNotificationPrefs();
   const {
     prefs: alertPrefs,
     setSoundEnabled,
@@ -164,7 +164,6 @@ export default function SettingsScreen(): React.JSX.Element {
   // (near-instant) so a tap can't race the initial read and clobber a stored value.
   const notifLoaded = prefs !== null;
   const notif: GlobalNotificationPrefs = prefs ?? {
-    shotOclockNotificationEnabled: true,
     preWarningEnabled: true,
     preWarningMinutes: 2,
   };
@@ -224,16 +223,8 @@ export default function SettingsScreen(): React.JSX.Element {
 
         <SettingsSection
           title="Notifications"
-          caption="Alerts when the app is in the background."
+          caption="Alerts when the app is in the background. Shot O'Clock itself always notifies."
         >
-          <ToggleRow
-            title="Shot O'Clock notification"
-            description="Notify me when it's Shot O'Clock and the app is in the background."
-            value={notif.shotOclockNotificationEnabled}
-            onValueChange={setShotOclock}
-            disabled={!notifLoaded}
-          />
-          <View style={styles.divider} />
           <ToggleRow
             title="Heads-up"
             description="Get a reminder before the next Shot O'Clock."

@@ -33,37 +33,28 @@ beforeEach(() => {
 });
 
 const GLOBAL_DEFAULT: GlobalNotificationPrefs = {
-  shotOclockNotificationEnabled: true,
   preWarningEnabled: true,
   preWarningMinutes: 2,
 };
 
 describe('resolveEffectivePrefs', () => {
   it('uses global defaults when there is no override', () => {
-    expect(resolveEffectivePrefs(GLOBAL_DEFAULT, null)).toEqual({
-      includeOpen: true,
-      preWarningMinutes: 2,
-    });
+    expect(resolveEffectivePrefs(GLOBAL_DEFAULT, null)).toEqual({ preWarningMinutes: 2 });
   });
 
   it('lets the override replace the lead time', () => {
     expect(resolveEffectivePrefs(GLOBAL_DEFAULT, { leadMinutes: 5 })).toEqual({
-      includeOpen: true,
       preWarningMinutes: 5,
     });
   });
 
   it('zeroes the lead time when the global Heads-up toggle is off', () => {
     const global: GlobalNotificationPrefs = { ...GLOBAL_DEFAULT, preWarningEnabled: false };
-    expect(resolveEffectivePrefs(global, { leadMinutes: 5 })).toEqual({
-      includeOpen: true,
-      preWarningMinutes: 0,
-    });
+    expect(resolveEffectivePrefs(global, { leadMinutes: 5 })).toEqual({ preWarningMinutes: 0 });
   });
 
   it('zeroes the lead time when the per-session Heads-up override is off', () => {
     expect(resolveEffectivePrefs(GLOBAL_DEFAULT, { preWarningEnabled: false })).toEqual({
-      includeOpen: true,
       preWarningMinutes: 0,
     });
   });
@@ -71,17 +62,8 @@ describe('resolveEffectivePrefs', () => {
   it('honours a per-session Heads-up override turning it back on over a global-off', () => {
     const global: GlobalNotificationPrefs = { ...GLOBAL_DEFAULT, preWarningEnabled: false };
     expect(resolveEffectivePrefs(global, { preWarningEnabled: true, leadMinutes: 1 })).toEqual({
-      includeOpen: true,
       preWarningMinutes: 1,
     });
-  });
-
-  it('drops the open notification when the global master is off', () => {
-    const global: GlobalNotificationPrefs = {
-      ...GLOBAL_DEFAULT,
-      shotOclockNotificationEnabled: false,
-    };
-    expect(resolveEffectivePrefs(global, null).includeOpen).toBe(false);
   });
 });
 

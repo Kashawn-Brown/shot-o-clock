@@ -147,17 +147,12 @@ export async function scheduleShotNotifications(
       MAX_SCHEDULED_ROUNDS,
       preWarningMinutes,
     );
-    // The shot-window 'open' notification follows the global master; Heads-up slots are
-    // already gated by preWarningMinutes (0 when off => none) and the per-round
-    // lead<interval rule in the planner.
-    if (!effective.includeOpen) slots = slots.filter((slot) => slot.kind !== 'open');
-
-    // Once-per-round Heads-up guard: drop a pre-warning for a round whose Heads-up
-    // already fired (its last-planned instant has passed), and record the planned
-    // instant for the rest so a later add-time recompute can recognize it. See
-    // prewarnPlannedByRound. Only the prewarn kind is governed; opens are unaffected.
+    // The planner now emits only Heads-up slots (the window-open alert is server push,
+    // D063), already gated by preWarningMinutes (0 when off) and the per-round
+    // lead<interval rule. Once-per-round guard: drop a pre-warning for a round whose
+    // Heads-up already fired (its last-planned instant has passed), and record the
+    // planned instant for the rest so a later add-time recompute can recognize it.
     slots = slots.filter((slot) => {
-      if (slot.kind !== 'prewarn') return true;
       const planned = prewarnPlannedByRound.get(slot.roundNumber);
       if (planned !== undefined && nowMs >= planned) return false; // already fired this round
       prewarnPlannedByRound.set(slot.roundNumber, slot.fireAtMs);
@@ -183,7 +178,7 @@ export async function scheduleShotNotifications(
     slots.map((slot) =>
       scheduleNotificationAsync({
         identifier: identifierFor(slot),
-        content: contentFor(slot, preWarningMinutes),
+        content: contentFor(preWarningMinutes),
         trigger: {
           type: SchedulableTriggerInputTypes.DATE,
           date: slot.fireAtMs,
@@ -203,28 +198,19 @@ export async function reapplyShotNotifications(): Promise<void> {
   await scheduleShotNotifications(lastInput, lastPartyId);
 }
 
-// Per-round, per-kind identifier. Both kinds share the SHOT_NOTIFICATION_ID_PREFIX so
-// clearScheduledBatch cancels them together.
+// Per-round Heads-up identifier, under the shared SHOT_NOTIFICATION_ID_PREFIX so
+// clearScheduledBatch cancels the batch together.
 function identifierFor(slot: ShotNotificationSlot): string {
-  return slot.kind === 'prewarn'
-    ? `${SHOT_NOTIFICATION_ID_PREFIX}-prewarn-r${slot.roundNumber}`
-    : `${SHOT_NOTIFICATION_ID_PREFIX}-r${slot.roundNumber}`;
+  return `${SHOT_NOTIFICATION_ID_PREFIX}-prewarn-r${slot.roundNumber}`;
 }
 
-function contentFor(slot: ShotNotificationSlot, preWarningMinutes: number) {
-  // The backgrounded notification always uses the OS default sound (D064); the phone's
-  // ring/silent/vibrate mode decides whether that plays a sound or vibrates.
-  if (slot.kind === 'prewarn') {
-    const unit = preWarningMinutes === 1 ? 'minute' : 'minutes';
-    return {
-      title: 'Shot O’Clock soon',
-      body: `Get ready, the next shot is in ${preWarningMinutes} ${unit}.`,
-      sound: 'default' as const,
-    };
-  }
+// The Heads-up content. The backgrounded notification always uses the OS default
+// sound (D064); the phone's ring/silent/vibrate mode decides sound vs vibration.
+function contentFor(preWarningMinutes: number) {
+  const unit = preWarningMinutes === 1 ? 'minute' : 'minutes';
   return {
-    title: "It's Shot O'Clock! 🥃",
-    body: 'Time to take your shot!',
+    title: 'Shot O’Clock soon',
+    body: `Get ready, the next shot is in ${preWarningMinutes} ${unit}.`,
     sound: 'default' as const,
   };
 }

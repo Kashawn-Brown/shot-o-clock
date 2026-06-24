@@ -25,7 +25,6 @@ import {
   clearPreWarningEnabled,
   clearPreWarningMinutes,
   clearSessionOverride,
-  clearShotOclockNotificationEnabled,
 } from '@/features/notifications/api/notificationPreferences';
 import { cancelShotNotifications } from '@/features/notifications/api/shotNotification';
 import { clearLeftPartyId } from '@/features/party/leftParty';
@@ -45,7 +44,6 @@ export async function resetDevice(): Promise<void> {
     clearConsent(),
     clearNotificationsPrompted(),
     clearPreWarningMinutes(),
-    clearShotOclockNotificationEnabled(),
     clearPreWarningEnabled(),
     clearAlertSoundEnabled(),
     clearAlertHapticEnabled(),
