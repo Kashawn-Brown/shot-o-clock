@@ -93,3 +93,20 @@ export function registerPushToken(
     p_platform: currentPlatform(),
   });
 }
+
+/**
+ * Acquire this device's push token and persist it server-side — the single entry
+ * point both registration triggers use (onboarding grant + every launch when
+ * permission is already granted). Fire-and-forget: never throws, logs failures, and
+ * is safe to call repeatedly (the RPC is idempotent). No-ops when getPushToken
+ * returns null (no permission, emulator, or a transient failure), so it's retried on
+ * the next launch.
+ */
+export async function syncPushToken(): Promise<void> {
+  const token = await getPushToken();
+  if (!token) return;
+  const result = await registerPushToken(token);
+  if (!result.ok) {
+    console.error('Failed to register push token', result.error_code, result.error_msg);
+  }
+}

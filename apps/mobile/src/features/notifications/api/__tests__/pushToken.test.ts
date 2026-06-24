@@ -1,4 +1,8 @@
-import { getPushToken, registerPushToken } from '@/features/notifications/api/pushToken';
+import {
+  getPushToken,
+  registerPushToken,
+  syncPushToken,
+} from '@/features/notifications/api/pushToken';
 
 // Mock the seams: the token-minting API, the permission read, the RPC layer, and
 // the EAS config that supplies projectId. Each test sets its own return values.
@@ -73,5 +77,29 @@ describe('registerPushToken', () => {
     expect(args.p_expo_push_token).toBe('ExponentPushToken[abc]');
     // jest-expo runs as a known platform; whatever it is, it must be enum-valid.
     expect([undefined, 'ios', 'android', 'web']).toContain(args.p_platform);
+  });
+});
+
+describe('syncPushToken', () => {
+  it('does not call the RPC when no token is available', async () => {
+    mockPermission.mockResolvedValueOnce('denied'); // getPushToken returns null
+    await syncPushToken();
+    expect(mockCallRpc).not.toHaveBeenCalled();
+  });
+
+  it('registers the token when one is available', async () => {
+    mockPermission.mockResolvedValueOnce('granted');
+    mockGetToken.mockResolvedValueOnce({ type: 'expo', data: 'ExponentPushToken[xyz]' });
+    mockCallRpc.mockResolvedValueOnce({
+      ok: true,
+      error_code: null,
+      error_msg: null,
+      data: { device_id: 'd1' },
+    });
+
+    await syncPushToken();
+
+    expect(mockCallRpc).toHaveBeenCalledTimes(1);
+    expect(mockCallRpc.mock.calls[0][1].p_expo_push_token).toBe('ExponentPushToken[xyz]');
   });
 });

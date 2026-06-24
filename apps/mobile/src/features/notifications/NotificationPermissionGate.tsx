@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { requestNotificationPermission } from '@/features/notifications/api/notificationPermission';
+import { syncPushToken } from '@/features/notifications/api/pushToken';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, SPACING } from '@/styles/tokens';
 
 type NotificationPermissionGateProps = {
@@ -25,7 +26,12 @@ export function NotificationPermissionGate({
     if (busy) return;
     setBusy(true);
     try {
-      await requestNotificationPermission();
+      const permission = await requestNotificationPermission();
+      // Just granted — register this device's push token now. Fire-and-forget so it
+      // never blocks advancing past onboarding; the RPC is idempotent.
+      if (permission === 'granted') {
+        void syncPushToken();
+      }
     } finally {
       // Advance regardless of grant/deny — the choice is recorded and Settings
       // (Phase 15) lets the user change it. Denial is handled gracefully: the app
