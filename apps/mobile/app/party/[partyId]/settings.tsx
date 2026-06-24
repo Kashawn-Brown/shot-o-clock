@@ -27,18 +27,22 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { OptionPicker } from '@/components/ui/OptionPicker';
-import { PRE_WARNING_OPTIONS } from '@/features/notifications/api/notificationPreferences';
 import { SHOT_SOUNDS } from '@/features/notifications/api/shotSounds';
 import { useSessionOverride } from '@/features/notifications/useSessionOverride';
+import {
+  hostSetHeadsUp,
+  HEADS_UP_LEAD_SECONDS,
+  type HeadsUpLeadSeconds,
+} from '@/features/party/api/hostSetHeadsUp';
 import { hostSetPartyLock } from '@/features/party/api/hostSetPartyLock';
 import { usePartyRole } from '@/features/party/usePartyRole';
 import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
-const LEAD_TIME_OPTIONS = PRE_WARNING_OPTIONS.map((minutes) => ({
-  label: `${minutes} min`,
-  value: minutes,
-}));
+// The Heads-up lead picker options, in seconds (the host RPC validates this set).
+const LEAD_TIME_OPTIONS: { label: string; value: HeadsUpLeadSeconds }[] = HEADS_UP_LEAD_SECONDS.map(
+  (seconds) => ({ label: `${seconds / 60} min`, value: seconds }),
+);
 
 const SOUND_OPTIONS = SHOT_SOUNDS.map((sound) => ({ label: sound.label, value: sound.id }));
 
@@ -87,19 +91,16 @@ function SettingsSection({
 
 export default function PartySettingsScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
-  const { status, isHost, isLocked, hostOnly, errorMessage } = usePartyRole(partyId);
+  const { status, isHost, isLocked, hostOnly, headsUpEnabled, headsUpLeadSeconds, errorMessage } =
+    usePartyRole(partyId);
   const {
     loaded,
     alertSoundEnabled,
     alertHapticEnabled,
     soundChoice,
-    preWarningEnabled,
-    leadMinutes,
     setAlertSoundEnabled,
     setAlertHapticEnabled,
     setSoundChoice,
-    setPreWarningEnabled,
-    setLeadMinutes,
   } = useSessionOverride(partyId);
 
   // Party lock — seed from the load, then own the value locally (the host is the only
@@ -119,6 +120,44 @@ export default function PartySettingsScreen(): React.JSX.Element {
       return;
     }
     setLocked(previous); // revert
+    Alert.alert("Couldn't update", rpcErrorMessage(result.error_code));
+  };
+
+  // Party-wide Heads-up (host-controlled, server push). Seed from the load, then own
+  // the value locally (host-only, no realtime here) — same pattern as the lock. The
+  // server enforces once-per-round + a fire-window lock; on rejection we revert and
+  // show the reason (HEADS_UP_ALREADY_CHANGED / HEADS_UP_LOCKED) via rpcErrorMessage.
+  const [headsUp, setHeadsUp] = useState<{ enabled: boolean; lead: HeadsUpLeadSeconds } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (status !== 'ready') return;
+    // Normalize the stored lead to one of the offered options (a legacy party could
+    // hold a value outside the set); fall back to the 2-min default.
+    const lead = HEADS_UP_LEAD_SECONDS.includes(headsUpLeadSeconds as HeadsUpLeadSeconds)
+      ? (headsUpLeadSeconds as HeadsUpLeadSeconds)
+      : 120;
+    setHeadsUp({ enabled: headsUpEnabled, lead });
+  }, [status, headsUpEnabled, headsUpLeadSeconds]);
+
+  const applyHeadsUp = async (next: { enabled: boolean; lead: HeadsUpLeadSeconds }): Promise<void> => {
+    if (!partyId) return;
+    const previous = headsUp;
+    setHeadsUp(next); // optimistic
+    const result = await hostSetHeadsUp({
+      partySessionId: partyId,
+      enabled: next.enabled,
+      leadSeconds: next.lead,
+    });
+    if (result.ok) {
+      // The RPC validated and echoes one of the offered leads.
+      setHeadsUp({
+        enabled: result.data.heads_up_enabled,
+        lead: result.data.heads_up_lead_seconds as HeadsUpLeadSeconds,
+      });
+      return;
+    }
+    setHeadsUp(previous); // revert
     Alert.alert("Couldn't update", rpcErrorMessage(result.error_code));
   };
 
@@ -180,35 +219,38 @@ export default function PartySettingsScreen(): React.JSX.Element {
           />
         </SettingsSection>
 
-        <SettingsSection
-          title="Notifications"
-        >
-          <ToggleRow
-            title="Heads-up"
-            description="Get a reminder before the next Shot O'Clock."
-            value={preWarningEnabled}
-            onValueChange={setPreWarningEnabled}
-            disabled={!loaded}
-          />
-          {preWarningEnabled ? (
-            <View style={styles.subControl}>
-              <Text style={styles.subLabel}>Lead time</Text>
-              <OptionPicker
-                options={LEAD_TIME_OPTIONS}
-                value={leadMinutes}
-                onChange={setLeadMinutes}
-                disabled={!loaded}
-              />
-            </View>
-          ) : null}
-        </SettingsSection>
-
         {/* Host-only single-phone mode has no joiners, so the lock is meaningless and
-            the whole section is hidden (D040/D050). */}
+            the whole section is hidden (D040/D050). Heads-up is host-controlled and
+            party-wide now (D063): only the host sees it, here. */}
         {isHost && !hostOnly ? (
           <SettingsSection
             title="Host controls"
+            caption="Heads-up applies to everyone. You can change it once per round."
           >
+            <ToggleRow
+              title="Heads-up"
+              description="Warn everyone before the next Shot O'Clock."
+              value={headsUp?.enabled ?? false}
+              onValueChange={(enabled) =>
+                void applyHeadsUp({
+                  enabled,
+                  lead: (headsUp?.lead ?? 120) as HeadsUpLeadSeconds,
+                })
+              }
+              disabled={headsUp === null}
+            />
+            {headsUp?.enabled ? (
+              <View style={styles.subControl}>
+                <Text style={styles.subLabel}>Lead time</Text>
+                <OptionPicker
+                  options={LEAD_TIME_OPTIONS}
+                  value={headsUp.lead}
+                  onChange={(lead) => void applyHeadsUp({ enabled: true, lead })}
+                  disabled={headsUp === null}
+                />
+              </View>
+            ) : null}
+            <View style={styles.divider} />
             <ToggleRow
               title="Lock party"
               description="Stop new players from joining."

@@ -27,22 +27,11 @@ import { Button } from '@/components/ui/Button';
 import { OptionPicker } from '@/components/ui/OptionPicker';
 import { DISPLAY_NAME_MAX_LENGTH, isValidDisplayName } from '@/features/auth/api/displayName';
 import type { GlobalAlertPrefs } from '@/features/notifications/api/alertPreferences';
-import {
-  PRE_WARNING_OPTIONS,
-  type GlobalNotificationPrefs,
-} from '@/features/notifications/api/notificationPreferences';
 import { SHOT_SOUNDS } from '@/features/notifications/api/shotSounds';
 import { useDisplayName } from '@/features/auth/useDisplayName';
 import { useGlobalAlertPrefs } from '@/features/notifications/useGlobalAlertPrefs';
-import { useGlobalNotificationPrefs } from '@/features/notifications/useGlobalNotificationPrefs';
 import { useReset } from '@/features/auth/ResetProvider';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
-
-// 1/2/5 → the lead-time picker options, derived from the canonical PRE_WARNING_OPTIONS.
-const LEAD_TIME_OPTIONS = PRE_WARNING_OPTIONS.map((minutes) => ({
-  label: `${minutes} min`,
-  value: minutes,
-}));
 
 // The available in-app Alert sounds, as picker options.
 const SOUND_OPTIONS = SHOT_SOUNDS.map((sound) => ({ label: sound.label, value: sound.id }));
@@ -122,7 +111,6 @@ function SettingsSection({
 
 export default function SettingsScreen(): React.JSX.Element {
   const { displayName, save } = useDisplayName();
-  const { prefs, setPreWarning, setLeadMinutes } = useGlobalNotificationPrefs();
   const {
     prefs: alertPrefs,
     setSoundEnabled,
@@ -162,11 +150,6 @@ export default function SettingsScreen(): React.JSX.Element {
 
   // Show sensible defaults instantly; the toggles are disabled until storage loads
   // (near-instant) so a tap can't race the initial read and clobber a stored value.
-  const notifLoaded = prefs !== null;
-  const notif: GlobalNotificationPrefs = prefs ?? {
-    preWarningEnabled: true,
-    preWarningMinutes: 2,
-  };
   const alertLoaded = alertPrefs !== null;
   const alert: GlobalAlertPrefs = alertPrefs ?? {
     soundEnabled: false,
@@ -219,30 +202,6 @@ export default function SettingsScreen(): React.JSX.Element {
             onValueChange={setHapticEnabled}
             disabled={!alertLoaded}
           />
-        </SettingsSection>
-
-        <SettingsSection
-          title="Notifications"
-          caption="Alerts when the app is in the background. Shot O'Clock itself always notifies."
-        >
-          <ToggleRow
-            title="Heads-up"
-            description="Get a reminder before the next Shot O'Clock."
-            value={notif.preWarningEnabled}
-            onValueChange={setPreWarning}
-            disabled={!notifLoaded}
-          />
-          {notif.preWarningEnabled ? (
-            <View style={styles.subControl}>
-              <Text style={styles.subLabel}>Lead time</Text>
-              <OptionPicker
-                options={LEAD_TIME_OPTIONS}
-                value={notif.preWarningMinutes}
-                onChange={setLeadMinutes}
-                disabled={!notifLoaded}
-              />
-            </View>
-          ) : null}
         </SettingsSection>
 
         <SettingsSection title="Party defaults">

@@ -35,6 +35,9 @@ export const RPC_ERROR_MESSAGES: Record<RpcErrorCode, string> = {
   SELF_OUT_IS_STICKY: 'You already opted out of this round.',
   NO_ACTIVE_PLAYERS: 'There are no active players left in this party.',
   REINSTATE_TOO_OLD: 'That player has been out too long to be reinstated.',
+  HEADS_UP_LOCKED:
+    "The next Heads-up is about to send — you can't change it now. Try again after this round's shot.",
+  HEADS_UP_ALREADY_CHANGED: 'You can only change Heads-up once per round. Try again next round.',
   // ─── Client-side wrapper codes (rpcClient.ts) ────────────────────────────
   UNEXPECTED_ERROR: 'Something unexpected went wrong. Please try again.',
 };

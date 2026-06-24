@@ -696,6 +696,8 @@ export type Database = {
           countdown_ends_at: string | null
           countdown_started_at: string | null
           created_at: string
+          heads_up_push_sent_at: string | null
+          heads_up_setting_changed_at: string | null
           id: string
           interval_seconds: number
           party_session_id: string
@@ -714,6 +716,8 @@ export type Database = {
           countdown_ends_at?: string | null
           countdown_started_at?: string | null
           created_at?: string
+          heads_up_push_sent_at?: string | null
+          heads_up_setting_changed_at?: string | null
           id?: string
           interval_seconds: number
           party_session_id: string
@@ -732,6 +736,8 @@ export type Database = {
           countdown_ends_at?: string | null
           countdown_started_at?: string | null
           created_at?: string
+          heads_up_push_sent_at?: string | null
+          heads_up_setting_changed_at?: string | null
           id?: string
           interval_seconds?: number
           party_session_id?: string
@@ -891,6 +897,10 @@ export type Database = {
         Returns: Json
       }
       host_resume_timer: { Args: { p_party_session_id: string }; Returns: Json }
+      host_set_heads_up: {
+        Args: { p_party_session_id: string; p_enabled: boolean; p_lead_seconds: number }
+        Returns: Json
+      }
       is_active_party_member: { Args: { session_id: string }; Returns: boolean }
       is_party_host: { Args: { session_id: string }; Returns: boolean }
       is_party_member: { Args: { session_id: string }; Returns: boolean }

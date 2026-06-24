@@ -22,6 +22,10 @@ interface UsePartyRoleResult {
   isLocked: boolean;
   // Single-phone mode (D040/D050): no joiners, so the party-lock control is hidden.
   hostOnly: boolean;
+  // Party-wide Heads-up at load (party_settings.pre_shot_warning_*). The Surface B
+  // host control seeds from these, then owns the value (host-only, no realtime here).
+  headsUpEnabled: boolean;
+  headsUpLeadSeconds: number;
   errorMessage: string | null;
 }
 
@@ -31,6 +35,8 @@ export function usePartyRole(partyId: string | undefined): UsePartyRoleResult {
   const [isHost, setIsHost] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [hostOnly, setHostOnly] = useState(false);
+  const [headsUpEnabled, setHeadsUpEnabled] = useState(true);
+  const [headsUpLeadSeconds, setHeadsUpLeadSeconds] = useState(120);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,6 +58,8 @@ export function usePartyRole(partyId: string | undefined): UsePartyRoleResult {
         setIsHost(me?.permission_role === 'host');
         setIsLocked(result.data.session.is_locked);
         setHostOnly(result.data.settings.host_only);
+        setHeadsUpEnabled(result.data.settings.pre_shot_warning_enabled);
+        setHeadsUpLeadSeconds(result.data.settings.pre_shot_warning_seconds);
         setStatus('ready');
       })
       .catch(() => {
@@ -64,5 +72,5 @@ export function usePartyRole(partyId: string | undefined): UsePartyRoleResult {
     };
   }, [partyId, userId]);
 
-  return { status, isHost, isLocked, hostOnly, errorMessage };
+  return { status, isHost, isLocked, hostOnly, headsUpEnabled, headsUpLeadSeconds, errorMessage };
 }

@@ -21,30 +21,19 @@ import {
   clearShotOclockSound,
 } from '@/features/notifications/api/alertPreferences';
 import { clearNotificationsPrompted } from '@/features/notifications/api/notificationPermission';
-import {
-  clearPreWarningEnabled,
-  clearPreWarningMinutes,
-  clearSessionOverride,
-} from '@/features/notifications/api/notificationPreferences';
-import { cancelShotNotifications } from '@/features/notifications/api/shotNotification';
+import { clearSessionOverride } from '@/features/notifications/api/notificationPreferences';
 import { clearLeftPartyId } from '@/features/party/leftParty';
 import { clearPartyCreateDefaults } from '@/features/party/partyDefaults';
 import { supabase } from '@/lib/supabase';
 
 export async function resetDevice(): Promise<void> {
-  // Cancel any pending local notifications first, in case reset fires while a game
-  // is still scheduled — otherwise a stale Shot O'Clock alarm could fire post-reset.
-  await cancelShotNotifications();
-
   // Clear every device-side store. Each module owns its key. The single
-  // clearSessionOverride() wipes ALL per-session overrides (alert + Heads-up) — they
-  // share one blob.
+  // clearSessionOverride() wipes the per-session alert override blob. (Notifications
+  // are server push now, nothing is locally scheduled to cancel — D063.)
   await Promise.all([
     clearDisplayName(),
     clearConsent(),
     clearNotificationsPrompted(),
-    clearPreWarningMinutes(),
-    clearPreWarningEnabled(),
     clearAlertSoundEnabled(),
     clearAlertHapticEnabled(),
     clearShotOclockSound(),

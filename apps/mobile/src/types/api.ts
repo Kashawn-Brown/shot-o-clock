@@ -34,7 +34,9 @@ export type DbRpcErrorCode =
   | 'SHOT_WINDOW_CLOSED'
   | 'SELF_OUT_IS_STICKY'
   | 'NO_ACTIVE_PLAYERS'
-  | 'REINSTATE_TOO_OLD';
+  | 'REINSTATE_TOO_OLD'
+  | 'HEADS_UP_LOCKED'
+  | 'HEADS_UP_ALREADY_CHANGED';
 
 // Codes the client wrapper produces when the call itself fails (network error,
 // thrown exception, malformed response). Never returned by the database.
