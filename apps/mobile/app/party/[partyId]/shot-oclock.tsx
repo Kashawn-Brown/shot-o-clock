@@ -40,6 +40,7 @@ import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { selfOutCopy } from '@/features/game/selfOutCopy';
 import { useCountdown } from '@/features/game/useCountdown';
 import { useGameExit } from '@/features/party/useGameExit';
+import { useBlockBack } from '@/features/party/useBlockBack';
 import { useTimerSession } from '@/features/party/useTimerSession';
 import { rpcErrorMessage } from '@/lib/errors';
 import { formatDuration } from '@/lib/time';
@@ -73,6 +74,10 @@ export default function ShotOClockScreen(): React.JSX.Element {
   // playsInSilentMode set). The player is recreated per mount / on a sound change.
   const shotSound = useAudioPlayer(shotSoundAsset(alertPrefs.soundChoice));
   const { leaving } = useGameExit(partyId);
+
+  // The Shot O'Clock moment is brief and intentionally offers no exit (D044) — so OS
+  // back is fully inert here, not even a confirmation. Players leave from the timer.
+  useBlockBack();
 
   // Optimistic action: set on tap for instant feedback, reconciled when myOutcome
   // re-reads. Cleared when the round changes (defensive — the screen usually

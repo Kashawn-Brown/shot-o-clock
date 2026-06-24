@@ -38,6 +38,7 @@ import {
 } from '@/features/game/roundResults';
 import { useRoundOutcomes } from '@/features/game/useRoundOutcomes';
 import { useGameExit } from '@/features/party/useGameExit';
+import { useBlockBack } from '@/features/party/useBlockBack';
 import { useTimerSession } from '@/features/party/useTimerSession';
 import { supabase } from '@/lib/supabase';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
@@ -99,6 +100,11 @@ export default function ResultsScreen(): React.JSX.Element {
   const isHalt = session?.current_phase === 'round_complete';
   const isReview = review === '1';
   const isHost = me?.permission_role === 'host';
+
+  // OS back: in review mode (opened from the timer / reconnect recap), back returns
+  // to the timer like the "Back to timer" button. In the auto-advancing post-round
+  // results and the zero-active halt, back is inert — exits go through End Party.
+  useBlockBack(isReview ? () => router.back() : undefined);
 
   const shownRoundNumber =
     roundNumber ??

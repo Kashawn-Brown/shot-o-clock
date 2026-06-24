@@ -39,6 +39,7 @@ import { startGame } from '@/features/party/api/startGame';
 import type { LobbyRosterEntry } from '@/features/party/lobbyView';
 import { routeForPhase } from '@/features/party/reconnectRoute';
 import { shareJoinCode } from '@/features/party/shareJoinCode';
+import { useBlockBack } from '@/features/party/useBlockBack';
 import { useLobby } from '@/features/party/useLobby';
 import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
@@ -175,6 +176,11 @@ export default function LobbyScreen(): React.JSX.Element {
       { text: confirmLabel, style: 'destructive', onPress: handleExit },
     ]);
   }, [leaving, handleExit, view?.isHost]);
+
+  // OS back routes through the same exit confirmation as the header control, so a
+  // back-press can't silently strand the host out of their lobby (Phase 16 bug fix;
+  // iOS swipe disabled via gestureEnabled in _layout).
+  useBlockBack(confirmExit);
 
   // Host starts the game: start_game creates round 1's countdown, then we route
   // into the timer. router.replace (not push) because the lobby is no longer a
