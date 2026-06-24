@@ -891,10 +891,6 @@ export type Database = {
         Returns: Json
       }
       host_resume_timer: { Args: { p_party_session_id: string }; Returns: Json }
-      host_skip_to_shot_window: {
-        Args: { p_party_session_id: string }
-        Returns: Json
-      }
       is_active_party_member: { Args: { session_id: string }; Returns: boolean }
       is_party_host: { Args: { session_id: string }; Returns: boolean }
       is_party_member: { Args: { session_id: string }; Returns: boolean }
