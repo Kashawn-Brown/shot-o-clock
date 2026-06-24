@@ -108,6 +108,33 @@ export type Database = {
           },
         ]
       }
+      devices: {
+        Row: {
+          created_at: string
+          expo_push_token: string
+          id: string
+          platform: Database["public"]["Enums"]["device_platform"] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expo_push_token: string
+          id?: string
+          platform?: Database["public"]["Enums"]["device_platform"] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expo_push_token?: string
+          id?: string
+          platform?: Database["public"]["Enums"]["device_platform"] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       party_player_notification_settings: {
         Row: {
           created_at: string
@@ -880,6 +907,13 @@ export type Database = {
       mark_self_left: { Args: { p_party_session_id: string }; Returns: Json }
       mark_self_out: { Args: { p_party_session_id: string }; Returns: Json }
       my_party_player_id: { Args: { session_id: string }; Returns: string }
+      register_push_token: {
+        Args: {
+          p_expo_push_token: string
+          p_platform?: Database["public"]["Enums"]["device_platform"]
+        }
+        Returns: Json
+      }
       start_game: { Args: { p_party_session_id: string }; Returns: Json }
     }
     Enums: {

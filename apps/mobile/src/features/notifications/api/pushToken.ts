@@ -9,9 +9,19 @@
 // emulators have no push service, so getExpoPushTokenAsync rejects there.
 
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 import { getExpoPushTokenAsync } from '@/features/notifications/api/expoNotifications';
 import { getNotificationPermission } from '@/features/notifications/api/notificationPermission';
+import { callRpc } from '@/lib/rpcClient';
+import type { RpcResult } from '@/types/api';
+import type { Database } from '@/types/db.generated';
+
+type DevicePlatform = Database['public']['Enums']['device_platform'];
+
+export type RegisterPushTokenData = {
+  device_id: string;
+};
 
 /**
  * EAS project id, the credential getExpoPushTokenAsync needs to mint a token. It
@@ -56,4 +66,30 @@ export async function getPushToken(): Promise<string | null> {
     console.error('Failed to obtain Expo push token', error);
     return null;
   }
+}
+
+/**
+ * Narrow React Native's Platform.OS to the device_platform enum. The app runs only
+ * on the three the enum knows; anything else (shouldn't happen) registers with no
+ * platform rather than an invalid one.
+ */
+function currentPlatform(): DevicePlatform | undefined {
+  if (Platform.OS === 'ios' || Platform.OS === 'android' || Platform.OS === 'web') {
+    return Platform.OS;
+  }
+  return undefined;
+}
+
+/**
+ * Persist this device's Expo push token server-side via the register_push_token
+ * RPC, so the push send path (#009 / D063) can reach the device. Idempotent — safe
+ * to call on every launch; an unchanged token just refreshes the row.
+ */
+export function registerPushToken(
+  token: string,
+): Promise<RpcResult<RegisterPushTokenData>> {
+  return callRpc<RegisterPushTokenData>('register_push_token', {
+    p_expo_push_token: token,
+    p_platform: currentPlatform(),
+  });
 }
