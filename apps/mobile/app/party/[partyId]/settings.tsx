@@ -37,8 +37,10 @@ import {
   type HeadsUpLeadSeconds,
 } from '@/features/party/api/hostSetHeadsUp';
 import { hostSetPartyLock } from '@/features/party/api/hostSetPartyLock';
+import { headsUpGate } from '@/features/party/headsUpGate';
 import { usePartyRole } from '@/features/party/usePartyRole';
 import { rpcErrorMessage } from '@/lib/errors';
+import { serverNow } from '@/lib/time';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
 // The Heads-up lead picker options, in seconds (the host RPC validates this set).
@@ -93,8 +95,17 @@ function SettingsSection({
 
 export default function PartySettingsScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
-  const { status, isHost, isLocked, hostOnly, headsUpEnabled, headsUpLeadSeconds, errorMessage } =
-    usePartyRole(partyId);
+  const {
+    status,
+    isHost,
+    hostOnly,
+    initialLocked,
+    initialHeadsUpEnabled,
+    initialHeadsUpLeadSeconds,
+    roundGate,
+    refresh,
+    errorMessage,
+  } = usePartyRole(partyId);
   const {
     loaded,
     alertSoundEnabled,
@@ -109,8 +120,8 @@ export default function PartySettingsScreen(): React.JSX.Element {
   // one toggling it; this screen has no realtime). null until usePartyRole resolves.
   const [locked, setLocked] = useState<boolean | null>(null);
   useEffect(() => {
-    if (status === 'ready') setLocked(isLocked);
-  }, [status, isLocked]);
+    if (status === 'ready') setLocked(initialLocked);
+  }, [status, initialLocked]);
 
   const toggleLock = async (next: boolean): Promise<void> => {
     if (!partyId) return;
@@ -137,11 +148,37 @@ export default function PartySettingsScreen(): React.JSX.Element {
     if (status !== 'ready') return;
     // Normalize the stored lead to one of the offered options (a legacy party could
     // hold a value outside the set); fall back to the 2-min default.
-    const lead = HEADS_UP_LEAD_SECONDS.includes(headsUpLeadSeconds as HeadsUpLeadSeconds)
-      ? (headsUpLeadSeconds as HeadsUpLeadSeconds)
+    const lead = HEADS_UP_LEAD_SECONDS.includes(initialHeadsUpLeadSeconds as HeadsUpLeadSeconds)
+      ? (initialHeadsUpLeadSeconds as HeadsUpLeadSeconds)
       : 120;
-    setHeadsUp({ enabled: headsUpEnabled, lead });
-  }, [status, headsUpEnabled, headsUpLeadSeconds]);
+    setHeadsUp({ enabled: initialHeadsUpEnabled, lead });
+  }, [status, initialHeadsUpEnabled, initialHeadsUpLeadSeconds]);
+
+  // Re-evaluate the time-based fire-window gate every second against skew-corrected
+  // server time (the same clock the countdown uses), so the gate stays live while the
+  // host lingers — not just at screen-open.
+  const [nowMs, setNowMs] = useState(() => serverNow().getTime());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(serverNow().getTime()), 1_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Proactive disable: compute both gates client-side from the polled round inputs +
+  // the committed Heads-up value + the live clock, so the row explains itself instead
+  // of bouncing off a rejected RPC. The server still enforces.
+  const gate = headsUpGate(
+    {
+      status: roundGate.sessionStatus,
+      currentPhase: roundGate.currentPhase,
+      phaseStartedAt: roundGate.phaseStartedAt,
+      phaseEndsAt: roundGate.phaseEndsAt,
+      enabled: headsUp?.enabled ?? false,
+      leadSeconds: headsUp?.lead ?? 120,
+      changedThisRound: roundGate.changedThisRound,
+      sentThisRound: roundGate.sentThisRound,
+    },
+    nowMs,
+  );
 
   // The confirm dialog's draft state (seeded from the committed value on open).
   const [headsUpDialogOpen, setHeadsUpDialogOpen] = useState(false);
@@ -170,6 +207,9 @@ export default function PartySettingsScreen(): React.JSX.Element {
         enabled: result.data.heads_up_enabled,
         lead: result.data.heads_up_lead_seconds as HeadsUpLeadSeconds,
       });
+      // Re-read the round gate now so "already changed this round" reflects this change
+      // immediately, rather than waiting up to one poll interval.
+      refresh();
       if (result.data.deferred) {
         Alert.alert(
           'Saved',
@@ -251,17 +291,19 @@ export default function PartySettingsScreen(): React.JSX.Element {
               style={styles.row}
               onPress={openHeadsUpDialog}
               accessibilityRole="button"
-              disabled={headsUp === null}
+              disabled={headsUp === null || gate.locked}
             >
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>Heads-up</Text>
                 <Text style={styles.rowDescription}>
-                  {"Warn everyone before the next Shot O'Clock."}
+                  {gate.locked ? gate.reason : "Warn everyone before the next Shot O'Clock."}
                 </Text>
               </View>
-              <Text style={styles.rowValue}>
-                {headsUp?.enabled ? `On · ${headsUp.lead / 60} min` : 'Off'}
-              </Text>
+              {!gate.locked ? (
+                <Text style={styles.rowValue}>
+                  {headsUp?.enabled ? `On · ${headsUp.lead / 60} min` : 'Off'}
+                </Text>
+              ) : null}
               <Ionicons name="chevron-forward" size={CHEVRON_SIZE} color={COLORS.textSecondary} />
             </Pressable>
             <View style={styles.divider} />
@@ -314,7 +356,7 @@ export default function PartySettingsScreen(): React.JSX.Element {
               <Button
                 label={savingHeadsUp ? 'Saving…' : 'Confirm'}
                 onPress={() => void confirmHeadsUp()}
-                disabled={savingHeadsUp}
+                disabled={savingHeadsUp || gate.locked}
                 style={styles.modalButton}
               />
             </View>
