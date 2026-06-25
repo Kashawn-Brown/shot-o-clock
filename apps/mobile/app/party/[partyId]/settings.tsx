@@ -285,7 +285,7 @@ export default function PartySettingsScreen(): React.JSX.Element {
         {isHost && !hostOnly ? (
           <SettingsSection
             title="Host controls"
-            caption="Heads-up applies to everyone. You can change it once per round."
+            caption="Settings that apply to the whole party. Only Host has access."
           >
             <Pressable
               style={styles.row}
@@ -296,7 +296,7 @@ export default function PartySettingsScreen(): React.JSX.Element {
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>Heads-up</Text>
                 <Text style={styles.rowDescription}>
-                  {gate.locked ? gate.reason : "Warn everyone before the next Shot O'Clock."}
+                  {gate.locked ? gate.reason : "Reminder to everyone before the next Shot O'Clock."}
                 </Text>
               </View>
               {!gate.locked ? (
@@ -309,7 +309,7 @@ export default function PartySettingsScreen(): React.JSX.Element {
             <View style={styles.divider} />
             <ToggleRow
               title="Lock party"
-              description="Stop new players from joining."
+              description="Stop new players from joining party."
               value={locked ?? false}
               onValueChange={(next) => void toggleLock(next)}
               disabled={locked === null}
@@ -331,7 +331,7 @@ export default function PartySettingsScreen(): React.JSX.Element {
           <Pressable style={styles.modalCard} onPress={() => {}}>
             <Text style={styles.modalTitle}>Heads-up</Text>
             <Text style={styles.modalSubtitle}>
-              {"Warn everyone before the next Shot O'Clock."}
+              {"Applies to all active players. Can only be changed once per round."}
             </Text>
             <View style={styles.row}>
               <View style={styles.rowText}>

@@ -323,7 +323,7 @@ export default function LobbyScreen(): React.JSX.Element {
                 leaving the list looking empty / like nothing happened. */}
             {isHost && roster.length === 1 ? (
               <Text style={styles.emptyHint}>
-                No one&apos;s joined yet — share the code above to invite players.
+                No one else has joined yet — share the code above to invite players.
               </Text>
             ) : null}
           </ScrollView>
