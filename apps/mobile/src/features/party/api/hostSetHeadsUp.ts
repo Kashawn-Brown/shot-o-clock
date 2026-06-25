@@ -25,6 +25,9 @@ export type HostSetHeadsUpParams = {
 export type HostSetHeadsUpData = {
   heads_up_enabled: boolean;
   heads_up_lead_seconds: number;
+  // True when the change was saved but can't fire this round (already sent, or the new
+  // lead's moment is past) — it applies from the next round. The host is told.
+  deferred: boolean;
 };
 
 export function hostSetHeadsUp(
