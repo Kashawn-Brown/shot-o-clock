@@ -108,6 +108,33 @@ export type Database = {
           },
         ]
       }
+      devices: {
+        Row: {
+          created_at: string
+          expo_push_token: string
+          id: string
+          platform: Database["public"]["Enums"]["device_platform"] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expo_push_token: string
+          id?: string
+          platform?: Database["public"]["Enums"]["device_platform"] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expo_push_token?: string
+          id?: string
+          platform?: Database["public"]["Enums"]["device_platform"] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       party_player_notification_settings: {
         Row: {
           created_at: string
@@ -669,6 +696,8 @@ export type Database = {
           countdown_ends_at: string | null
           countdown_started_at: string | null
           created_at: string
+          heads_up_push_sent_at: string | null
+          heads_up_setting_changed_at: string | null
           id: string
           interval_seconds: number
           party_session_id: string
@@ -687,6 +716,8 @@ export type Database = {
           countdown_ends_at?: string | null
           countdown_started_at?: string | null
           created_at?: string
+          heads_up_push_sent_at?: string | null
+          heads_up_setting_changed_at?: string | null
           id?: string
           interval_seconds: number
           party_session_id: string
@@ -705,6 +736,8 @@ export type Database = {
           countdown_ends_at?: string | null
           countdown_started_at?: string | null
           created_at?: string
+          heads_up_push_sent_at?: string | null
+          heads_up_setting_changed_at?: string | null
           id?: string
           interval_seconds?: number
           party_session_id?: string
@@ -864,8 +897,8 @@ export type Database = {
         Returns: Json
       }
       host_resume_timer: { Args: { p_party_session_id: string }; Returns: Json }
-      host_skip_to_shot_window: {
-        Args: { p_party_session_id: string }
+      host_set_heads_up: {
+        Args: { p_party_session_id: string; p_enabled: boolean; p_lead_seconds: number }
         Returns: Json
       }
       is_active_party_member: { Args: { session_id: string }; Returns: boolean }
@@ -880,6 +913,13 @@ export type Database = {
       mark_self_left: { Args: { p_party_session_id: string }; Returns: Json }
       mark_self_out: { Args: { p_party_session_id: string }; Returns: Json }
       my_party_player_id: { Args: { session_id: string }; Returns: string }
+      register_push_token: {
+        Args: {
+          p_expo_push_token: string
+          p_platform?: Database["public"]["Enums"]["device_platform"]
+        }
+        Returns: Json
+      }
       start_game: { Args: { p_party_session_id: string }; Returns: Json }
     }
     Enums: {

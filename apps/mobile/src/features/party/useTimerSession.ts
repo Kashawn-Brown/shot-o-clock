@@ -21,7 +21,6 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { getRoundOutcomes } from '@/features/game/api/roundOutcomes';
 import { useAdvancePhase } from '@/features/game/useAdvancePhase';
 import { syncServerTime } from '@/features/game/syncServerTime';
-import { useShotNotification } from '@/features/notifications/useShotNotification';
 import { useForegroundEffect } from '@/features/party/useForegroundEffect';
 import { getPartyState } from '@/features/party/api/partyState';
 import { rpcErrorMessage } from '@/lib/errors';
@@ -249,12 +248,6 @@ export function useTimerSession(partyId: string | undefined): UseTimerSessionRes
     onAdvance: refresh,
   });
 
-  // Schedule the local Shot O'Clock notifications (current round + the next several)
-  // so they fire even when the app is backgrounded / the phone is locked — a suspended
-  // app can't reschedule per round. Needs settings + currentRound for the round-loop
-  // math. Self-cancels on pause / end / unmount (Phase 14, §2.1 — mirrors the server's
-  // deterministic timing, never owns the timer).
-  useShotNotification(session, settings, currentRound, partyId);
 
   // On a foreground resume, realtime delivered nothing while we were suspended and
   // the socket may be dead — so the screen would render stale state (a frozen

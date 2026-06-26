@@ -39,6 +39,7 @@ import { startGame } from '@/features/party/api/startGame';
 import type { LobbyRosterEntry } from '@/features/party/lobbyView';
 import { routeForPhase } from '@/features/party/reconnectRoute';
 import { shareJoinCode } from '@/features/party/shareJoinCode';
+import { useBlockBack } from '@/features/party/useBlockBack';
 import { useLobby } from '@/features/party/useLobby';
 import { rpcErrorMessage } from '@/lib/errors';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
@@ -115,8 +116,10 @@ export default function LobbyScreen(): React.JSX.Element {
   useEffect(() => {
     if (status !== 'ready' || leaving || membershipLost || !partyId || !sessionStatus) return;
     if (sessionStatus === 'lobby') return; // still waiting for the host
-    if (sessionStatus === 'ended') {
-      router.replace('/'); // host cancelled from the lobby — go home
+    // Any terminal status closes the lobby: 'ended' (host cancelled) or 'expired'
+    // (the stale-lobby sweep, D069); 'cancelled' is covered for completeness.
+    if (sessionStatus === 'ended' || sessionStatus === 'expired' || sessionStatus === 'cancelled') {
+      router.replace('/');
       return;
     }
     // active/paused: the game is live — go to the current phase's screen.
@@ -175,6 +178,11 @@ export default function LobbyScreen(): React.JSX.Element {
       { text: confirmLabel, style: 'destructive', onPress: handleExit },
     ]);
   }, [leaving, handleExit, view?.isHost]);
+
+  // OS back routes through the same exit confirmation as the header control, so a
+  // back-press can't silently strand the host out of their lobby (Phase 16 bug fix;
+  // iOS swipe disabled via gestureEnabled in _layout).
+  useBlockBack(confirmExit);
 
   // Host starts the game: start_game creates round 1's countdown, then we route
   // into the timer. router.replace (not push) because the lobby is no longer a
@@ -315,7 +323,7 @@ export default function LobbyScreen(): React.JSX.Element {
                 leaving the list looking empty / like nothing happened. */}
             {isHost && roster.length === 1 ? (
               <Text style={styles.emptyHint}>
-                No one&apos;s joined yet — share the code above to invite players.
+                No one else has joined yet — share the code above to invite players.
               </Text>
             ) : null}
           </ScrollView>

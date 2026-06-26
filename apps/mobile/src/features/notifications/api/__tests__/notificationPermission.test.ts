@@ -21,9 +21,8 @@ jest.mock('expo-secure-store', () => {
   };
 });
 
-// Mock our submodule wrapper (the seam the code imports from) rather than the
-// 'expo-notifications' barrel — the barrel is intentionally never imported (it runs
-// the push auto-registration side effect; see api/expoNotifications.ts).
+// Mock our wrapper module (the seam the code imports from) rather than
+// 'expo-notifications' directly, so these tests never load the native barrel.
 jest.mock('@/features/notifications/api/expoNotifications', () => ({
   PermissionStatus: { GRANTED: 'granted', DENIED: 'denied', UNDETERMINED: 'undetermined' },
   getPermissionsAsync: jest.fn(),

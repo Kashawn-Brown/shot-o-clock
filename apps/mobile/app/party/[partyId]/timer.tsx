@@ -42,6 +42,7 @@ import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { selfOutCopy } from '@/features/game/selfOutCopy';
 import { useCountdown } from '@/features/game/useCountdown';
 import { useGameExit } from '@/features/party/useGameExit';
+import { useBlockBack } from '@/features/party/useBlockBack';
 import { shareJoinCode } from '@/features/party/shareJoinCode';
 import { routeForPhase } from '@/features/party/reconnectRoute';
 import { useRecapOnResume } from '@/features/party/useRecapOnResume';
@@ -90,6 +91,12 @@ export default function TimerScreen(): React.JSX.Element {
   // surfaces collapse — no join-code popover, no Players sheet, no I'm Out, no
   // results link. The host is the only player and never self-outs.
   const hostOnly = settings?.host_only ?? false;
+
+  // OS back routes through the same exit confirmation as the End/Leave button, so a
+  // back-press is handled gracefully instead of silently popping out of the live
+  // party (D044 / Phase 16 bug fix). Paired with gestureEnabled:false in _layout.
+  useBlockBack(() => confirmExit({ isHost, hostOnly }));
+
   const isPaused = session?.status === 'paused';
   const [rosterOpen, setRosterOpen] = useState(false);
   // Host taps the party name to reveal the join code for sharing mid-game.

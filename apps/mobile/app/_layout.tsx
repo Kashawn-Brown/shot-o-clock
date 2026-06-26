@@ -12,6 +12,7 @@ import { useDisplayName } from '@/features/auth/useDisplayName';
 import { NotificationPermissionGate } from '@/features/notifications/NotificationPermissionGate';
 import { configureNotifications } from '@/features/notifications/api/shotNotification';
 import { useNotificationPrompt } from '@/features/notifications/useNotificationPrompt';
+import { usePushTokenRegistration } from '@/features/notifications/usePushTokenRegistration';
 import { COLORS, FONT_SIZE, SPACING } from '@/styles/tokens';
 
 // Gates the navigator: nothing renders until (1) an anonymous identity is resolved
@@ -25,6 +26,10 @@ function RootNavigator(): React.JSX.Element {
   const { status: nameStatus, save: saveName } = useDisplayName();
   const { status: notificationStatus, complete: completeNotificationPrompt } =
     useNotificationPrompt();
+
+  // Once a session exists, register this device's push token on launch if permission
+  // is already granted (no-ops otherwise). The onboarding grant registers separately.
+  usePushTokenRegistration(authStatus === 'ready');
 
   if (authStatus === 'loading') {
     return (
