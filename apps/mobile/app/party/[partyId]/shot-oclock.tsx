@@ -63,6 +63,17 @@ export default function ShotOClockScreen(): React.JSX.Element {
   } = useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
 
+  // Phase-gate the displayed countdown. session.phase_ends_at is one field reused
+  // across phases, so the instant the round finalizes it rolls to the NEXT round's
+  // deadline — but navigation off this screen is a post-paint effect (below), so for
+  // a frame this screen is still mounted while remainingMs already reflects the next
+  // countdown. Hold the last in-window value until we navigate, so the ring/number
+  // never flash the next round's time under the Shot O'Clock UI.
+  const inShotWindow = session?.current_phase === 'shot_window';
+  const lastInWindowMsRef = useRef(remainingMs);
+  if (inShotWindow) lastInWindowMsRef.current = remainingMs;
+  const displayMs = inShotWindow ? remainingMs : lastInWindowMsRef.current;
+
   // Foreground ALERT prefs for this party (sound on/off, haptic on/off, which sound) —
   // global layered with the per-session override (D064). `loaded` lets the window-open
   // effect wait for the real values rather than firing on the defaults.
@@ -238,7 +249,7 @@ export default function ShotOClockScreen(): React.JSX.Element {
   // the configured shot_window_seconds; clamp (in ProgressRing) guards against
   // host_add_time pushing remaining past the original window.
   const shotWindowMs = (settings?.shot_window_seconds ?? 0) * 1000;
-  const ringProgress = shotWindowMs > 0 ? remainingMs / shotWindowMs : 0;
+  const ringProgress = shotWindowMs > 0 ? displayMs / shotWindowMs : 0;
 
   // When the server advances the phase (the poll in useTimerSession closes the
   // shot window → countdown for round N+1, or → round_complete on the zero-active
@@ -348,7 +359,7 @@ export default function ShotOClockScreen(): React.JSX.Element {
             <View style={styles.ringContent}>
               <Text style={[styles.ringLabel, hostOnly && styles.ringLabelLarge]}>SHOT WINDOW</Text>
               <Text style={[styles.ringTime, hostOnly && styles.ringTimeLarge]}>
-                {formatDuration(remainingMs)}
+                {formatDuration(displayMs)}
               </Text>
             </View>
           </ProgressRing>

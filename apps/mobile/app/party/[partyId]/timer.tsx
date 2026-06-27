@@ -15,7 +15,7 @@
 // devices follow the host onto the summary via partyEnded / 'ended' detection.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -108,6 +108,17 @@ export default function TimerScreen(): React.JSX.Element {
   // device (the realtime session sub delivers the paused status). useCountdown
   // stays pure; we just pick which value to display.
   const remainingMs = isPaused ? (session?.paused_remaining_seconds ?? 0) * 1000 : liveRemainingMs;
+
+  // Phase-gate the displayed countdown — same reason as the Shot O'Clock screen.
+  // When this round's countdown finalizes, session.phase_ends_at rolls to the shot
+  // window's deadline before the routing effect (below) navigates us there, so for a
+  // frame remainingMs would show the shot-window time under "NEXT SHOT O'CLOCK IN".
+  // Hold the last countdown value until we navigate. (Pausing keeps the phase on
+  // 'countdown', so the paused freeze is unaffected.)
+  const inCountdown = session?.current_phase === 'countdown';
+  const lastCountdownMsRef = useRef(remainingMs);
+  if (inCountdown) lastCountdownMsRef.current = remainingMs;
+  const displayMs = inCountdown ? remainingMs : lastCountdownMsRef.current;
 
   // Host timer controls (pause/resume, add time) — integrated onto the ring, not a
   // sheet. One in-flight lock across them; add_time isn't idempotent, so the lock
@@ -237,7 +248,7 @@ export default function TimerScreen(): React.JSX.Element {
   // the round's interval; clamp (in ProgressRing) guards against host_add_time
   // pushing remaining past the original interval.
   const intervalMs = (currentRound?.interval_seconds ?? 0) * 1000;
-  const ringProgress = intervalMs > 0 ? remainingMs / intervalMs : 0;
+  const ringProgress = intervalMs > 0 ? displayMs / intervalMs : 0;
 
   // When the server advances the phase (the poll in useTimerSession transitions
   // countdown → shot_window, or the host ends the party), the snapshot's
@@ -370,7 +381,7 @@ export default function TimerScreen(): React.JSX.Element {
             <View style={styles.ringContent}>
               {/* The time stays centred; a paused player gets a PAUSED label just
                   below it, the host gets the pause/play control near the bottom. */}
-              <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
+              <Text style={styles.ringTime}>{formatDuration(displayMs)}</Text>
               {!isHost && isPaused ? (
                 <View style={styles.pausedLabelSlot}>
                   <Text style={styles.pausedLabel}>❚❚ PAUSED</Text>
