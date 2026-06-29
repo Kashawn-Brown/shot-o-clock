@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -127,6 +128,30 @@ export default function TimerScreen(): React.JSX.Element {
   // the host's screen updates without waiting on the realtime round-trip.
   const [controlBusy, setControlBusy] = useState(false);
   const [controlError, setControlError] = useState<string | null>(null);
+
+  // Control errors (add-time cap, pause/resume failures) surface as a transient
+  // overlay toast, not an in-flow banner: the old banner was the last child inside
+  // the ScrollView, so on a short viewport / large font scale it fell below the fold
+  // with no scroll cue and read as "the button did nothing". This floats over the
+  // ring, fades in, holds, fades out, and clears itself — no layout growth.
+  const controlErrorOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!controlError) return;
+    controlErrorOpacity.setValue(0);
+    Animated.timing(controlErrorOpacity, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+    const hideId = setTimeout(() => {
+      Animated.timing(controlErrorOpacity, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start(() => setControlError(null));
+    }, CONTROL_ERROR_VISIBLE_MS);
+    return () => clearTimeout(hideId);
+  }, [controlError, controlErrorOpacity]);
 
   const handlePauseResume = useCallback(async () => {
     if (!partyId || controlBusy) return;
@@ -425,8 +450,20 @@ export default function TimerScreen(): React.JSX.Element {
           ) : null}
         </View>
 
-        {isHost ? <ErrorBanner message={controlError} /> : null}
       </ScrollView>
+
+      {/* Control-error toast — absolute so it never grows the scroll content or
+          hides below the fold. Floats over the upper ring area, fades in/out, and
+          self-clears (CONTROL_ERROR_VISIBLE_MS). pointerEvents none so taps still
+          reach the +time / pause controls beneath it. */}
+      {isHost && controlError ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.controlToast, { opacity: controlErrorOpacity }]}
+        >
+          <ErrorBanner message={controlError} />
+        </Animated.View>
+      ) : null}
 
       <View style={styles.footer}>
         {/* Out player: the "you're out" note + tally sits ABOVE the buttons, which
@@ -575,6 +612,9 @@ const POPOVER_SHARE_ICON_SIZE = 16; // join-code popover "Share code" button ico
 const ADD_TIME_SHORT_SECONDS = 30;
 const ADD_TIME_LONG_SECONDS = 60;
 
+// How long the control-error toast holds (ms) before it fades out and clears.
+const CONTROL_ERROR_VISIBLE_MS = 2800;
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -624,6 +664,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.xl,
     gap: SPACING.xl,
+  },
+  // Transient overlay for control errors — absolute so it never affects layout or
+  // sits below the fold. Anchored in the upper area, centred, non-interactive.
+  controlToast: {
+    position: 'absolute',
+    top: '20%',
+    left: SPACING.lg,
+    right: SPACING.lg,
+    alignItems: 'center',
   },
   // Nudged down so it stays close to the repositioned (lower) ring.
   ringLabel: {
