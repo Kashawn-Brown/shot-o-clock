@@ -808,7 +808,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   popoverCard: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surfaceRaised,
     borderRadius: RADIUS.md,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.xl,

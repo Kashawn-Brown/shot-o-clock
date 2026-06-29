@@ -13,8 +13,9 @@
 
 export const COLORS = {
   // ─── Base ────────────────────────────────────────────────────────────────
-  background: '#FFFFFF',
-  surface: '#F5F5F5', // cards, input backgrounds
+  background: '#ECECEC', // canvas — neutral grey; cards/modals read as raised above it
+  surface: '#F5F5F5', // cards, inputs — lighter than the canvas, so they float
+  surfaceRaised: '#FFFFFF', // modals, popovers, sheets — lightest, above the dim backdrop
   border: '#E0E0E0',
   textPrimary: '#0C1142', // Navy — the brand ink (was generic #1A1A1A)
   textSecondary: '#666666', // neutral grey (confirmed to stay neutral)

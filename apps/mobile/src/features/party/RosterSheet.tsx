@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
     backgroundColor: BACKDROP_COLOR,
   },
   sheet: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surfaceRaised,
     borderTopLeftRadius: RADIUS.lg,
     borderTopRightRadius: RADIUS.lg,
   },

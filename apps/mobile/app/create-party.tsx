@@ -389,19 +389,22 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface,
   },
   segmentItemActive: {
-    // Active segment — brand Indigo (reserved-moment).
-    backgroundColor: COLORS.brandPrimary,
+    // Selected — outlined-card style (Indigo border + soft-Highlight fill), matching
+    // the Multiplayer/Host-only picker rather than a solid Indigo fill.
+    borderWidth: 2,
     borderColor: COLORS.brandPrimary,
+    backgroundColor: COLORS.brandHighlightSoft,
+    margin: -1, // absorb the extra 1px so selecting doesn't nudge the layout
   },
   segmentLabel: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.textPrimary,
   },
   segmentLabelActive: {
-    color: COLORS.buttonFilledText,
+    color: COLORS.textPrimary,
     fontWeight: FONT_WEIGHT.medium,
   },
   submit: {

@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
   },
   modalCard: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surfaceRaised,
     borderRadius: RADIUS.md,
     padding: SPACING.lg,
     gap: SPACING.md,
