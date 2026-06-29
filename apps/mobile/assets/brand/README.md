@@ -6,11 +6,11 @@ Expo-consumed runtime exports in `../images/` (which `app.json` references by na
 
 ## Conventions
 
-- **Filenames:** `shot-oclock-<role>[-<variant>].<ext>`, kebab-case. Two exceptions:
-  the glass mark carries a leading `flat-` **style prefix** for its flat-line
-  treatment, and taglines are named by their phrase (kebab-cased), not the role scheme.
-- **Master = SVG.** Each asset's `.svg` is the source of truth; PNGs are exports.
-  (`glass/` is the exception — no vector master yet; its PNGs are the de-facto master.)
+- **Filenames:** kebab-case, following one of these accepted patterns:
+  - `shot-oclock-<role>[-<variant>].<ext>` — the default, for marks, wordmarks, and lockups.
+  - `<style>-shot-oclock-<role>[-<variant>].<ext>` — a leading **style prefix** when an asset has more than one stylistic treatment (e.g. `flat-` for the glass mark's flat-line version alongside its sketch version).
+  - `<phrase>.<ext>` — taglines, named by their kebab-cased phrase rather than a role.
+- **Master = SVG**, where one exists; PNGs are exports. `glass/` is intentionally **PNG-only** — it's a deferred Batch 2 alternate-icon asset, so the flat/sketch PNGs are sufficient and no vector master is planned for now (revisit if/when the alternate-icon-picker is actually built).
 - **Variant suffixes:**
   | Suffix | Meaning |
   |---|---|
@@ -26,7 +26,7 @@ Expo-consumed runtime exports in `../images/` (which `app.json` references by na
 | Folder | Asset | Keeper files |
 |---|---|---|
 | `logo/` | **Primary mark** — dial + V-hands + liquid "smile". **Ships.** | SVG master + `on-brand`, `on-light`, `transparent-navy`, `white-on-dark`, `transparent-white` |
-| `glass/` | **Glass-in-Dial** — shot glass in a dial. Alternate-icon option. **No SVG master.** | sketch style (`transparent`, `on-light`) + flat style (`flat-…-transparent`, `flat-…-on-light`) |
+| `glass/` | **Glass-in-Dial** — shot glass in a dial. Alternate-icon option; **PNG-only** (deferred Batch 2). | sketch style (`transparent`, `on-light`) + flat style (`flat-…-transparent`, `flat-…-on-light`) |
 | `meniscus/` | **Meniscus** — liquid wave + hands (frameless). Alternate-icon option. | SVG master + `transparent` (frameless) |
 | `horizontal-wordmark/` | **Horizontal wordmark** "Shot O'Clock" | SVG master + `transparent` |
 | `stacked-wordmark/` | **Stacked wordmark** "Shot / O'Clock" | SVG master + `.png` export |
