@@ -264,8 +264,9 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    // Final Summary header — brand Indigo (the "game over" brand moment).
-    backgroundColor: COLORS.brandPrimary,
+    // Final Summary header — Navy surface (brand dark); the winner accent below
+    // carries the Indigo pop.
+    backgroundColor: COLORS.brandNavy,
     paddingVertical: SPACING.lg,
   },
   title: {
@@ -314,7 +315,8 @@ const styles = StyleSheet.create({
   heroNames: {
     fontSize: FONT_SIZE.lg,
     fontWeight: FONT_WEIGHT.bold,
-    color: COLORS.warning,
+    // Winner accent — brand Indigo (the "game over" pop).
+    color: COLORS.brandPrimary,
     textAlign: 'center',
   },
   heroSub: {

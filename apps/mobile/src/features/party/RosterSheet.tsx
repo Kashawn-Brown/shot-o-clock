@@ -485,8 +485,9 @@ const styles = StyleSheet.create({
   // Mirrors hostPill so "You" reads as a bordered chip, not loose text.
   youPill: {
     fontSize: FONT_SIZE.xs,
-    // "You" self-marker — brand Indigo (active/selected state).
+    // "You" self-marker — Indigo text/outline on a soft-Highlight fill.
     color: COLORS.brandPrimary,
+    backgroundColor: COLORS.brandHighlightSoft,
     borderWidth: 1,
     borderColor: COLORS.brandPrimary,
     borderRadius: RADIUS.sm,

@@ -1,10 +1,12 @@
 // Design tokens — the single source of visual truth for the app.
 //
-// The base palette is monotone (black / white / grey). Brand Indigo
-// (`brandPrimary`, #3D2BE8 — sampled from the primary mark) is reserved for
-// specific moments only: primary actions, active/selected states, the timer
-// ring, and the Shot O'Clock moment. Everything else stays neutral, so the brand
-// color reads as emphasis rather than decoration.
+// The palette is built from the brand colors. Navy (#0C1142) is the ink — text,
+// dark surfaces, outline buttons, the Shot O'Clock background (the app's "black"
+// is Navy). Indigo (#3D2BE8) is the accent — primary actions, active/selected
+// states, rings, key moments. Highlight (#9F90FB) is the soft connective tint —
+// ring tracks, selected-card fills, accents (fills only, never text on white).
+// White is the canvas; neutral grey stays for secondary text and hairline borders.
+// Indigo is kept reserved so it reads as emphasis, not wallpaper.
 //
 // Status colors carry meaning the greyscale can't (Completed vs Missed vs Out).
 // The Shot O'Clock screen is the only dark-background surface; its tokens are `shot*`.
@@ -14,15 +16,15 @@ export const COLORS = {
   background: '#FFFFFF',
   surface: '#F5F5F5', // cards, input backgrounds
   border: '#E0E0E0',
-  textPrimary: '#1A1A1A',
-  textSecondary: '#666666',
+  textPrimary: '#0C1142', // Navy — the brand ink (was generic #1A1A1A)
+  textSecondary: '#666666', // neutral grey (confirmed to stay neutral)
 
   // Buttons
-  buttonFilled: '#1A1A1A',
+  buttonFilled: '#0C1142', // Navy — incidental dark surfaces (e.g. join-code card)
   buttonFilledText: '#FFFFFF',
   buttonOutline: 'transparent',
-  buttonOutlineBorder: '#1A1A1A',
-  buttonOutlineText: '#1A1A1A',
+  buttonOutlineBorder: '#0C1142', // Navy — secondary/outline buttons
+  buttonOutlineText: '#0C1142', // Navy
 
   // ─── Status (semantic — survives the monotone phase) ─────────────────────
   success: '#22C55E', // Completed, active players
@@ -32,15 +34,22 @@ export const COLORS = {
   grace: '#3B82F6', // Grace — distinct blue (Used Grace, grace badges)
 
   // ─── Shot O'Clock dark screen (only dark surface in the app) ─────────────
-  shotBackground: '#000000',
+  shotBackground: '#0C1142', // Navy — cohesive with the app's other dark surfaces
   shotText: '#FFFFFF',
   shotRing: '#FFFFFF',
 
-  // ─── Brand — Indigo, reserved for primary actions / active states / rings ─
-  // Sampled from logo/shot-oclock-mark-primary-transparent-navy.png; matches the
-  // locked design-doc token. buttonFilled (#1A1A1A) stays the neutral dark-fill
-  // for incidental surfaces (e.g. the join-code card).
+  // ─── Brand palette ───────────────────────────────────────────────────────
+  // Indigo — primary accent: actions, active/selected states, rings, key moments.
   brandPrimary: '#3D2BE8',
+  // Navy — the brand ink: drives textPrimary / dark surfaces / outline buttons /
+  // the Shot O'Clock background (all repointed above). The app's "black" is Navy.
+  brandNavy: '#0C1142',
+  // Highlight — soft connective tint: ring tracks, selected-card fills, accents.
+  // Fills/tints only, never text on white (too light).
+  brandHighlight: '#9F90FB',
+  // Highlight-soft — flat, paler Highlight for selected-card / subtle-surface
+  // backgrounds (derived; the design doc locks only #9F90FB).
+  brandHighlightSoft: '#F0EEFE',
 } as const;
 
 export const FONT_SIZE = {

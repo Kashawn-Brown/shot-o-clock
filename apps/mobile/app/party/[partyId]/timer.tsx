@@ -401,7 +401,7 @@ export default function TimerScreen(): React.JSX.Element {
             strokeWidth={10}
             progress={ringProgress}
             color={COLORS.brandPrimary}
-            trackColor={COLORS.border}
+            trackColor={COLORS.brandHighlight}
           >
             <View style={styles.ringContent}>
               {/* The time stays centred; a paused player gets a PAUSED label just
