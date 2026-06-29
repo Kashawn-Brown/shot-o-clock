@@ -35,6 +35,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { shotSoundAsset } from '@/features/notifications/api/shotSounds';
 import { useEffectiveAlertPrefs } from '@/features/notifications/useEffectiveAlertPrefs';
+import { hostEndShotWindow } from '@/features/party/api/hostEndShotWindow';
 import { markDone } from '@/features/party/api/markDone';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { selfOutCopy } from '@/features/game/selfOutCopy';
@@ -60,6 +61,7 @@ export default function ShotOClockScreen(): React.JSX.Element {
     errorMessage,
     partyEnded,
     refreshOutcome,
+    refreshSession,
   } = useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
 
@@ -96,6 +98,13 @@ export default function ShotOClockScreen(): React.JSX.Element {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [acting, setActing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Host-only: end the shot window early and roll to the next round. With no other
+  // players to wait on, the multi-device auto-close (D051) never fires, so the lone
+  // host would otherwise have to wait out the full window every round. Reuses the
+  // existing host_end_shot_window finalize + auto-advance, host-triggered.
+  const [skipping, setSkipping] = useState(false);
+  const [skipError, setSkipError] = useState<string | null>(null);
 
   const roundId = currentRound?.id;
   useEffect(() => {
@@ -245,6 +254,21 @@ export default function ShotOClockScreen(): React.JSX.Element {
     ]);
   }, [canSelfOut, handleSelfOut, requiresConfirm, confirmTitle, confirmMessage, confirmButton]);
 
+  const handleHostSkip = useCallback(async () => {
+    if (!partyId || skipping) return;
+    setSkipError(null);
+    setSkipping(true);
+    const result = await hostEndShotWindow({ partySessionId: partyId });
+    setSkipping(false);
+    if (result.ok) {
+      // Advance promptly rather than waiting on the realtime round-trip; the phase-
+      // routing effect then carries the host to the next round's timer.
+      refreshSession();
+      return;
+    }
+    setSkipError(rpcErrorMessage(result.error_code));
+  }, [partyId, skipping, refreshSession]);
+
   // Ring fills clockwise as the proportion of the shot window remaining. Total is
   // the configured shot_window_seconds; clamp (in ProgressRing) guards against
   // host_add_time pushing remaining past the original window.
@@ -370,7 +394,19 @@ export default function ShotOClockScreen(): React.JSX.Element {
       </View>
 
       <View style={styles.actions}>
-        {hostOnly ? null : isActive ? (
+        {hostOnly ? (
+          <>
+            <ErrorBanner message={skipError} />
+            <Pressable
+              onPress={handleHostSkip}
+              disabled={skipping}
+              accessibilityRole="button"
+              style={[styles.hostSkipButton, skipping && styles.actionDisabled]}
+            >
+              <Text style={styles.hostSkipLabel}>Skip to Next Round</Text>
+            </Pressable>
+          </>
+        ) : isActive ? (
           <>
             <ErrorBanner message={actionError} />
             <View style={styles.actionRow}>
@@ -533,5 +569,20 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.medium,
     color: COLORS.danger,
+  },
+  // Host-only "Skip to Next Round": a white-outline button on the dark screen
+  // (the shared Button is built for light screens, so it's drawn inline here).
+  hostSkipButton: {
+    borderWidth: 1,
+    borderColor: COLORS.shotText,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hostSkipLabel: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.shotText,
   },
 });
