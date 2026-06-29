@@ -86,7 +86,12 @@ function ToggleRow({
         <Text style={styles.rowTitle}>{title}</Text>
         <Text style={styles.rowDescription}>{description}</Text>
       </View>
-      <Switch value={value} onValueChange={onValueChange} disabled={disabled} />
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        disabled={disabled}
+        trackColor={{ false: COLORS.border, true: COLORS.brandPrimary }}
+      />
     </View>
   );
 }

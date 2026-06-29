@@ -61,7 +61,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filled: {
-    backgroundColor: COLORS.buttonFilled,
+    // Primary action — brand Indigo (reserved-moment). Text stays white.
+    backgroundColor: COLORS.brandPrimary,
   },
   outline: {
     backgroundColor: COLORS.buttonOutline,

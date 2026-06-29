@@ -70,7 +70,12 @@ function ToggleRow({
         <Text style={styles.rowTitle}>{title}</Text>
         <Text style={styles.rowDescription}>{description}</Text>
       </View>
-      <Switch value={value} onValueChange={onValueChange} disabled={disabled} />
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        disabled={disabled}
+        trackColor={{ false: COLORS.border, true: COLORS.brandPrimary }}
+      />
     </View>
   );
 }
@@ -337,7 +342,11 @@ export default function PartySettingsScreen(): React.JSX.Element {
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>Enabled</Text>
               </View>
-              <Switch value={draftEnabled} onValueChange={setDraftEnabled} />
+              <Switch
+                value={draftEnabled}
+                onValueChange={setDraftEnabled}
+                trackColor={{ false: COLORS.border, true: COLORS.brandPrimary }}
+              />
             </View>
             {draftEnabled ? (
               <View style={styles.subControl}>

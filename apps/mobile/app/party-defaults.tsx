@@ -157,6 +157,7 @@ export default function PartyDefaultsScreen(): React.JSX.Element {
           <Switch
             value={draft.eliminationEnabled}
             onValueChange={(value) => setDraft({ ...draft, eliminationEnabled: value })}
+            trackColor={{ false: COLORS.border, true: COLORS.brandPrimary }}
           />
         </View>
 

@@ -1,14 +1,13 @@
 // Design tokens — the single source of visual truth for the app.
 //
-// Phase 3 ships a monotone (black / white / grey) palette that matches the
-// low-fidelity Figma wireframes. The app's real purple theme arrives in a
-// later phase: `brandPrimary` is defined now but deliberately NOT applied
-// anywhere, so theming later is a matter of switching which token a component
-// reads — not rewriting every screen.
+// The base palette is monotone (black / white / grey). Brand Indigo
+// (`brandPrimary`, #3D2BE8 — sampled from the primary mark) is reserved for
+// specific moments only: primary actions, active/selected states, the timer
+// ring, and the Shot O'Clock moment. Everything else stays neutral, so the brand
+// color reads as emphasis rather than decoration.
 //
-// Status colors are kept even in monotone because they carry meaning the
-// greyscale can't (Completed vs Missed vs Out). The Shot O'Clock screen is the
-// only dark-background surface in the app; its tokens live under `shot*`.
+// Status colors carry meaning the greyscale can't (Completed vs Missed vs Out).
+// The Shot O'Clock screen is the only dark-background surface; its tokens are `shot*`.
 
 export const COLORS = {
   // ─── Base ────────────────────────────────────────────────────────────────
@@ -37,8 +36,11 @@ export const COLORS = {
   shotText: '#FFFFFF',
   shotRing: '#FFFFFF',
 
-  // ─── Brand (defined, NOT applied in MVP monotone phase) ──────────────────
-  brandPrimary: '#7B2FBE',
+  // ─── Brand — Indigo, reserved for primary actions / active states / rings ─
+  // Sampled from logo/shot-oclock-mark-primary-transparent-navy.png; matches the
+  // locked design-doc token. buttonFilled (#1A1A1A) stays the neutral dark-fill
+  // for incidental surfaces (e.g. the join-code card).
+  brandPrimary: '#3D2BE8',
 } as const;
 
 export const FONT_SIZE = {

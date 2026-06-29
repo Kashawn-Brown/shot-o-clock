@@ -65,8 +65,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pillSelected: {
-    backgroundColor: COLORS.buttonFilled,
-    borderColor: COLORS.buttonFilled,
+    // Selected state — brand Indigo (reserved-moment).
+    backgroundColor: COLORS.brandPrimary,
+    borderColor: COLORS.brandPrimary,
   },
   pillText: {
     fontSize: FONT_SIZE.sm,

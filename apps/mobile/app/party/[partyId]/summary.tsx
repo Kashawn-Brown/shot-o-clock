@@ -264,7 +264,8 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    backgroundColor: COLORS.buttonFilled,
+    // Final Summary header — brand Indigo (the "game over" brand moment).
+    backgroundColor: COLORS.brandPrimary,
     paddingVertical: SPACING.lg,
   },
   title: {

@@ -265,7 +265,11 @@ function CreatePartyForm({
                 {eliminationEnabled ? ELIMINATION_ON_HINT : ELIMINATION_OFF_HINT}
               </Text>
             </View>
-            <Switch value={eliminationEnabled} onValueChange={setEliminationEnabled} />
+            <Switch
+              value={eliminationEnabled}
+              onValueChange={setEliminationEnabled}
+              trackColor={{ false: COLORS.border, true: COLORS.brandPrimary }}
+            />
           </View>
         )}
 
@@ -388,8 +392,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   segmentItemActive: {
-    backgroundColor: COLORS.buttonFilled,
-    borderColor: COLORS.buttonFilled,
+    // Active segment — brand Indigo (reserved-moment).
+    backgroundColor: COLORS.brandPrimary,
+    borderColor: COLORS.brandPrimary,
   },
   segmentLabel: {
     fontSize: FONT_SIZE.sm,

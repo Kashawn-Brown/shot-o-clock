@@ -400,7 +400,7 @@ export default function TimerScreen(): React.JSX.Element {
             size={RING_SIZE}
             strokeWidth={10}
             progress={ringProgress}
-            color={COLORS.buttonFilled}
+            color={COLORS.brandPrimary}
             trackColor={COLORS.border}
           >
             <View style={styles.ringContent}>
@@ -830,7 +830,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.xs,
     marginTop: SPACING.sm,
-    backgroundColor: COLORS.buttonFilled,
+    backgroundColor: COLORS.brandPrimary,
     borderRadius: RADIUS.full,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
