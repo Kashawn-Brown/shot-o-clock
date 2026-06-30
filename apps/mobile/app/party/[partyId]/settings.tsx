@@ -19,7 +19,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
@@ -29,6 +28,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { OptionPicker } from '@/components/ui/OptionPicker';
+import { SettingsSection } from '@/components/ui/SettingsSection';
+import { ToggleRow } from '@/components/ui/ToggleRow';
 import { SHOT_SOUNDS } from '@/features/notifications/api/shotSounds';
 import { useSessionOverride } from '@/features/notifications/useSessionOverride';
 import {
@@ -49,54 +50,6 @@ const LEAD_TIME_OPTIONS: { label: string; value: HeadsUpLeadSeconds }[] = HEADS_
 );
 
 const SOUND_OPTIONS = SHOT_SOUNDS.map((sound) => ({ label: sound.label, value: sound.id }));
-
-// A row with a right-side on/off Switch (no chevron). For the per-session toggles.
-function ToggleRow({
-  title,
-  description,
-  value,
-  onValueChange,
-  disabled = false,
-}: {
-  title: string;
-  description: string;
-  value: boolean;
-  onValueChange: (value: boolean) => void;
-  disabled?: boolean;
-}): React.JSX.Element {
-  return (
-    <View style={styles.row}>
-      <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowDescription}>{description}</Text>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        disabled={disabled}
-        trackColor={{ false: COLORS.border, true: COLORS.brandPrimary }}
-      />
-    </View>
-  );
-}
-
-function SettingsSection({
-  title,
-  caption,
-  children,
-}: {
-  title: string;
-  caption?: string;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.card}>{children}</View>
-      {caption ? <Text style={styles.sectionCaption}>{caption}</Text> : null}
-    </View>
-  );
-}
 
 export default function PartySettingsScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
@@ -338,16 +291,7 @@ export default function PartySettingsScreen(): React.JSX.Element {
             <Text style={styles.modalSubtitle}>
               {"Applies to all active players. Can only be changed once per round."}
             </Text>
-            <View style={styles.row}>
-              <View style={styles.rowText}>
-                <Text style={styles.rowTitle}>Enabled</Text>
-              </View>
-              <Switch
-                value={draftEnabled}
-                onValueChange={setDraftEnabled}
-                trackColor={{ false: COLORS.border, true: COLORS.brandPrimary }}
-              />
-            </View>
+            <ToggleRow title="Enabled" value={draftEnabled} onValueChange={setDraftEnabled} />
             {draftEnabled ? (
               <View style={styles.subControl}>
                 <Text style={styles.subLabel}>Lead time</Text>
@@ -403,28 +347,6 @@ const styles = StyleSheet.create({
   content: {
     padding: SPACING.lg,
     gap: SPACING.lg,
-  },
-  section: {
-    gap: SPACING.sm,
-  },
-  sectionTitle: {
-    fontSize: FONT_SIZE.xs,
-    fontWeight: FONT_WEIGHT.medium,
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: SPACING.xs,
-  },
-  sectionCaption: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.textSecondary,
-    paddingHorizontal: SPACING.xs,
-    lineHeight: 16,
-  },
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.lg,
   },
   row: {
     flexDirection: 'row',
