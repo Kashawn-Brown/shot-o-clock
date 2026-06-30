@@ -27,6 +27,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { OptionPicker } from '@/components/ui/OptionPicker';
 import { Stepper } from '@/components/ui/Stepper';
 import { useDisplayName } from '@/features/auth/useDisplayName';
 import { createParty } from '@/features/party/api/createParty';
@@ -41,6 +42,7 @@ import {
   ELIMINATION_ON_HINT,
   formatDefaultPartyName,
   GRACE_MODE_OPTIONS,
+  GRACE_PICKER_OPTIONS,
   INTERVAL_INCREMENT_MAX_MINUTES,
   INTERVAL_INCREMENT_MIN_MINUTES,
   INTERVAL_INCREMENT_STEP_MINUTES,
@@ -278,24 +280,11 @@ function CreatePartyForm({
         {!hostOnly && eliminationEnabled && (
           <View style={styles.field}>
             <Text style={styles.label}>Grace Mode</Text>
-            <View style={styles.segment}>
-              {GRACE_MODE_OPTIONS.map((option) => {
-                const active = graceMode === option.value;
-                return (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => setGraceMode(option.value)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    style={[styles.segmentItem, active && styles.segmentItemActive]}
-                  >
-                    <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <OptionPicker
+              options={GRACE_PICKER_OPTIONS}
+              value={graceMode}
+              onChange={setGraceMode}
+            />
             <Text style={styles.hint}>{graceHint}</Text>
           </View>
         )}
@@ -377,35 +366,6 @@ const styles = StyleSheet.create({
   toggleText: {
     gap: SPACING.xs,
     flexShrink: 1,
-  },
-  segment: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  segmentItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: SPACING.md,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-  },
-  segmentItemActive: {
-    // Selected — outlined-card style (Indigo border + soft-Highlight fill), matching
-    // the Multiplayer/Host-only picker rather than a solid Indigo fill.
-    borderWidth: 2,
-    borderColor: COLORS.brandPrimary,
-    backgroundColor: COLORS.brandHighlightSoft,
-    margin: -1, // absorb the extra 1px so selecting doesn't nudge the layout
-  },
-  segmentLabel: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.textPrimary,
-  },
-  segmentLabelActive: {
-    color: COLORS.textPrimary,
-    fontWeight: FONT_WEIGHT.medium,
   },
   submit: {
     marginTop: SPACING.md,

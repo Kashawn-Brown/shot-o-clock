@@ -75,6 +75,13 @@ export const GRACE_MODE_OPTIONS: readonly {
   { label: 'Grace', value: 'enabled', description: 'First miss is forgiven, second means out' },
 ];
 
+// The same options shaped for OptionPicker (label/value only), so Create Party and
+// the saved Create-Party defaults build the grace picker from one source.
+export const GRACE_PICKER_OPTIONS = GRACE_MODE_OPTIONS.map((option) => ({
+  label: option.label,
+  value: option.value,
+}));
+
 // Elimination-toggle hint text, switched on the toggle's value.
 export const ELIMINATION_ON_HINT = 'Players who don\'t take their shot are eliminated';
 export const ELIMINATION_OFF_HINT = 'Misses are tracked but nobody is eliminated';

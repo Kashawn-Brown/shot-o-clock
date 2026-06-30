@@ -56,18 +56,21 @@ const styles = StyleSheet.create({
   },
   pill: {
     flex: 1,
-    paddingVertical: SPACING.sm,
+    paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
-    borderRadius: RADIUS.full,
+    borderRadius: RADIUS.sm,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.surface,
     alignItems: 'center',
   },
   pillSelected: {
-    // Selected state — brand Indigo (reserved-moment).
-    backgroundColor: COLORS.brandPrimary,
+    // Selected — outlined (Indigo border + soft-Highlight fill, navy label), the
+    // shared selection treatment used by the Create Party / host-mode pickers.
+    borderWidth: 2,
     borderColor: COLORS.brandPrimary,
+    backgroundColor: COLORS.brandHighlightSoft,
+    margin: -1, // absorb the extra 1px so selecting doesn't nudge the layout
   },
   pillText: {
     fontSize: FONT_SIZE.sm,
@@ -75,6 +78,6 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   pillTextSelected: {
-    color: COLORS.buttonFilledText,
+    color: COLORS.textPrimary,
   },
 });

@@ -27,6 +27,7 @@ import {
   ELIMINATION_OFF_HINT,
   ELIMINATION_ON_HINT,
   GRACE_MODE_OPTIONS,
+  GRACE_PICKER_OPTIONS,
   INTERVAL_INCREMENT_MAX_MINUTES,
   INTERVAL_INCREMENT_MIN_MINUTES,
   INTERVAL_INCREMENT_STEP_MINUTES,
@@ -43,11 +44,6 @@ import {
 } from '@/features/party/partyDefaults';
 import { usePartyCreateDefaults } from '@/features/party/usePartyCreateDefaults';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
-
-const GRACE_OPTIONS = GRACE_MODE_OPTIONS.map((option) => ({
-  label: option.label,
-  value: option.value,
-}));
 
 // Shallow compare the five fields, for the Save "dirty" gate.
 function defaultsEqual(a: PartyCreateDefaults, b: PartyCreateDefaults): boolean {
@@ -167,7 +163,7 @@ export default function PartyDefaultsScreen(): React.JSX.Element {
           <View style={styles.field}>
             <Text style={styles.label}>Grace Mode</Text>
             <OptionPicker
-              options={GRACE_OPTIONS}
+              options={GRACE_PICKER_OPTIONS}
               value={draft.graceMode}
               onChange={(value) => setDraft({ ...draft, graceMode: value })}
             />
