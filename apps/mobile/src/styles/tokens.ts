@@ -41,7 +41,7 @@ export const COLORS = {
 
   // ─── Brand palette ───────────────────────────────────────────────────────
   // Indigo — primary accent: actions, active/selected states, rings, key moments.
-  brandPrimary: '#3D2BE8',
+  brandPrimary: '#2B1EB3', // now using darker hue, old: #3D2BE8
   // Navy — the brand ink: drives textPrimary / dark surfaces / outline buttons /
   // the Shot O'Clock background (all repointed above). The app's "black" is Navy.
   brandNavy: '#0C1142',
@@ -51,6 +51,10 @@ export const COLORS = {
   // Highlight-soft — flat, paler Highlight for selected-card / subtle-surface
   // backgrounds (derived; the design doc locks only #9F90FB).
   brandHighlightSoft: '#F0EEFE',
+
+  trackColor: '#DCE6FE',
+
+  champion: '#F59E0B',
 } as const;
 
 export const FONT_SIZE = {

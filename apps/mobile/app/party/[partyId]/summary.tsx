@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.lg,
     fontWeight: FONT_WEIGHT.bold,
     // Winner accent — brand Indigo (the "game over" pop).
-    color: COLORS.brandPrimary,
+    color: COLORS.champion,
     textAlign: 'center',
   },
   heroSub: {

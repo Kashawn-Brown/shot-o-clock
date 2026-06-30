@@ -388,7 +388,7 @@ export default function TimerScreen(): React.JSX.Element {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.ringLabel}>NEXT SHOT O&apos;CLOCK IN</Text>
+        <Text style={styles.ringLabel}>NEXT SHOT O&apos;CLOCK IN:</Text>
 
         {/* Real remaining time, draining clockwise. The server-driven transition
             into the shot window is the advance_phase_if_due poll (useTimerSession).
@@ -401,7 +401,7 @@ export default function TimerScreen(): React.JSX.Element {
             strokeWidth={10}
             progress={ringProgress}
             color={COLORS.brandPrimary}
-            trackColor={COLORS.brandHighlight}
+            trackColor={COLORS.trackColor}
           >
             <View style={styles.ringContent}>
               {/* The time stays centred; a paused player gets a PAUSED label just
@@ -678,6 +678,7 @@ const styles = StyleSheet.create({
   ringLabel: {
     marginTop: SPACING.xl,
     fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.medium,
     letterSpacing: 1,
     color: COLORS.textSecondary,
   },
