@@ -224,6 +224,7 @@ export default function PartySettingsScreen(): React.JSX.Element {
                 value={soundChoice}
                 onChange={setSoundChoice}
                 disabled={!loaded}
+                compact
               />
             </View>
           ) : null}
@@ -295,7 +296,7 @@ export default function PartySettingsScreen(): React.JSX.Element {
             {draftEnabled ? (
               <View style={styles.subControl}>
                 <Text style={styles.subLabel}>Lead time</Text>
-                <OptionPicker options={LEAD_TIME_OPTIONS} value={draftLead} onChange={setDraftLead} />
+                <OptionPicker options={LEAD_TIME_OPTIONS} value={draftLead} onChange={setDraftLead} compact />
               </View>
             ) : null}
             <View style={styles.modalActions}>

@@ -120,6 +120,7 @@ export default function SettingsScreen(): React.JSX.Element {
                 value={alert.soundChoice}
                 onChange={setSoundChoice}
                 disabled={!alertLoaded}
+                compact
               />
             </View>
           ) : null}

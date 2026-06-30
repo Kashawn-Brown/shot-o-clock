@@ -17,11 +17,15 @@ export function OptionPicker<T extends string | number>({
   value,
   onChange,
   disabled = false,
+  compact = false,
 }: {
   options: OptionPickerItem<T>[];
   value: T;
   onChange: (value: T) => void;
   disabled?: boolean;
+  // Compact = the original smaller pill size/shape (settings pickers). Default is
+  // the larger card-style option (the grace / create-party pickers).
+  compact?: boolean;
 }): React.JSX.Element {
   return (
     <View style={[styles.row, disabled && styles.disabled]}>
@@ -34,7 +38,7 @@ export function OptionPicker<T extends string | number>({
             disabled={disabled}
             accessibilityRole="button"
             accessibilityState={{ selected, disabled }}
-            style={[styles.pill, selected && styles.pillSelected]}
+            style={[styles.pill, compact && styles.pillCompact, selected && styles.pillSelected]}
           >
             <Text style={[styles.pillText, selected && styles.pillTextSelected]}>
               {option.label}
@@ -63,6 +67,11 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: COLORS.surface,
     alignItems: 'center',
+  },
+  // Compact — the original smaller pill size/shape (settings pickers).
+  pillCompact: {
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.full,
   },
   pillSelected: {
     // Selected — outlined (Indigo border + soft-Highlight fill, navy label), the
