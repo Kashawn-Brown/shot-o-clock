@@ -43,6 +43,7 @@ import { usePartyRole } from '@/features/party/usePartyRole';
 import { rpcErrorMessage } from '@/lib/errors';
 import { serverNow } from '@/lib/time';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
+import { ScreenHeader } from '@/components/layout/ScreenHeader';
 
 // The Heads-up lead picker options, in seconds (the host RPC validates this set).
 const LEAD_TIME_OPTIONS: { label: string; value: HeadsUpLeadSeconds }[] = HEADS_UP_LEAD_SECONDS.map(
@@ -197,12 +198,7 @@ export default function PartySettingsScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>
-          <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
-        </Pressable>
-        <Text style={styles.title}>Party settings</Text>
-      </View>
+      <ScreenHeader title="Party settings" onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.content}>
         <SettingsSection
@@ -244,7 +240,7 @@ export default function PartySettingsScreen(): React.JSX.Element {
         {isHost && !hostOnly ? (
           <SettingsSection
             title="Host controls"
-            caption="Settings that apply to the whole party. Only Host has access."
+            caption="Settings that apply to the whole party. Only you have access."
           >
             <Pressable
               style={styles.row}
@@ -321,7 +317,6 @@ export default function PartySettingsScreen(): React.JSX.Element {
   );
 }
 
-const HEADER_ICON_SIZE = 22; // header back-arrow, matching the other screens
 const CHEVRON_SIZE = 20; // per-row tappable indicator
 
 const styles = StyleSheet.create({
@@ -332,18 +327,6 @@ const styles = StyleSheet.create({
   centered: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  title: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.bold,
-    color: COLORS.textPrimary,
   },
   content: {
     padding: SPACING.lg,

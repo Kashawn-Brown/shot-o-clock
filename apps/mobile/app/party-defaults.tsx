@@ -18,8 +18,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
+import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { Button } from '@/components/ui/Button';
 import { OptionPicker } from '@/components/ui/OptionPicker';
 import { Stepper } from '@/components/ui/Stepper';
@@ -83,23 +83,24 @@ export default function PartyDefaultsScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>
-          <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
-        </Pressable>
-        <Text style={styles.title}>Party defaults</Text>
-        <Pressable
-          onPress={restoreDraft}
-          accessibilityRole="button"
-          accessibilityLabel="Restore defaults"
-          hitSlop={8}
-        >
-          <Text style={styles.restore}>Restore</Text>
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title="Party defaults"
+        onBack={() => router.back()}
+        right={
+          <Pressable
+            onPress={restoreDraft}
+            accessibilityRole="button"
+            accessibilityLabel="Restore defaults"
+            hitSlop={8}
+          >
+            <Text style={styles.restore}>Restore</Text>
+          </Pressable>
+        }
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.intro}>These pre-fill the Create Party screen for every new party.</Text>
+        <Text style={styles.intro}>Set your pre-filled values for everytime you create
+           a new party.</Text>
 
         <View style={styles.field}>
           <Text style={styles.label}>Starting Interval</Text>
@@ -154,6 +155,7 @@ export default function PartyDefaultsScreen(): React.JSX.Element {
             value={draft.eliminationEnabled}
             onValueChange={(value) => setDraft({ ...draft, eliminationEnabled: value })}
             trackColor={{ false: COLORS.border, true: COLORS.brandPrimary }}
+            thumbColor={COLORS.surfaceRaised}
           />
         </View>
 
@@ -186,8 +188,6 @@ export default function PartyDefaultsScreen(): React.JSX.Element {
   );
 }
 
-const HEADER_ICON_SIZE = 22; // header back-arrow
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -196,19 +196,6 @@ const styles = StyleSheet.create({
   loading: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  title: {
-    flex: 1,
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.bold,
-    color: COLORS.textPrimary,
   },
   restore: {
     fontSize: FONT_SIZE.sm,

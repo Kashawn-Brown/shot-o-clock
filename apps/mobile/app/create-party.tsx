@@ -14,7 +14,6 @@ import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -23,8 +22,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
+import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { OptionPicker } from '@/components/ui/OptionPicker';
@@ -185,12 +184,7 @@ function CreatePartyForm({
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>
-          <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
-        </Pressable>
-        <Text style={styles.title}>Create Party</Text>
-      </View>
+      <ScreenHeader title="Create Party" onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
@@ -271,6 +265,7 @@ function CreatePartyForm({
               value={eliminationEnabled}
               onValueChange={setEliminationEnabled}
               trackColor={{ false: COLORS.border, true: COLORS.brandPrimary }}
+              thumbColor={COLORS.surfaceRaised}
             />
           </View>
         )}
@@ -302,8 +297,6 @@ function CreatePartyForm({
   );
 }
 
-const HEADER_ICON_SIZE = 22; // header back-arrow + settings-gear icons
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -312,22 +305,6 @@ const styles = StyleSheet.create({
   loading: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  back: {
-    fontSize: FONT_SIZE.md,
-    color: COLORS.textPrimary,
-  },
-  title: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.bold,
-    color: COLORS.textPrimary,
   },
   content: {
     padding: SPACING.lg,
