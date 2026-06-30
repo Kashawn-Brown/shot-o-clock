@@ -55,6 +55,8 @@ export const COLORS = {
   trackColor: '#DCE6FE',
 
   champion: '#F59E0B',
+
+  black: '#000000', // #1A1A1A
 } as const;
 
 export const FONT_SIZE = {

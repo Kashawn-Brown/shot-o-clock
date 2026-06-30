@@ -127,6 +127,9 @@ export default function TimerScreen(): React.JSX.Element {
   // surface in a small banner under the ring. On success refreshSession re-pulls so
   // the host's screen updates without waiting on the realtime round-trip.
   const [controlBusy, setControlBusy] = useState(false);
+  // Which control is mid-call, so the dim/press feedback shows on ONLY the tapped
+  // one (controlBusy still blocks all three from firing at once).
+  const [busyControl, setBusyControl] = useState<'pause' | 'short' | 'long' | null>(null);
   const [controlError, setControlError] = useState<string | null>(null);
 
   // Control errors (add-time cap, pause/resume failures) surface as a transient
@@ -157,10 +160,12 @@ export default function TimerScreen(): React.JSX.Element {
     if (!partyId || controlBusy) return;
     setControlError(null);
     setControlBusy(true);
+    setBusyControl('pause');
     const result = isPaused
       ? await hostResumeTimer({ partySessionId: partyId })
       : await hostPauseTimer({ partySessionId: partyId });
     setControlBusy(false);
+    setBusyControl(null);
     if (result.ok) {
       refreshSession();
       return;
@@ -173,8 +178,10 @@ export default function TimerScreen(): React.JSX.Element {
       if (!partyId || controlBusy) return;
       setControlError(null);
       setControlBusy(true);
+      setBusyControl(seconds === ADD_TIME_SHORT_SECONDS ? 'short' : 'long');
       const result = await hostAddTime({ partySessionId: partyId, seconds });
       setControlBusy(false);
+      setBusyControl(null);
       if (result.ok) {
         refreshSession();
         return;
@@ -400,7 +407,7 @@ export default function TimerScreen(): React.JSX.Element {
             size={RING_SIZE}
             strokeWidth={10}
             progress={ringProgress}
-            color={COLORS.brandPrimary}
+            color={COLORS.brandPrimary} // backgroundColor: COLORS.surface
             trackColor={COLORS.trackColor}
           >
             <View style={styles.ringContent}>
@@ -422,7 +429,7 @@ export default function TimerScreen(): React.JSX.Element {
                     style={({ pressed }) => [
                       styles.pauseButton,
                       pressed && styles.controlPressed,
-                      controlBusy && styles.controlDisabled,
+                      busyControl === 'pause' && styles.controlDisabled,
                     ]}
                   >
                     <Text style={styles.pauseIcon}>{isPaused ? '▶' : '❚❚'}</Text>
@@ -438,12 +445,14 @@ export default function TimerScreen(): React.JSX.Element {
                 label="+30s"
                 onPress={() => void handleAddTime(ADD_TIME_SHORT_SECONDS)}
                 disabled={controlBusy}
+                busy={busyControl === 'short'}
                 style={styles.addLeft}
               />
               <CircleControl
                 label="+1m"
                 onPress={() => void handleAddTime(ADD_TIME_LONG_SECONDS)}
                 disabled={controlBusy}
+                busy={busyControl === 'long'}
                 style={styles.addRight}
               />
             </>
@@ -509,6 +518,7 @@ export default function TimerScreen(): React.JSX.Element {
               variant="outline"
               onPress={confirmSelfOut}
               disabled={!canSelfOut}
+              style={styles.selfOutFill}
             />
           </>
         ) : null}
@@ -571,11 +581,13 @@ function CircleControl({
   label,
   onPress,
   disabled,
+  busy,
   style,
 }: {
   label: string;
   onPress: () => void;
   disabled: boolean;
+  busy: boolean;
   style: StyleProp<ViewStyle>;
 }): React.JSX.Element {
   return (
@@ -588,7 +600,7 @@ function CircleControl({
         styles.circle,
         style,
         pressed && styles.controlPressed,
-        disabled && styles.controlDisabled,
+        busy && styles.controlDisabled,
       ]}
     >
       <Text style={styles.circleLabel}>{label}</Text>
@@ -601,7 +613,7 @@ function CircleControl({
 // `styles` block below (and `size={RING_SIZE}` on the ProgressRing). Adjust freely.
 const RING_SIZE = 280; // ring diameter
 const RING_TIME_FONT_SIZE = 60; // the M:SS time text inside the ring
-const PAUSE_BUTTON_SIZE = 64; // host pause/play button (centre-bottom of the ring)
+const PAUSE_BUTTON_SIZE = 72; // host pause/play button (centre-bottom of the ring)
 const ADD_TIME_BUTTON_SIZE = 64; // host +30s / +1m circles
 const ADD_TIME_BUTTON_OFFSET = 44; // how far the +time circles sit outside the ring's sides
 const HEADER_ICON_SIZE = 22; // header back-arrow + settings-gear icons
@@ -662,7 +674,7 @@ const styles = StyleSheet.create({
   },
   content: {
     alignItems: 'center',
-    paddingVertical: SPACING.xl,
+    paddingVertical: SPACING.sm,
     gap: SPACING.xl,
   },
   // Transient overlay for control errors — absolute so it never affects layout or
@@ -713,44 +725,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pausedLabel: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.custom_1,
     fontWeight: FONT_WEIGHT.medium,
     letterSpacing: 1,
     color: COLORS.textSecondary,
+    opacity: 0.8,
   },
   // Host pause/play, pinned near the bottom of the circle interior.
   pauseSlot: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: SPACING.xl,
+    bottom: SPACING.lg,
     alignItems: 'center',
   },
   pauseButton: {
     width: PAUSE_BUTTON_SIZE,
     height: PAUSE_BUTTON_SIZE,
     borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceRaised,
     borderWidth: 1,
-    borderColor: COLORS.brandNavy,
+    borderColor: `${COLORS.black}99`, // softened
+    opacity: 0.9, 
     alignItems: 'center',
     justifyContent: 'center',
   },
   pauseIcon: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.custom_1,
     color: COLORS.textPrimary,
   },
   // The +time circles sit below and outside the ring's lower corners — negative
   // offsets (ADD_TIME_BUTTON_OFFSET) push them clear of the ring arc.
   circle: {
     position: 'absolute',
-    bottom: -SPACING.md,
+    bottom: -SPACING.xxl,
     width: ADD_TIME_BUTTON_SIZE,
     height: ADD_TIME_BUTTON_SIZE,
     borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceRaised,
     borderWidth: 1,
-    borderColor: COLORS.brandNavy,
+    borderColor: `${COLORS.black}99`, // softened
+    opacity: 0.8, // a touch transparent so the controls recede
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -796,6 +811,18 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
+    // Raised fill so the footer actions read as buttons on the grey canvas, not
+    // flat transparent outlines.
+    backgroundColor: COLORS.surfaceRaised,
+    borderColor: COLORS.brandPrimary,
+    borderWidth: 2,
+  },
+  // The round action (Use Grace / I'm Out / Skip) — soft-Highlight fill + Indigo
+  // border, so it reads as the distinct action vs the neutral Players / danger exit.
+  selfOutFill: {
+    backgroundColor: COLORS.surfaceRaised,
+    borderColor: COLORS.black,
+    borderWidth: 2,
   },
   // Danger-tinted border marks the destructive exit (End / Leave Party) without a
   // third Button variant; the label keeps the default outline color.

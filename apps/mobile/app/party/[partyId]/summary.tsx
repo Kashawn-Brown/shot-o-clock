@@ -174,6 +174,7 @@ export default function SummaryScreen(): React.JSX.Element {
         </View>
 
         <Text style={styles.sectionTitle}>Final Standings</Text>
+        <View style={styles.standingsList}>
         {view.standings.map((standing) => {
           // Olympic rank from derivePartySummary (tied players share a rank);
           // removed players carry null and show a "Removed" badge instead.
@@ -202,6 +203,7 @@ export default function SummaryScreen(): React.JSX.Element {
             </View>
           );
         })}
+        </View>
       </ScrollView>
 
       <View style={styles.footer}>
@@ -346,6 +348,9 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
+  },
+  standingsList: {
+    gap: 12, // tighter than the content gap so the standings rows sit closer
   },
   standingRow: {
     flexDirection: 'row',
