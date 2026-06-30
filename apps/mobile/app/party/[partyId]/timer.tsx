@@ -811,14 +811,16 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
-    // Raised fill so the footer actions read as buttons on the grey canvas, not
-    // flat transparent outlines.
+    // Raised white button so the footer actions read as buttons on the grey canvas,
+    // not flat outlines. The Indigo border is the Players (neutral utility) default;
+    // End/Leave overrides it to red (destructiveButton).
     backgroundColor: COLORS.surfaceRaised,
     borderColor: COLORS.brandPrimary,
     borderWidth: 2,
   },
-  // The round action (Use Grace / I'm Out / Skip) — soft-Highlight fill + Indigo
-  // border, so it reads as the distinct action vs the neutral Players / danger exit.
+  // The round action (Use Grace / I'm Out / Skip) — white fill + a neutral black
+  // border. Kept neutral on purpose: the label flips between a positive (Use Grace)
+  // and a negative (I'm Out), so a fixed brand accent would misread half the time.
   selfOutFill: {
     backgroundColor: COLORS.surfaceRaised,
     borderColor: COLORS.black,
