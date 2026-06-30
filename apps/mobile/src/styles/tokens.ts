@@ -60,6 +60,8 @@ export const COLORS = {
 } as const;
 
 export const FONT_SIZE = {
+  xxxl: 72,
+  xxl: 64,
   xl: 48, // big countdown number
   lg: 32, // "SHOT O'CLOCK" text
   md: 18,

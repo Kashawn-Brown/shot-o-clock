@@ -381,7 +381,6 @@ export default function ShotOClockScreen(): React.JSX.Element {
             trackColor="rgba(255,255,255,0.2)"
           >
             <View style={styles.ringContent}>
-              <Text style={[styles.ringLabel, hostOnly && styles.ringLabelLarge]}>SHOT WINDOW</Text>
               <Text style={[styles.ringTime, hostOnly && styles.ringTimeLarge]}>
                 {formatDuration(displayMs)}
               </Text>
@@ -477,17 +476,17 @@ const styles = StyleSheet.create({
     gap: SPACING.xxl,
   },
   title: {
-    fontSize: FONT_SIZE.xl,
+    fontSize: FONT_SIZE.xxl,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.shotText,
     textAlign: 'center',
     letterSpacing: 2,
-    
+    transform: [{ translateY: TITLE_OFFSET_Y }],
   },
   // Larger title for single-phone mode, where there are no action buttons below.
   titleLarge: {
-    fontSize: 56,
-    letterSpacing: 4,
+    fontSize: FONT_SIZE.xxl,
+    letterSpacing: 2,
     // Nudge up the page without moving the ring (TITLE_OFFSET_Y).
     transform: [{ translateY: TITLE_OFFSET_Y }],
   },
@@ -500,7 +499,7 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   ringCaption: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.custom_3,
     color: COLORS.shotText,
     opacity: 0.7,
   },
@@ -509,17 +508,8 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     transform: [{ translateY: 20 }],
   },
-  ringLabel: {
-    fontSize: FONT_SIZE.xs,
-    letterSpacing: 1,
-    color: COLORS.shotText,
-  },
-  ringLabelLarge: {
-    fontSize: FONT_SIZE.sm,
-    letterSpacing: 2,
-  },
   ringTime: {
-    fontSize: FONT_SIZE.xl,
+    fontSize: FONT_SIZE.xxl,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.shotText,
   },
@@ -544,11 +534,13 @@ const styles = StyleSheet.create({
   },
   action: {
     flex: 1,
-    minHeight: 128,
+    minHeight: 108,
     paddingVertical: SPACING.lg,
     borderRadius: RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.black,
   },
   actionDisabled: {
     opacity: 0.4,
@@ -562,18 +554,19 @@ const styles = StyleSheet.create({
     color: COLORS.shotBackground,
   },
   outAction: {
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: COLORS.danger,
+    backgroundColor: COLORS.shotText,
   },
   outLabel: {
     fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.medium,
+    fontWeight: FONT_WEIGHT.bold,
     color: COLORS.danger,
   },
   // Host-only "Skip to Next Round": a white-outline button on the dark screen
   // (the shared Button is built for light screens, so it's drawn inline here).
   hostSkipButton: {
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: COLORS.shotText,
     borderRadius: RADIUS.md,
     paddingVertical: SPACING.lg,
