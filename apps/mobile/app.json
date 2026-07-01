@@ -42,7 +42,14 @@
       ],
       "expo-font",
       "expo-secure-store",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#2B1EB3"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
