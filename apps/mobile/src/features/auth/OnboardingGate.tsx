@@ -4,7 +4,7 @@
 // onComplete to useDisplayName.save + useConsent.confirm.
 
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
@@ -38,6 +38,19 @@ export function OnboardingGate({ onComplete }: OnboardingGateProps): React.JSX.E
 
   return (
     <SafeAreaView style={styles.screen}>
+      {/* Brand mark, no wordmark. Using the transparent-navy PNG so it sits on the
+          light canvas; swappable to the SVG master (logo/shot-oclock-mark-primary.svg)
+          if we want crisper scaling later. */}
+      <View style={styles.logoHeader}>
+        <Image
+          source={require('@/assets/brand/logo/shot-oclock-mark-primary-transparent-navy.png')}
+          style={styles.logo}
+          resizeMode="contain"
+          accessibilityRole="image"
+          accessibilityLabel="Shot O'Clock"
+        />
+      </View>
+
       <View style={styles.body}>
         <Text style={styles.title}>{"Welcome to Shot O'Clock"}</Text>
 
@@ -97,9 +110,27 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.lg,
     justifyContent: 'space-between',
   },
+  logoHeader: {
+    // Absolutely positioned so the mark floats above the layout: moving it (via
+    // `top`) doesn't push the centered welcome block down with it. Tune `top`
+    // freely to reposition the logo without affecting anything else.
+    position: 'absolute',
+    top: 128,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  logo: {
+    width: 164,
+    height: 164,
+  },
   body: {
     flex: 1,
-    justifyContent: 'center',
+    // Top-anchored (not centered) with its own paddingTop so it sits below the
+    // absolutely-positioned logo. Tune `paddingTop` to move the welcome block
+    // independently of the logo — the two no longer affect each other.
+    justifyContent: 'flex-start',
+    paddingTop: 280,
     gap: SPACING.lg,
   },
   title: {
