@@ -1,6 +1,6 @@
 # Terms of Service — Shot O'Clock
 
-_Last updated: [EFFECTIVE DATE]_
+_Last updated: July 2, 2026_
 
 These Terms of Service ("Terms") are a legal agreement between you and **KB Forge** ("we", "us") governing your use of the **Shot O'Clock** mobile app (the "App"). By using the App, you agree to these Terms. If you do not agree, do not use the App.
 

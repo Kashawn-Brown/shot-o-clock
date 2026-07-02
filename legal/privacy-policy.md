@@ -1,6 +1,6 @@
 # Privacy Policy — Shot O'Clock
 
-_Last updated: [EFFECTIVE DATE]_
+_Last updated: July 2, 2026_
 
 This Privacy Policy explains how **KB Forge** ("we", "us") handles information in the **Shot O'Clock** mobile app (the "App"). By using the App, you agree to this policy.
 
@@ -43,9 +43,8 @@ We do **not** sell your information, and we do **not** use it for advertising.
 
 We use a small number of service providers to run the App. They process data only to provide their service to us:
 
-- **Supabase** — database, authentication, and backend hosting (stores your party and profile data). Data is hosted in the **[SUPABASE REGION, e.g. US]** region.
+- **Supabase** — database, authentication, and backend hosting (stores your party and profile data). Data is hosted in the **Canada (Central)** region.
 - **Expo, Apple (APNs), and Google (FCM)** — delivery of push notifications to your device.
-- **[IF/WHEN ADDED: a crash-reporting provider (e.g. Sentry)]** — to receive crash and diagnostic reports so we can fix problems. We will update this policy before enabling it.
 
 We may also disclose information if required by law or to protect the rights, safety, and security of our users or the service.
 
