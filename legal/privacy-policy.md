@@ -45,6 +45,7 @@ We use a small number of service providers to run the App. They process data onl
 
 - **Supabase** — database, authentication, and backend hosting (stores your party and profile data). Data is hosted in the **Canada (Central)** region.
 - **Expo, Apple (APNs), and Google (FCM)** — delivery of push notifications to your device.
+- **Sentry** — crash and error reporting, so we can find and fix problems. Sentry receives crash reports and related technical/diagnostic data; it does not receive your party content.
 
 We may also disclose information if required by law or to protect the rights, safety, and security of our users or the service.
 

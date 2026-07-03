@@ -49,6 +49,13 @@
           "icon": "./assets/images/android-icon-monochrome.png",
           "color": "#2B1EB3"
         }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "kb-forge",
+          "project": "shot-o-clock"
+        }
       ]
     ],
     "experiments": {
