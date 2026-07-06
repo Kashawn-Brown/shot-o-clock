@@ -4,10 +4,23 @@
 // preference is a small id string rather than a path. require() must be static for
 // Metro to bundle the asset, so each sound is a literal entry here.
 //
-// One entry today (the Phase 13 CC0 placeholder, see assets/sounds/CREDITS.md); the
-// real identity sound + any additions land in Phase 17 — each is one more entry.
+// 'classic' is the original CC0 sound (see CREDITS.md) and stays the default. The rest
+// are the Phase 17 additions (Mixkit, see CREDITS.md); the four drink-themed ones lead
+// the list, then the general tones. The Settings sound picker reads this list directly.
 
-export type ShotSoundId = 'classic';
+export type ShotSoundId =
+  | 'classic'
+  | 'cheers'
+  | 'ice-drop'
+  | 'bubbles'
+  | 'pop'
+  | 'chime'
+  | 'ding'
+  | 'confirm'
+  | 'double-beep'
+  | 'blip'
+  | 'elevator'
+  | 'power-up';
 
 export interface ShotSound {
   id: ShotSoundId;
@@ -17,11 +30,22 @@ export interface ShotSound {
 }
 
 export const SHOT_SOUNDS: ShotSound[] = [
+  { id: 'classic', label: 'Classic', asset: require('@/assets/sounds/shot-oclock-placeholder.mp3') },
+  { id: 'cheers', label: 'Cheers', asset: require('@/assets/sounds/shot-oclock-cheers.wav') },
+  { id: 'ice-drop', label: 'Ice Drop', asset: require('@/assets/sounds/shot-oclock-ice-drop.wav') },
+  { id: 'bubbles', label: 'Bubbles', asset: require('@/assets/sounds/shot-oclock-bubbles.wav') },
+  { id: 'pop', label: 'Pop', asset: require('@/assets/sounds/shot-oclock-pop.wav') },
+  { id: 'chime', label: 'Chime', asset: require('@/assets/sounds/shot-oclock-chime.wav') },
+  { id: 'ding', label: 'Ding', asset: require('@/assets/sounds/shot-oclock-ding.wav') },
+  { id: 'confirm', label: 'Confirm', asset: require('@/assets/sounds/shot-oclock-confirm.wav') },
   {
-    id: 'classic',
-    label: 'Classic',
-    asset: require('@/assets/sounds/shot-oclock-placeholder.mp3'),
+    id: 'double-beep',
+    label: 'Double Beep',
+    asset: require('@/assets/sounds/shot-oclock-double-beep.wav'),
   },
+  { id: 'blip', label: 'Blip', asset: require('@/assets/sounds/shot-oclock-blip.wav') },
+  { id: 'elevator', label: 'Elevator', asset: require('@/assets/sounds/shot-oclock-elevator.wav') },
+  { id: 'power-up', label: 'Power Up', asset: require('@/assets/sounds/shot-oclock-power-up.wav') },
 ];
 
 export const DEFAULT_SHOT_SOUND_ID: ShotSoundId = 'classic';

@@ -30,7 +30,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { OptionPicker } from '@/components/ui/OptionPicker';
 import { SettingsSection } from '@/components/ui/SettingsSection';
 import { ToggleRow } from '@/components/ui/ToggleRow';
-import { SHOT_SOUNDS } from '@/features/notifications/api/shotSounds';
+import { SoundPicker } from '@/features/notifications/SoundPicker';
 import { useSessionOverride } from '@/features/notifications/useSessionOverride';
 import {
   hostSetHeadsUp,
@@ -49,8 +49,6 @@ import { ScreenHeader } from '@/components/layout/ScreenHeader';
 const LEAD_TIME_OPTIONS: { label: string; value: HeadsUpLeadSeconds }[] = HEADS_UP_LEAD_SECONDS.map(
   (seconds) => ({ label: `${seconds / 60} min`, value: seconds }),
 );
-
-const SOUND_OPTIONS = SHOT_SOUNDS.map((sound) => ({ label: sound.label, value: sound.id }));
 
 export default function PartySettingsScreen(): React.JSX.Element {
   const { partyId } = useLocalSearchParams<{ partyId: string }>();
@@ -215,12 +213,10 @@ export default function PartySettingsScreen(): React.JSX.Element {
           {alertSoundEnabled ? (
             <View style={styles.subControl}>
               <Text style={styles.subLabel}>Sound</Text>
-              <OptionPicker
-                options={SOUND_OPTIONS}
+              <SoundPicker
                 value={soundChoice}
                 onChange={setSoundChoice}
                 disabled={!loaded}
-                compact
               />
             </View>
           ) : null}

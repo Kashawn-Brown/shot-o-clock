@@ -23,20 +23,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { Button } from '@/components/ui/Button';
-import { OptionPicker } from '@/components/ui/OptionPicker';
 import { SettingRow } from '@/components/ui/SettingRow';
 import { SettingsSection } from '@/components/ui/SettingsSection';
 import { ToggleRow } from '@/components/ui/ToggleRow';
 import { DISPLAY_NAME_MAX_LENGTH, isValidDisplayName } from '@/features/auth/api/displayName';
 import type { GlobalAlertPrefs } from '@/features/notifications/api/alertPreferences';
-import { SHOT_SOUNDS } from '@/features/notifications/api/shotSounds';
+import { SoundPicker } from '@/features/notifications/SoundPicker';
 import { useDisplayName } from '@/features/auth/useDisplayName';
 import { useGlobalAlertPrefs } from '@/features/notifications/useGlobalAlertPrefs';
 import { useReset } from '@/features/auth/ResetProvider';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
-
-// The available in-app Alert sounds, as picker options.
-const SOUND_OPTIONS = SHOT_SOUNDS.map((sound) => ({ label: sound.label, value: sound.id }));
 
 export default function SettingsScreen(): React.JSX.Element {
   const { displayName, save } = useDisplayName();
@@ -110,12 +106,10 @@ export default function SettingsScreen(): React.JSX.Element {
           {alert.soundEnabled ? (
             <View style={styles.subControl}>
               <Text style={styles.subLabel}>Sound</Text>
-              <OptionPicker
-                options={SOUND_OPTIONS}
+              <SoundPicker
                 value={alert.soundChoice}
                 onChange={setSoundChoice}
                 disabled={!alertLoaded}
-                compact
               />
             </View>
           ) : null}
