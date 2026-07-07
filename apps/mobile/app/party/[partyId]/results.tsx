@@ -28,6 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { getRoundIdByNumber } from '@/features/game/api/roundByNumber';
 import { getRoundWindow } from '@/features/game/api/roundWindow';
 import {
@@ -303,7 +304,7 @@ export default function ResultsScreen(): React.JSX.Element {
                 key={row.playerId}
                 style={[styles.playerRow, { borderLeftColor: GROUP_ACCENT[group.key] }]}
               >
-                <View style={styles.avatar} />
+                <PlayerAvatar id={row.playerId} name={row.displayName} size={32} />
                 <View style={styles.playerNameGroup}>
                   <Text style={styles.playerName}>
                     {row.displayName}
@@ -405,12 +406,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     borderLeftWidth: 3,
     padding: SPACING.md,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.border,
   },
   playerNameGroup: {
     flex: 1,

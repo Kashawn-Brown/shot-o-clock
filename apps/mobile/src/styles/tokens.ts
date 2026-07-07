@@ -59,6 +59,29 @@ export const COLORS = {
   black: '#000000', // #1A1A1A
 } as const;
 
+// Player-avatar background palette (PlayerAvatar). All are medium-dark so white
+// initials stay legible; the borderline-bright hues are pinned to the 700 weight for
+// contrast. A player's colour is a deterministic hash of their id into this array, so
+// it's stable across renders and identical on every screen.
+export const AVATAR_COLORS = [
+  '#DC2626', // red
+  '#E11D48', // rose
+  '#DB2777', // pink
+  '#C026D3', // fuchsia
+  '#9333EA', // purple
+  '#4F46E5', // indigo
+  '#2563EB', // blue
+  '#0369A1', // sky
+  '#0E7490', // cyan
+  '#0F766E', // teal
+  '#047857', // emerald
+  '#15803D', // green
+  '#B45309', // amber
+  '#C2410C', // orange
+  '#92400E', // brown
+  '#475569', // slate
+] as const;
+
 export const FONT_SIZE = {
   xxxl: 72,
   xxl: 64,

@@ -34,6 +34,7 @@ import { ScreenHeader } from '@/components/layout/ScreenHeader';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { endParty } from '@/features/party/api/endParty';
 import { hostRemovePlayer } from '@/features/party/api/hostRemovePlayer';
 import { leaveParty } from '@/features/party/api/leaveParty';
@@ -292,7 +293,7 @@ export default function LobbyScreen(): React.JSX.Element {
               const canRemove = isHost && !player.isHost && !player.isSelf;
               return (
                 <View key={player.id} style={styles.playerRow}>
-                  <View style={styles.avatar} />
+                  <PlayerAvatar id={player.id} name={player.displayName} size={36} />
                   <View style={styles.playerInfo}>
                     <Text style={styles.playerName}>
                       {player.displayName}
@@ -452,12 +453,6 @@ const styles = StyleSheet.create({
   },
   playerInfo: {
     flex: 1,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.border,
   },
   playerName: {
     fontSize: FONT_SIZE.md,

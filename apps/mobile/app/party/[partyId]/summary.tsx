@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { getPartyState } from '@/features/party/api/partyState';
 import { derivePartySummary, type PartySummaryView } from '@/features/game/partySummary';
@@ -185,7 +186,11 @@ export default function SummaryScreen(): React.JSX.Element {
               style={[styles.standingRow, standing.isRemoved && styles.standingRemoved]}
             >
               <Text style={styles.rank}>{rank ?? '—'}</Text>
-              <View style={styles.avatar} />
+              <PlayerAvatar
+                id={standing.playerId}
+                name={standing.displayName}
+                size={standing.isLeader ? 48 : 36}
+              />
               <View style={styles.standingInfo}>
                 <Text style={styles.standingName}>
                   {standing.displayName}
@@ -369,12 +374,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     width: 20,
     textAlign: 'center',
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.border,
   },
   standingInfo: {
     flex: 1,
