@@ -78,11 +78,7 @@ export function OnboardingGate({ onComplete }: OnboardingGateProps): React.JSX.E
           />
         </View>
 
-        <Text style={styles.disclaimer}>
-          {
-            "Shot O'Clock is a social drinking game for adults of legal drinking age. Play responsibly, know your limits, never pressure anyone to drink, and never drink and drive. You are responsible for your own choices while using this app."
-          }
-        </Text>
+
 
         <View style={styles.checks}>
           <Checkbox
@@ -109,7 +105,11 @@ export function OnboardingGate({ onComplete }: OnboardingGateProps): React.JSX.E
           .
         </Text>
       </View>
-
+        <Text style={styles.disclaimer}>
+          {
+            "Shot O'Clock is a social drinking game for adults of legal drinking age. Play responsibly, know your limits, and never pressure anyone to drink."
+          }
+        </Text>
       <View style={styles.footer}>
         <Button label="Continue" onPress={submit} disabled={!canContinue} />
         {/* Sign-in hidden until accounts ship (post-production). See SHOW_SIGN_IN. */}
@@ -195,6 +195,7 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
   footer: {
+    marginTop: SPACING.md,
     gap: SPACING.md,
     alignItems: 'center',
   },
