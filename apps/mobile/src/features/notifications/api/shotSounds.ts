@@ -31,13 +31,15 @@ export interface ShotSound {
 }
 
 export const SHOT_SOUNDS: ShotSound[] = [
-  { id: 'classic', label: 'Alarm', asset: require('@/assets/sounds/shot-oclock-placeholder.mp3') },
+  // Default first, then the drink-themed sounds, the upbeat tones, the plainer tones,
+  // and the Alarm last (it's the harshest — demoted from default).
   { id: 'cheers', label: 'Classic', asset: require('@/assets/sounds/shot-oclock-cheers.wav') },
   { id: 'ice-drop', label: 'Ice Drop', asset: require('@/assets/sounds/shot-oclock-ice-drop.wav') },
   { id: 'bubbles', label: 'Bubbles', asset: require('@/assets/sounds/shot-oclock-bubbles.wav') },
   { id: 'pop', label: 'Pop', asset: require('@/assets/sounds/shot-oclock-pop.wav') },
-  { id: 'chime', label: 'Chime', asset: require('@/assets/sounds/shot-oclock-chime.wav') },
   { id: 'ding', label: 'Ding', asset: require('@/assets/sounds/shot-oclock-ding.wav') },
+  { id: 'chime', label: 'Chime', asset: require('@/assets/sounds/shot-oclock-chime.wav') },
+  { id: 'power-up', label: 'Power Up', asset: require('@/assets/sounds/shot-oclock-power-up.wav') },
   { id: 'confirm', label: 'Confirm', asset: require('@/assets/sounds/shot-oclock-confirm.wav') },
   {
     id: 'double-beep',
@@ -46,7 +48,7 @@ export const SHOT_SOUNDS: ShotSound[] = [
   },
   { id: 'blip', label: 'Blip', asset: require('@/assets/sounds/shot-oclock-blip.wav') },
   { id: 'elevator', label: 'Elevator', asset: require('@/assets/sounds/shot-oclock-elevator.wav') },
-  { id: 'power-up', label: 'Power Up', asset: require('@/assets/sounds/shot-oclock-power-up.wav') },
+  { id: 'classic', label: 'Alarm', asset: require('@/assets/sounds/shot-oclock-placeholder.mp3') },
 ];
 
 export const DEFAULT_SHOT_SOUND_ID: ShotSoundId = 'cheers';
