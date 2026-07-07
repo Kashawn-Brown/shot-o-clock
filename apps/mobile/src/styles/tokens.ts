@@ -93,6 +93,7 @@ export const FONT_SIZE = {
   custom_1: 20, // custom font size
   custom_2: 24, // custom font size
   custom_3: 16, // custom font size
+  custom_4: 22, // custom font size
 } as const;
 
 export const FONT_WEIGHT = {

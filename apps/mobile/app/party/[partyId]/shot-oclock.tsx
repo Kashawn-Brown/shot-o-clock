@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.shotText,
   },
   doneLabel: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.custom_4,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.shotBackground,
   },
@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.shotText,
   },
   outLabel: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.custom_4,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.danger,
   },
