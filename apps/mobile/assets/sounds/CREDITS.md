@@ -2,7 +2,7 @@
 
 Audio used in the app, with source + license recorded for traceability.
 
-## shot-oclock-placeholder.mp3 — "Classic" (default)
+## shot-oclock-placeholder.mp3 — "Alarm"
 
 - **Used for:** the Shot O'Clock shot-window alert sound (plays once when the shot
   window opens — see `app/party/[partyId]/shot-oclock.tsx`).
@@ -23,7 +23,7 @@ The selectable alert sounds below are from **Mixkit** (https://mixkit.co).
   here for traceability only.
 - **Format:** WAV.
 - **Files (picker label — app filename — original Mixkit source):**
-  - Cheers — `shot-oclock-cheers.wav` — Mixkit "Glasses clinking" (2836)
+  - Classic (default) — `shot-oclock-cheers.wav` — Mixkit "Glasses clinking" (2836)
   - Ice Drop — `shot-oclock-ice-drop.wav` — Mixkit "Dropping ice into a glass" (2834)
   - Bubbles — `shot-oclock-bubbles.wav` — Mixkit "Liquid bubble" (3000)
   - Pop — `shot-oclock-pop.wav` — Mixkit "Long pop" (2358)

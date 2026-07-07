@@ -4,9 +4,10 @@
 // preference is a small id string rather than a path. require() must be static for
 // Metro to bundle the asset, so each sound is a literal entry here.
 //
-// 'classic' is the original CC0 sound (see CREDITS.md) and stays the default. The rest
-// are the Phase 17 additions (Mixkit, see CREDITS.md); the four drink-themed ones lead
-// the list, then the general tones. The Settings sound picker reads this list directly.
+// The default is the glasses-clink sound, shown as "Classic" (id 'cheers'); the original
+// CC0 alarm is shown as "Alarm" (id 'classic'). The rest are Phase 17 additions (Mixkit,
+// see CREDITS.md). The id/label split is intentional — ids are the stable storage keys
+// (never rename them), labels are just display text. The Settings picker reads this list.
 
 export type ShotSoundId =
   | 'classic'
@@ -30,8 +31,8 @@ export interface ShotSound {
 }
 
 export const SHOT_SOUNDS: ShotSound[] = [
-  { id: 'classic', label: 'Classic', asset: require('@/assets/sounds/shot-oclock-placeholder.mp3') },
-  { id: 'cheers', label: 'Cheers', asset: require('@/assets/sounds/shot-oclock-cheers.wav') },
+  { id: 'classic', label: 'Alarm', asset: require('@/assets/sounds/shot-oclock-placeholder.mp3') },
+  { id: 'cheers', label: 'Classic', asset: require('@/assets/sounds/shot-oclock-cheers.wav') },
   { id: 'ice-drop', label: 'Ice Drop', asset: require('@/assets/sounds/shot-oclock-ice-drop.wav') },
   { id: 'bubbles', label: 'Bubbles', asset: require('@/assets/sounds/shot-oclock-bubbles.wav') },
   { id: 'pop', label: 'Pop', asset: require('@/assets/sounds/shot-oclock-pop.wav') },
@@ -48,7 +49,7 @@ export const SHOT_SOUNDS: ShotSound[] = [
   { id: 'power-up', label: 'Power Up', asset: require('@/assets/sounds/shot-oclock-power-up.wav') },
 ];
 
-export const DEFAULT_SHOT_SOUND_ID: ShotSoundId = 'classic';
+export const DEFAULT_SHOT_SOUND_ID: ShotSoundId = 'cheers';
 
 export function isShotSoundId(value: unknown): value is ShotSoundId {
   return typeof value === 'string' && SHOT_SOUNDS.some((sound) => sound.id === value);
