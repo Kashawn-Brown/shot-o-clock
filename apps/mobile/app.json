@@ -56,7 +56,8 @@
           "organization": "kb-forge",
           "project": "shot-o-clock"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

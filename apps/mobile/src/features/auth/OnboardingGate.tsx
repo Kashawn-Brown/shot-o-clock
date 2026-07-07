@@ -3,6 +3,7 @@
 // until all three are satisfied. Persistence is unchanged — the root layout wires
 // onComplete to useDisplayName.save + useConsent.confirm.
 
+import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +18,11 @@ import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens
 // a one-line re-enable rather than a rebuild). plan.md Phase 13.
 const SHOW_SIGN_IN = false;
 
+// Hosted legal docs (GitHub Pages). Opened in an in-app browser sheet
+// (WebBrowser.openBrowserAsync) rather than switching to an external browser.
+const TERMS_URL = 'https://kashawn-brown.github.io/shot-o-clock/terms-of-service.html';
+const PRIVACY_URL = 'https://kashawn-brown.github.io/shot-o-clock/privacy-policy.html';
+
 type OnboardingGateProps = {
   onComplete: (name: string) => void;
 };
@@ -30,6 +36,9 @@ export function OnboardingGate({ onComplete }: OnboardingGateProps): React.JSX.E
   const submit = (): void => {
     if (canContinue) onComplete(name);
   };
+
+  const openTerms = (): void => void WebBrowser.openBrowserAsync(TERMS_URL);
+  const openPrivacy = (): void => void WebBrowser.openBrowserAsync(PRIVACY_URL);
 
   const handleSignIn = (): void => {
     // Placeholder — sign-in / full accounts are post-production (currently hidden
@@ -87,6 +96,18 @@ export function OnboardingGate({ onComplete }: OnboardingGateProps): React.JSX.E
             label="I accept the terms and agree to drink responsibly."
           />
         </View>
+
+        <Text style={styles.legal}>
+          By continuing, you agree to our{' '}
+          <Text style={styles.legalLink} onPress={openTerms}>
+            Terms of Service
+          </Text>{' '}
+          and{' '}
+          <Text style={styles.legalLink} onPress={openPrivacy}>
+            Privacy Policy
+          </Text>
+          .
+        </Text>
       </View>
 
       <View style={styles.footer}>
@@ -163,6 +184,15 @@ const styles = StyleSheet.create({
   },
   checks: {
     gap: SPACING.md,
+  },
+  legal: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+  },
+  legalLink: {
+    color: COLORS.brandPrimary,
+    textDecorationLine: 'underline',
   },
   footer: {
     gap: SPACING.md,
