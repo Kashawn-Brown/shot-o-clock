@@ -35,6 +35,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { shotSoundAsset } from '@/features/notifications/api/shotSounds';
 import { useEffectiveAlertPrefs } from '@/features/notifications/useEffectiveAlertPrefs';
+import { hostEndShotWindow } from '@/features/party/api/hostEndShotWindow';
 import { markDone } from '@/features/party/api/markDone';
 import { markSelfOut } from '@/features/party/api/markSelfOut';
 import { selfOutCopy } from '@/features/game/selfOutCopy';
@@ -60,8 +61,20 @@ export default function ShotOClockScreen(): React.JSX.Element {
     errorMessage,
     partyEnded,
     refreshOutcome,
+    refreshSession,
   } = useTimerSession(partyId);
   const { remainingMs } = useCountdown(session?.phase_ends_at ?? null);
+
+  // Phase-gate the displayed countdown. session.phase_ends_at is one field reused
+  // across phases, so the instant the round finalizes it rolls to the NEXT round's
+  // deadline — but navigation off this screen is a post-paint effect (below), so for
+  // a frame this screen is still mounted while remainingMs already reflects the next
+  // countdown. Hold the last in-window value until we navigate, so the ring/number
+  // never flash the next round's time under the Shot O'Clock UI.
+  const inShotWindow = session?.current_phase === 'shot_window';
+  const lastInWindowMsRef = useRef(remainingMs);
+  if (inShotWindow) lastInWindowMsRef.current = remainingMs;
+  const displayMs = inShotWindow ? remainingMs : lastInWindowMsRef.current;
 
   // Foreground ALERT prefs for this party (sound on/off, haptic on/off, which sound) —
   // global layered with the per-session override (D064). `loaded` lets the window-open
@@ -85,6 +98,13 @@ export default function ShotOClockScreen(): React.JSX.Element {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [acting, setActing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Host-only: end the shot window early and roll to the next round. With no other
+  // players to wait on, the multi-device auto-close (D051) never fires, so the lone
+  // host would otherwise have to wait out the full window every round. Reuses the
+  // existing host_end_shot_window finalize + auto-advance, host-triggered.
+  const [skipping, setSkipping] = useState(false);
+  const [skipError, setSkipError] = useState<string | null>(null);
 
   const roundId = currentRound?.id;
   useEffect(() => {
@@ -234,11 +254,26 @@ export default function ShotOClockScreen(): React.JSX.Element {
     ]);
   }, [canSelfOut, handleSelfOut, requiresConfirm, confirmTitle, confirmMessage, confirmButton]);
 
+  const handleHostSkip = useCallback(async () => {
+    if (!partyId || skipping) return;
+    setSkipError(null);
+    setSkipping(true);
+    const result = await hostEndShotWindow({ partySessionId: partyId });
+    setSkipping(false);
+    if (result.ok) {
+      // Advance promptly rather than waiting on the realtime round-trip; the phase-
+      // routing effect then carries the host to the next round's timer.
+      refreshSession();
+      return;
+    }
+    setSkipError(rpcErrorMessage(result.error_code));
+  }, [partyId, skipping, refreshSession]);
+
   // Ring fills clockwise as the proportion of the shot window remaining. Total is
   // the configured shot_window_seconds; clamp (in ProgressRing) guards against
   // host_add_time pushing remaining past the original window.
   const shotWindowMs = (settings?.shot_window_seconds ?? 0) * 1000;
-  const ringProgress = shotWindowMs > 0 ? remainingMs / shotWindowMs : 0;
+  const ringProgress = shotWindowMs > 0 ? displayMs / shotWindowMs : 0;
 
   // When the server advances the phase (the poll in useTimerSession closes the
   // shot window → countdown for round N+1, or → round_complete on the zero-active
@@ -346,9 +381,8 @@ export default function ShotOClockScreen(): React.JSX.Element {
             trackColor="rgba(255,255,255,0.2)"
           >
             <View style={styles.ringContent}>
-              <Text style={[styles.ringLabel, hostOnly && styles.ringLabelLarge]}>SHOT WINDOW</Text>
               <Text style={[styles.ringTime, hostOnly && styles.ringTimeLarge]}>
-                {formatDuration(remainingMs)}
+                {formatDuration(displayMs)}
               </Text>
             </View>
           </ProgressRing>
@@ -359,7 +393,19 @@ export default function ShotOClockScreen(): React.JSX.Element {
       </View>
 
       <View style={styles.actions}>
-        {hostOnly ? null : isActive ? (
+        {hostOnly ? (
+          <>
+            <ErrorBanner message={skipError} />
+            <Pressable
+              onPress={handleHostSkip}
+              disabled={skipping}
+              accessibilityRole="button"
+              style={[styles.hostSkipButton, skipping && styles.actionDisabled]}
+            >
+              <Text style={styles.hostSkipLabel}>Skip to Next Round</Text>
+            </Pressable>
+          </>
+        ) : isActive ? (
           <>
             <ErrorBanner message={actionError} />
             <View style={styles.actionRow}>
@@ -430,17 +476,17 @@ const styles = StyleSheet.create({
     gap: SPACING.xxl,
   },
   title: {
-    fontSize: FONT_SIZE.xl,
+    fontSize: FONT_SIZE.xxl,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.shotText,
     textAlign: 'center',
     letterSpacing: 2,
-    
+    transform: [{ translateY: TITLE_OFFSET_Y }],
   },
   // Larger title for single-phone mode, where there are no action buttons below.
   titleLarge: {
-    fontSize: 56,
-    letterSpacing: 4,
+    fontSize: FONT_SIZE.xxl,
+    letterSpacing: 2,
     // Nudge up the page without moving the ring (TITLE_OFFSET_Y).
     transform: [{ translateY: TITLE_OFFSET_Y }],
   },
@@ -453,7 +499,7 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   ringCaption: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.custom_3,
     color: COLORS.shotText,
     opacity: 0.7,
   },
@@ -462,17 +508,8 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     transform: [{ translateY: 20 }],
   },
-  ringLabel: {
-    fontSize: FONT_SIZE.xs,
-    letterSpacing: 1,
-    color: COLORS.shotText,
-  },
-  ringLabelLarge: {
-    fontSize: FONT_SIZE.sm,
-    letterSpacing: 2,
-  },
   ringTime: {
-    fontSize: FONT_SIZE.xl,
+    fontSize: FONT_SIZE.xxl,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.shotText,
   },
@@ -497,11 +534,13 @@ const styles = StyleSheet.create({
   },
   action: {
     flex: 1,
-    minHeight: 128,
+    minHeight: 108,
     paddingVertical: SPACING.lg,
     borderRadius: RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.black,
   },
   actionDisabled: {
     opacity: 0.4,
@@ -510,17 +549,33 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.shotText,
   },
   doneLabel: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.custom_4,
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.shotBackground,
   },
   outAction: {
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: COLORS.danger,
+    backgroundColor: COLORS.shotText,
   },
   outLabel: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.medium,
+    fontSize: FONT_SIZE.custom_4,
+    fontWeight: FONT_WEIGHT.bold,
     color: COLORS.danger,
+  },
+  // Host-only "Skip to Next Round": a white-outline button on the dark screen
+  // (the shared Button is built for light screens, so it's drawn inline here).
+  hostSkipButton: {
+    borderWidth: 2,
+    borderColor: COLORS.shotText,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hostSkipLabel: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.shotText,
   },
 });

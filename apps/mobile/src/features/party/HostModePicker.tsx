@@ -85,8 +85,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardSelected: {
+    // Selected card — Indigo outline on a soft-Highlight fill (the card-tier
+    // selection treatment; compact controls use a solid-Indigo fill instead).
     borderWidth: 2,
-    borderColor: COLORS.textPrimary,
+    borderColor: COLORS.brandPrimary,
+    backgroundColor: COLORS.brandHighlightSoft,
     margin: -1, // absorb the extra 1px so selecting doesn't nudge the layout
   },
   cardLabel: {

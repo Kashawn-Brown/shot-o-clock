@@ -6,7 +6,7 @@
 
 import { router } from 'expo-router';
 import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -89,10 +89,13 @@ export default function HomeScreen(): React.JSX.Element {
       </View>
 
       <View style={styles.hero}>
-        <Text style={styles.title}>{"Shot O'Clock"}</Text>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>Logo</Text>
-        </View>
+        {/* MOCK (throwaway — revert before commit): brand-candidate comparison.
+            Swap the require path to compare candidates in context. */}
+        <Image
+          source={require('../assets/brand/icon-O/shot-oclock-wordmark-icon-o-stacked-transparent.png')}
+          style={styles.brandMock}
+          // resizeMode="contain"
+        />
       </View>
 
       <View style={styles.actions}>
@@ -147,6 +150,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // MOCK (throwaway): brand-candidate image in the hero slot.
+  brandMock: {
+    width: '88%',
+    height: 220,
   },
   logoText: {
     fontSize: FONT_SIZE.xs,

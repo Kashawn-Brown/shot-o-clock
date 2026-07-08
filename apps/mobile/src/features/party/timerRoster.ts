@@ -4,10 +4,9 @@
 //
 // Per CLAUDE.md §2.4 permissionRole / status are independent — this reads both.
 // 'removed' players are not part of the live roster (a host's snapshot can carry
-// moderation history); only active/out members render. The caller's own row is
-// floated to the front (so they're #1 in whichever section they land in, even
-// above the host); everyone else keeps the server order (joined_at, host first;
-// rpc-contracts.md §13.1).
+// moderation history); only active/out members render. Each section is sorted
+// self-first (the caller is #1 wherever they land, even above the host), then by
+// shots taken (most first), with a name A–Z tiebreaker.
 
 import type { Database } from '@/types/db.generated';
 
@@ -99,11 +98,15 @@ export function deriveTimerRoster(
     };
   });
 
-  // Float the caller's own entry to the front, preserving server order otherwise
-  // (stable partition rather than Array.sort, which isn't guaranteed stable). The
-  // RosterSheet filters this into per-status sections, so self ends up first in
-  // whichever section they're in — above the host.
-  return [...entries.filter((entry) => entry.isSelf), ...entries.filter((entry) => !entry.isSelf)];
+  // Sort so each section reads self-first, then most shots to fewest, then name A–Z.
+  // The RosterSheet filters this into per-status sections, so the order holds within
+  // each: the caller is #1 in whichever section they land in (above the host), and the
+  // rest rank by shots taken with an alphabetical tiebreaker.
+  return [...entries].sort((a, b) => {
+    if (a.isSelf !== b.isSelf) return a.isSelf ? -1 : 1;
+    if (b.shotsCompleted !== a.shotsCompleted) return b.shotsCompleted - a.shotsCompleted;
+    return a.displayName.localeCompare(b.displayName);
+  });
 }
 
 // Whether the host's Reinstate reads at normal weight for this out player. Full

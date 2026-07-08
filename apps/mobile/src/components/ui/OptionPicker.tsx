@@ -17,11 +17,15 @@ export function OptionPicker<T extends string | number>({
   value,
   onChange,
   disabled = false,
+  compact = false,
 }: {
   options: OptionPickerItem<T>[];
   value: T;
   onChange: (value: T) => void;
   disabled?: boolean;
+  // Compact = the original smaller pill size/shape (settings pickers). Default is
+  // the larger card-style option (the grace / create-party pickers).
+  compact?: boolean;
 }): React.JSX.Element {
   return (
     <View style={[styles.row, disabled && styles.disabled]}>
@@ -34,7 +38,7 @@ export function OptionPicker<T extends string | number>({
             disabled={disabled}
             accessibilityRole="button"
             accessibilityState={{ selected, disabled }}
-            style={[styles.pill, selected && styles.pillSelected]}
+            style={[styles.pill, compact && styles.pillCompact, selected && styles.pillSelected]}
           >
             <Text style={[styles.pillText, selected && styles.pillTextSelected]}>
               {option.label}
@@ -56,17 +60,26 @@ const styles = StyleSheet.create({
   },
   pill: {
     flex: 1,
-    paddingVertical: SPACING.sm,
+    paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
-    borderRadius: RADIUS.full,
+    borderRadius: RADIUS.sm,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface,
     alignItems: 'center',
   },
+  // Compact — the original smaller pill size/shape (settings pickers).
+  pillCompact: {
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.full,
+  },
   pillSelected: {
-    backgroundColor: COLORS.buttonFilled,
-    borderColor: COLORS.buttonFilled,
+    // Selected — outlined (Indigo border + soft-Highlight fill, navy label), the
+    // shared selection treatment used by the Create Party / host-mode pickers.
+    borderWidth: 2,
+    borderColor: COLORS.brandPrimary,
+    backgroundColor: COLORS.brandHighlightSoft,
+    margin: -1, // absorb the extra 1px so selecting doesn't nudge the layout
   },
   pillText: {
     fontSize: FONT_SIZE.sm,
@@ -74,6 +87,6 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   pillTextSelected: {
-    color: COLORS.buttonFilledText,
+    color: COLORS.textPrimary,
   },
 });

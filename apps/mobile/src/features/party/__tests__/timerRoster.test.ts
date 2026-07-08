@@ -128,10 +128,20 @@ describe('deriveTimerRoster', () => {
     expect(rows.map((r) => r.id)).toEqual(['p-guest', 'p-host']);
   });
 
-  it('floats self to the front of a larger roster, others keep server order', () => {
+  it('sorts self first, then most shots to fewest, then name A–Z', () => {
     const other = makePlayer({ id: 'p-other', user_id: 'u-other', display_name: 'Other' });
+    // self (p-guest) first; the other two tie on 0 shots, so name A–Z puts Other before Player.
     const rows = deriveTimerRoster([host, other, player], 'u-guest', 'disabled');
-    expect(rows.map((r) => r.id)).toEqual(['p-guest', 'p-host', 'p-other']);
+    expect(rows.map((r) => r.id)).toEqual(['p-guest', 'p-other', 'p-host']);
+  });
+
+  it('orders by shots taken (most first) when no row is self', () => {
+    const a = makePlayer({ id: 'p-a', user_id: 'u-a', display_name: 'Ana', total_shots_completed: 1 });
+    const b = makePlayer({ id: 'p-b', user_id: 'u-b', display_name: 'Bo', total_shots_completed: 3 });
+    const c = makePlayer({ id: 'p-c', user_id: 'u-c', display_name: 'Cy', total_shots_completed: 3 });
+    // no self: the two 3-shot rows (name tiebreak) then the 1-shot then the 0-shot host.
+    const rows = deriveTimerRoster([host, a, b, c], 'u-none', 'disabled');
+    expect(rows.map((r) => r.id)).toEqual(['p-b', 'p-c', 'p-a', 'p-host']);
   });
 
   it('flags no row as self when there is no authenticated user', () => {

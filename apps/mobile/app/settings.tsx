@@ -15,99 +15,24 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
+import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { Button } from '@/components/ui/Button';
-import { OptionPicker } from '@/components/ui/OptionPicker';
+import { SettingRow } from '@/components/ui/SettingRow';
+import { SettingsSection } from '@/components/ui/SettingsSection';
+import { ToggleRow } from '@/components/ui/ToggleRow';
 import { DISPLAY_NAME_MAX_LENGTH, isValidDisplayName } from '@/features/auth/api/displayName';
 import type { GlobalAlertPrefs } from '@/features/notifications/api/alertPreferences';
-import { SHOT_SOUNDS } from '@/features/notifications/api/shotSounds';
+import { SoundPicker } from '@/features/notifications/SoundPicker';
 import { useDisplayName } from '@/features/auth/useDisplayName';
 import { useGlobalAlertPrefs } from '@/features/notifications/useGlobalAlertPrefs';
 import { useReset } from '@/features/auth/ResetProvider';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
-
-// The available in-app Alert sounds, as picker options.
-const SOUND_OPTIONS = SHOT_SOUNDS.map((sound) => ({ label: sound.label, value: sound.id }));
-
-// One settings row: a title, a short value/description, and a chevron. Tappable
-// when given an onPress; inert (a Phase 15 placeholder) otherwise.
-function SettingRow({
-  title,
-  description,
-  onPress,
-  danger = false,
-}: {
-  title: string;
-  description: string;
-  onPress?: () => void;
-  danger?: boolean;
-}): React.JSX.Element {
-  const content = (
-    <>
-      <View style={styles.rowText}>
-        <Text style={[styles.rowTitle, danger && styles.rowTitleDanger]}>{title}</Text>
-        <Text style={styles.rowDescription}>{description}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={CHEVRON_SIZE} color={COLORS.textSecondary} />
-    </>
-  );
-  if (!onPress) return <View style={styles.row}>{content}</View>;
-  return (
-    <Pressable style={styles.row} onPress={onPress} accessibilityRole="button">
-      {content}
-    </Pressable>
-  );
-}
-
-// A row with a right-side on/off Switch (no chevron). For the notification toggles.
-function ToggleRow({
-  title,
-  description,
-  value,
-  onValueChange,
-  disabled = false,
-}: {
-  title: string;
-  description: string;
-  value: boolean;
-  onValueChange: (value: boolean) => void;
-  disabled?: boolean;
-}): React.JSX.Element {
-  return (
-    <View style={styles.row}>
-      <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowDescription}>{description}</Text>
-      </View>
-      <Switch value={value} onValueChange={onValueChange} disabled={disabled} />
-    </View>
-  );
-}
-
-function SettingsSection({
-  title,
-  caption,
-  children,
-}: {
-  title: string;
-  caption?: string;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.card}>{children}</View>
-      {caption ? <Text style={styles.sectionCaption}>{caption}</Text> : null}
-    </View>
-  );
-}
 
 export default function SettingsScreen(): React.JSX.Element {
   const { displayName, save } = useDisplayName();
@@ -159,12 +84,7 @@ export default function SettingsScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>
-          <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
-        </Pressable>
-        <Text style={styles.title}>Settings</Text>
-      </View>
+      <ScreenHeader title="Settings" onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.content}>
         <SettingsSection title="Profile">
@@ -186,8 +106,7 @@ export default function SettingsScreen(): React.JSX.Element {
           {alert.soundEnabled ? (
             <View style={styles.subControl}>
               <Text style={styles.subLabel}>Sound</Text>
-              <OptionPicker
-                options={SOUND_OPTIONS}
+              <SoundPicker
                 value={alert.soundChoice}
                 onChange={setSoundChoice}
                 disabled={!alertLoaded}
@@ -270,74 +189,14 @@ export default function SettingsScreen(): React.JSX.Element {
   );
 }
 
-const HEADER_ICON_SIZE = 22; // header back-arrow, matching the other screens
-const CHEVRON_SIZE = 20; // per-row tappable indicator
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  title: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.bold,
-    color: COLORS.textPrimary,
-  },
   content: {
     padding: SPACING.lg,
     gap: SPACING.lg,
-  },
-  section: {
-    gap: SPACING.sm,
-  },
-  sectionTitle: {
-    fontSize: FONT_SIZE.xs,
-    fontWeight: FONT_WEIGHT.medium,
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: SPACING.xs,
-  },
-  sectionCaption: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.textSecondary,
-    paddingHorizontal: SPACING.xs,
-    lineHeight: 16,
-  },
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.lg,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    paddingVertical: SPACING.md,
-  },
-  rowText: {
-    flex: 1,
-    gap: SPACING.xs,
-  },
-  rowTitle: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.medium,
-    color: COLORS.textPrimary,
-  },
-  rowTitleDanger: {
-    color: COLORS.danger,
-  },
-  rowDescription: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.textSecondary,
-    lineHeight: 18,
   },
   divider: {
     height: 1,
@@ -359,7 +218,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
   },
   modalCard: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surfaceRaised,
     borderRadius: RADIUS.md,
     padding: SPACING.lg,
     gap: SPACING.md,

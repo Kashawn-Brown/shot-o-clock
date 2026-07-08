@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { getPartyState } from '@/features/party/api/partyState';
 import { derivePartySummary, type PartySummaryView } from '@/features/game/partySummary';
@@ -174,6 +175,7 @@ export default function SummaryScreen(): React.JSX.Element {
         </View>
 
         <Text style={styles.sectionTitle}>Final Standings</Text>
+        <View style={styles.standingsList}>
         {view.standings.map((standing) => {
           // Olympic rank from derivePartySummary (tied players share a rank);
           // removed players carry null and show a "Removed" badge instead.
@@ -184,7 +186,11 @@ export default function SummaryScreen(): React.JSX.Element {
               style={[styles.standingRow, standing.isRemoved && styles.standingRemoved]}
             >
               <Text style={styles.rank}>{rank ?? '—'}</Text>
-              <View style={styles.avatar} />
+              <PlayerAvatar
+                id={standing.playerId}
+                name={standing.displayName}
+                size={standing.isLeader ? 48 : 36}
+              />
               <View style={styles.standingInfo}>
                 <Text style={styles.standingName}>
                   {standing.displayName}
@@ -202,6 +208,7 @@ export default function SummaryScreen(): React.JSX.Element {
             </View>
           );
         })}
+        </View>
       </ScrollView>
 
       <View style={styles.footer}>
@@ -264,7 +271,9 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    backgroundColor: COLORS.buttonFilled,
+    // Final Summary header — Navy surface (brand dark); the winner accent below
+    // carries the Indigo pop.
+    backgroundColor: COLORS.brandNavy,
     paddingVertical: SPACING.lg,
   },
   title: {
@@ -313,7 +322,8 @@ const styles = StyleSheet.create({
   heroNames: {
     fontSize: FONT_SIZE.lg,
     fontWeight: FONT_WEIGHT.bold,
-    color: COLORS.warning,
+    // Winner accent — brand Indigo (the "game over" pop).
+    color: COLORS.champion,
     textAlign: 'center',
   },
   heroSub: {
@@ -344,6 +354,9 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHT.bold,
     color: COLORS.textPrimary,
   },
+  standingsList: {
+    gap: 12, // tighter than the content gap so the standings rows sit closer
+  },
   standingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -361,12 +374,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     width: 20,
     textAlign: 'center',
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.border,
   },
   standingInfo: {
     flex: 1,

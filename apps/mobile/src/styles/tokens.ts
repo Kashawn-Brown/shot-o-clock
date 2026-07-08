@@ -1,29 +1,31 @@
 // Design tokens — the single source of visual truth for the app.
 //
-// Phase 3 ships a monotone (black / white / grey) palette that matches the
-// low-fidelity Figma wireframes. The app's real purple theme arrives in a
-// later phase: `brandPrimary` is defined now but deliberately NOT applied
-// anywhere, so theming later is a matter of switching which token a component
-// reads — not rewriting every screen.
+// The palette is built from the brand colors. Navy (#0C1142) is the ink — text,
+// dark surfaces, outline buttons, the Shot O'Clock background (the app's "black"
+// is Navy). Indigo (#3D2BE8) is the accent — primary actions, active/selected
+// states, rings, key moments. Highlight (#9F90FB) is the soft connective tint —
+// ring tracks, selected-card fills, accents (fills only, never text on white).
+// White is the canvas; neutral grey stays for secondary text and hairline borders.
+// Indigo is kept reserved so it reads as emphasis, not wallpaper.
 //
-// Status colors are kept even in monotone because they carry meaning the
-// greyscale can't (Completed vs Missed vs Out). The Shot O'Clock screen is the
-// only dark-background surface in the app; its tokens live under `shot*`.
+// Status colors carry meaning the greyscale can't (Completed vs Missed vs Out).
+// The Shot O'Clock screen is the only dark-background surface; its tokens are `shot*`.
 
 export const COLORS = {
   // ─── Base ────────────────────────────────────────────────────────────────
-  background: '#FFFFFF',
-  surface: '#F5F5F5', // cards, input backgrounds
+  background: '#ECECEC', // canvas — neutral grey; cards/modals read as raised above it
+  surface: '#F5F5F5', // cards, inputs — lighter than the canvas, so they float
+  surfaceRaised: '#FFFFFF', // modals, popovers, sheets — lightest, above the dim backdrop
   border: '#E0E0E0',
-  textPrimary: '#1A1A1A',
-  textSecondary: '#666666',
+  textPrimary: '#0C1142', // Navy — the brand ink (was generic #1A1A1A)
+  textSecondary: '#666666', // neutral grey (confirmed to stay neutral)
 
   // Buttons
-  buttonFilled: '#1A1A1A',
+  buttonFilled: '#0C1142', // Navy — incidental dark surfaces (e.g. join-code card)
   buttonFilledText: '#FFFFFF',
   buttonOutline: 'transparent',
-  buttonOutlineBorder: '#1A1A1A',
-  buttonOutlineText: '#1A1A1A',
+  buttonOutlineBorder: '#0C1142', // Navy — secondary/outline buttons
+  buttonOutlineText: '#0C1142', // Navy
 
   // ─── Status (semantic — survives the monotone phase) ─────────────────────
   success: '#22C55E', // Completed, active players
@@ -33,15 +35,56 @@ export const COLORS = {
   grace: '#3B82F6', // Grace — distinct blue (Used Grace, grace badges)
 
   // ─── Shot O'Clock dark screen (only dark surface in the app) ─────────────
-  shotBackground: '#000000',
+  shotBackground: '#0C1142', // Navy — cohesive with the app's other dark surfaces
   shotText: '#FFFFFF',
   shotRing: '#FFFFFF',
 
-  // ─── Brand (defined, NOT applied in MVP monotone phase) ──────────────────
-  brandPrimary: '#7B2FBE',
+  // ─── Brand palette ───────────────────────────────────────────────────────
+  // Indigo — primary accent: actions, active/selected states, rings, key moments.
+  brandPrimary: '#2B1EB3', // now using darker hue, old: #3D2BE8
+  // Navy — the brand ink: drives textPrimary / dark surfaces / outline buttons /
+  // the Shot O'Clock background (all repointed above). The app's "black" is Navy.
+  brandNavy: '#0C1142',
+  // Highlight — soft connective tint: ring tracks, selected-card fills, accents.
+  // Fills/tints only, never text on white (too light).
+  brandHighlight: '#9F90FB',
+  // Highlight-soft — flat, paler Highlight for selected-card / subtle-surface
+  // backgrounds (derived; the design doc locks only #9F90FB).
+  brandHighlightSoft: '#F0EEFE',
+
+  trackColor: '#DCE6FE',
+
+  champion: '#F59E0B',
+
+  black: '#000000', // #1A1A1A
 } as const;
 
+// Player-avatar background palette (PlayerAvatar). All are medium-dark so white
+// initials stay legible; the borderline-bright hues are pinned to the 700 weight for
+// contrast. A player's colour is a deterministic hash of their id into this array, so
+// it's stable across renders and identical on every screen.
+export const AVATAR_COLORS = [
+  '#DC2626', // red
+  '#E11D48', // rose
+  '#DB2777', // pink
+  '#C026D3', // fuchsia
+  '#9333EA', // purple
+  '#4F46E5', // indigo
+  '#2563EB', // blue
+  '#0369A1', // sky
+  '#0E7490', // cyan
+  '#0F766E', // teal
+  '#047857', // emerald
+  '#15803D', // green
+  '#B45309', // amber
+  '#C2410C', // orange
+  '#92400E', // brown
+  '#475569', // slate
+] as const;
+
 export const FONT_SIZE = {
+  xxxl: 72,
+  xxl: 64,
   xl: 48, // big countdown number
   lg: 32, // "SHOT O'CLOCK" text
   md: 18,
@@ -50,6 +93,7 @@ export const FONT_SIZE = {
   custom_1: 20, // custom font size
   custom_2: 24, // custom font size
   custom_3: 16, // custom font size
+  custom_4: 22, // custom font size
 } as const;
 
 export const FONT_WEIGHT = {

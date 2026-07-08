@@ -4,7 +4,7 @@ Shot O'Clock is a mobile-first drinking-game app for legal-drinking-age groups. 
 
 I designed and built the project end-to-end, including the data model, server-side game logic, realtime sync layer, mobile client, and the full session lifecycle from lobby to final summary.
 
-> **Status:** MVP complete. App Store release coming soon.
+> **Status:** Complete. Release coming soon.
 
 ---
 
@@ -33,6 +33,17 @@ The app gives that game a dedicated home: a clear interval timer, a loud Shot O'
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="store/listing/home.png" width="180" alt="Home" />
+  <img src="store/listing/timer.png" width="180" alt="Synced countdown" />
+  <img src="store/listing/shot_o_clock.png" width="180" alt="Shot O'Clock" />
+  <img src="store/listing/summary.png" width="180" alt="Final summary" />
+</p>
+
+---
+
 ## Tech Stack
 
 - **React Native + Expo + TypeScript** — iOS and Android from one codebase
@@ -48,7 +59,7 @@ The app gives that game a dedicated home: a clear interval timer, a loud Shot O'
 - **Server-authoritative timer.** The session stores `phaseStartedAt` and `phaseEndsAt`; clients render `phaseEndsAt - serverNow()`. No client owns the timer.
 - **Game logic lives in Postgres.** All state-mutating actions go through RPC functions. The client displays state and submits actions — it never writes directly to game-state tables.
 - **RLS protects reads.** Every user-facing table has Row Level Security. Non-members of a party cannot read its data.
-- **Guest-first auth.** Players join via Supabase Anonymous Auth — no account required. Full accounts are post-MVP.
+- **Guest-first auth.** Players join via Supabase Anonymous Auth — no account required.
 - **Realtime sync.** Roster changes, timer phases, player actions, and host controls propagate to every device through Supabase Realtime subscriptions.
 
 ---
@@ -123,21 +134,12 @@ shot-o-clock/
 
 ---
 
-## What's Planned
-
-- Phone-level Shot O'Clock notifications
-- User accounts and saved party history
-- Party recaps and session history
-- And more
-
----
-
 ## Methodology
 
-Shot O'Clock was built using a structured AI-assisted development process — deliberate planning, phased execution, and close supervision at every step. See [METHODOLOGY.md](https://claude.ai/chat/METHODOLOGY.md) for how that process worked.
+Shot O'Clock was built using a structured AI-assisted development process — deliberate planning, phased execution, and close supervision at every step. See [METHODOLOGY.md](METHODOLOGY.md) for how that process worked.
 
 ---
 
 ## License
 
-To be added before public release.
+MIT — see [LICENSE](LICENSE).

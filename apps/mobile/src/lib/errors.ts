@@ -31,6 +31,7 @@ export const RPC_ERROR_MESSAGES: Record<RpcErrorCode, string> = {
   JOIN_CODE_NOT_FOUND: 'No party found with that join code.',
   JOIN_CODE_COLLISION: 'Could not generate a unique join code. Please try again.',
   ILLEGAL_TRANSITION: 'That action is not allowed right now.',
+  ADD_TIME_LIMIT_REACHED: "You've added the maximum extra time for this round.",
   SHOT_WINDOW_CLOSED: 'The shot window has already closed.',
   SELF_OUT_IS_STICKY: 'You already opted out of this round.',
   NO_ACTIVE_PLAYERS: 'There are no active players left in this party.',

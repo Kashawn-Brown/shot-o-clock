@@ -112,6 +112,10 @@ out/
 scratch.*
 notes.local.*
 
+# Store marketing-image build brief — personal working doc (the framed store
+# screenshots + feature graphic are built by hand from it). Not committed.
+store/screenshot-frames-brief.md
+
 # Project docs (specs, planning, learning, etc.) — kept local, not committed
 # going forward. Files remain on disk; older commits still contain them.
 docs/

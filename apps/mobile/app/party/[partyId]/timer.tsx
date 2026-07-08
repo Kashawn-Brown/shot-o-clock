@@ -15,10 +15,11 @@
 // devices follow the host onto the summary via partyEnded / 'ended' detection.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -109,22 +110,62 @@ export default function TimerScreen(): React.JSX.Element {
   // stays pure; we just pick which value to display.
   const remainingMs = isPaused ? (session?.paused_remaining_seconds ?? 0) * 1000 : liveRemainingMs;
 
+  // Phase-gate the displayed countdown — same reason as the Shot O'Clock screen.
+  // When this round's countdown finalizes, session.phase_ends_at rolls to the shot
+  // window's deadline before the routing effect (below) navigates us there, so for a
+  // frame remainingMs would show the shot-window time under "NEXT SHOT O'CLOCK IN".
+  // Hold the last countdown value until we navigate. (Pausing keeps the phase on
+  // 'countdown', so the paused freeze is unaffected.)
+  const inCountdown = session?.current_phase === 'countdown';
+  const lastCountdownMsRef = useRef(remainingMs);
+  if (inCountdown) lastCountdownMsRef.current = remainingMs;
+  const displayMs = inCountdown ? remainingMs : lastCountdownMsRef.current;
+
   // Host timer controls (pause/resume, add time) — integrated onto the ring, not a
   // sheet. One in-flight lock across them; add_time isn't idempotent, so the lock
   // is what stops a double-tap stacking two extensions (hostAddTime.ts). Errors
   // surface in a small banner under the ring. On success refreshSession re-pulls so
   // the host's screen updates without waiting on the realtime round-trip.
   const [controlBusy, setControlBusy] = useState(false);
+  // Which control is mid-call, so the dim/press feedback shows on ONLY the tapped
+  // one (controlBusy still blocks all three from firing at once).
+  const [busyControl, setBusyControl] = useState<'pause' | 'short' | 'long' | null>(null);
   const [controlError, setControlError] = useState<string | null>(null);
+
+  // Control errors (add-time cap, pause/resume failures) surface as a transient
+  // overlay toast, not an in-flow banner: the old banner was the last child inside
+  // the ScrollView, so on a short viewport / large font scale it fell below the fold
+  // with no scroll cue and read as "the button did nothing". This floats over the
+  // ring, fades in, holds, fades out, and clears itself — no layout growth.
+  const controlErrorOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!controlError) return;
+    controlErrorOpacity.setValue(0);
+    Animated.timing(controlErrorOpacity, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+    const hideId = setTimeout(() => {
+      Animated.timing(controlErrorOpacity, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start(() => setControlError(null));
+    }, CONTROL_ERROR_VISIBLE_MS);
+    return () => clearTimeout(hideId);
+  }, [controlError, controlErrorOpacity]);
 
   const handlePauseResume = useCallback(async () => {
     if (!partyId || controlBusy) return;
     setControlError(null);
     setControlBusy(true);
+    setBusyControl('pause');
     const result = isPaused
       ? await hostResumeTimer({ partySessionId: partyId })
       : await hostPauseTimer({ partySessionId: partyId });
     setControlBusy(false);
+    setBusyControl(null);
     if (result.ok) {
       refreshSession();
       return;
@@ -137,8 +178,10 @@ export default function TimerScreen(): React.JSX.Element {
       if (!partyId || controlBusy) return;
       setControlError(null);
       setControlBusy(true);
+      setBusyControl(seconds === ADD_TIME_SHORT_SECONDS ? 'short' : 'long');
       const result = await hostAddTime({ partySessionId: partyId, seconds });
       setControlBusy(false);
+      setBusyControl(null);
       if (result.ok) {
         refreshSession();
         return;
@@ -237,7 +280,7 @@ export default function TimerScreen(): React.JSX.Element {
   // the round's interval; clamp (in ProgressRing) guards against host_add_time
   // pushing remaining past the original interval.
   const intervalMs = (currentRound?.interval_seconds ?? 0) * 1000;
-  const ringProgress = intervalMs > 0 ? remainingMs / intervalMs : 0;
+  const ringProgress = intervalMs > 0 ? displayMs / intervalMs : 0;
 
   // When the server advances the phase (the poll in useTimerSession transitions
   // countdown → shot_window, or the host ends the party), the snapshot's
@@ -352,7 +395,7 @@ export default function TimerScreen(): React.JSX.Element {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.ringLabel}>NEXT SHOT O&apos;CLOCK IN</Text>
+        <Text style={styles.ringLabel}>NEXT SHOT O&apos;CLOCK IN:</Text>
 
         {/* Real remaining time, draining clockwise. The server-driven transition
             into the shot window is the advance_phase_if_due poll (useTimerSession).
@@ -364,13 +407,13 @@ export default function TimerScreen(): React.JSX.Element {
             size={RING_SIZE}
             strokeWidth={10}
             progress={ringProgress}
-            color={COLORS.buttonFilled}
-            trackColor={COLORS.border}
+            color={COLORS.brandPrimary} // backgroundColor: COLORS.surface
+            trackColor={COLORS.trackColor}
           >
             <View style={styles.ringContent}>
               {/* The time stays centred; a paused player gets a PAUSED label just
                   below it, the host gets the pause/play control near the bottom. */}
-              <Text style={styles.ringTime}>{formatDuration(remainingMs)}</Text>
+              <Text style={styles.ringTime}>{formatDuration(displayMs)}</Text>
               {!isHost && isPaused ? (
                 <View style={styles.pausedLabelSlot}>
                   <Text style={styles.pausedLabel}>❚❚ PAUSED</Text>
@@ -386,7 +429,7 @@ export default function TimerScreen(): React.JSX.Element {
                     style={({ pressed }) => [
                       styles.pauseButton,
                       pressed && styles.controlPressed,
-                      controlBusy && styles.controlDisabled,
+                      busyControl === 'pause' && styles.controlDisabled,
                     ]}
                   >
                     <Text style={styles.pauseIcon}>{isPaused ? '▶' : '❚❚'}</Text>
@@ -402,20 +445,34 @@ export default function TimerScreen(): React.JSX.Element {
                 label="+30s"
                 onPress={() => void handleAddTime(ADD_TIME_SHORT_SECONDS)}
                 disabled={controlBusy}
+                busy={busyControl === 'short'}
                 style={styles.addLeft}
               />
               <CircleControl
                 label="+1m"
                 onPress={() => void handleAddTime(ADD_TIME_LONG_SECONDS)}
                 disabled={controlBusy}
+                busy={busyControl === 'long'}
                 style={styles.addRight}
               />
             </>
           ) : null}
         </View>
 
-        {isHost ? <ErrorBanner message={controlError} /> : null}
       </ScrollView>
+
+      {/* Control-error toast — absolute so it never grows the scroll content or
+          hides below the fold. Floats over the upper ring area, fades in/out, and
+          self-clears (CONTROL_ERROR_VISIBLE_MS). pointerEvents none so taps still
+          reach the +time / pause controls beneath it. */}
+      {isHost && controlError ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.controlToast, { opacity: controlErrorOpacity }]}
+        >
+          <ErrorBanner message={controlError} />
+        </Animated.View>
+      ) : null}
 
       <View style={styles.footer}>
         {/* Out player: the "you're out" note + tally sits ABOVE the buttons, which
@@ -461,6 +518,7 @@ export default function TimerScreen(): React.JSX.Element {
               variant="outline"
               onPress={confirmSelfOut}
               disabled={!canSelfOut}
+              style={styles.selfOutFill}
             />
           </>
         ) : null}
@@ -523,11 +581,13 @@ function CircleControl({
   label,
   onPress,
   disabled,
+  busy,
   style,
 }: {
   label: string;
   onPress: () => void;
   disabled: boolean;
+  busy: boolean;
   style: StyleProp<ViewStyle>;
 }): React.JSX.Element {
   return (
@@ -540,7 +600,7 @@ function CircleControl({
         styles.circle,
         style,
         pressed && styles.controlPressed,
-        disabled && styles.controlDisabled,
+        busy && styles.controlDisabled,
       ]}
     >
       <Text style={styles.circleLabel}>{label}</Text>
@@ -553,7 +613,7 @@ function CircleControl({
 // `styles` block below (and `size={RING_SIZE}` on the ProgressRing). Adjust freely.
 const RING_SIZE = 280; // ring diameter
 const RING_TIME_FONT_SIZE = 60; // the M:SS time text inside the ring
-const PAUSE_BUTTON_SIZE = 64; // host pause/play button (centre-bottom of the ring)
+const PAUSE_BUTTON_SIZE = 72; // host pause/play button (centre-bottom of the ring)
 const ADD_TIME_BUTTON_SIZE = 64; // host +30s / +1m circles
 const ADD_TIME_BUTTON_OFFSET = 44; // how far the +time circles sit outside the ring's sides
 const HEADER_ICON_SIZE = 22; // header back-arrow + settings-gear icons
@@ -563,6 +623,9 @@ const POPOVER_SHARE_ICON_SIZE = 16; // join-code popover "Share code" button ico
 // Quick add-time amounts (seconds). host_add_time bounds input to 1–600.
 const ADD_TIME_SHORT_SECONDS = 30;
 const ADD_TIME_LONG_SECONDS = 60;
+
+// How long the control-error toast holds (ms) before it fades out and clears.
+const CONTROL_ERROR_VISIBLE_MS = 2800;
 
 const styles = StyleSheet.create({
   screen: {
@@ -611,13 +674,23 @@ const styles = StyleSheet.create({
   },
   content: {
     alignItems: 'center',
-    paddingVertical: SPACING.xl,
+    paddingVertical: SPACING.sm,
     gap: SPACING.xl,
+  },
+  // Transient overlay for control errors — absolute so it never affects layout or
+  // sits below the fold. Anchored in the upper area, centred, non-interactive.
+  controlToast: {
+    position: 'absolute',
+    top: '20%',
+    left: SPACING.lg,
+    right: SPACING.lg,
+    alignItems: 'center',
   },
   // Nudged down so it stays close to the repositioned (lower) ring.
   ringLabel: {
     marginTop: SPACING.xl,
     fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.medium,
     letterSpacing: 1,
     color: COLORS.textSecondary,
   },
@@ -652,42 +725,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pausedLabel: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.custom_1,
     fontWeight: FONT_WEIGHT.medium,
     letterSpacing: 1,
     color: COLORS.textSecondary,
+    opacity: 0.8,
   },
   // Host pause/play, pinned near the bottom of the circle interior.
   pauseSlot: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: SPACING.xl,
+    bottom: SPACING.lg,
     alignItems: 'center',
   },
   pauseButton: {
     width: PAUSE_BUTTON_SIZE,
     height: PAUSE_BUTTON_SIZE,
     borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceRaised,
+    borderWidth: 1,
+    borderColor: `${COLORS.black}99`, // softened
+    opacity: 0.9, 
     alignItems: 'center',
     justifyContent: 'center',
   },
   pauseIcon: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.custom_1,
     color: COLORS.textPrimary,
   },
   // The +time circles sit below and outside the ring's lower corners — negative
   // offsets (ADD_TIME_BUTTON_OFFSET) push them clear of the ring arc.
   circle: {
     position: 'absolute',
-    bottom: -SPACING.md,
+    bottom: -SPACING.xxl,
     width: ADD_TIME_BUTTON_SIZE,
     height: ADD_TIME_BUTTON_SIZE,
     borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceRaised,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: `${COLORS.black}99`, // softened
+    opacity: 0.8, // a touch transparent so the controls recede
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -733,6 +811,20 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
+    // Raised white button so the footer actions read as buttons on the grey canvas,
+    // not flat outlines. The Indigo border is the Players (neutral utility) default;
+    // End/Leave overrides it to red (destructiveButton).
+    backgroundColor: COLORS.surfaceRaised,
+    borderColor: COLORS.brandPrimary,
+    borderWidth: 2,
+  },
+  // The round action (Use Grace / I'm Out / Skip) — white fill + a neutral black
+  // border. Kept neutral on purpose: the label flips between a positive (Use Grace)
+  // and a negative (I'm Out), so a fixed brand accent would misread half the time.
+  selfOutFill: {
+    backgroundColor: COLORS.surfaceRaised,
+    borderColor: COLORS.black,
+    borderWidth: 2,
   },
   // Danger-tinted border marks the destructive exit (End / Leave Party) without a
   // third Button variant; the label keeps the default outline color.
@@ -747,8 +839,10 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.xxl * 2,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
+  // Join-code popover styled to match the host lobby's share-code card: a Navy
+  // surface with white code + a white-outline Share button.
   popoverCard: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.buttonFilled,
     borderRadius: RADIUS.md,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.xl,
@@ -759,21 +853,23 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.lg,
     fontWeight: FONT_WEIGHT.bold,
     letterSpacing: 2,
-    color: COLORS.textPrimary,
+    color: COLORS.buttonFilledText,
   },
   popoverHint: {
     fontSize: FONT_SIZE.sm,
-    color: COLORS.textSecondary,
+    color: COLORS.buttonFilledText,
+    opacity: 0.7,
   },
   popoverShareButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
     marginTop: SPACING.sm,
-    backgroundColor: COLORS.buttonFilled,
+    borderWidth: 1,
+    borderColor: COLORS.buttonFilledText,
     borderRadius: RADIUS.full,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
   },
   popoverShareText: {
     fontSize: FONT_SIZE.sm,

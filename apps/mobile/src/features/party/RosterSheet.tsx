@@ -35,6 +35,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { hostMarkPlayerActive } from '@/features/party/api/hostMarkPlayerActive';
 import { hostMarkPlayerOut } from '@/features/party/api/hostMarkPlayerOut';
 import { hostRemovePlayer } from '@/features/party/api/hostRemovePlayer';
@@ -250,7 +251,9 @@ export function RosterSheet({
     // full weight (Remove always; Reinstate dimmed per entry.reinstatable).
     return (
       <View key={entry.id} style={styles.row}>
-        <View style={[styles.avatar, muted && styles.fadedContent]} />
+        <View style={muted ? styles.fadedContent : undefined}>
+          <PlayerAvatar id={entry.id} name={entry.displayName} />
+        </View>
 
         <View style={[styles.info, muted && styles.fadedContent]}>
           <Text style={styles.name} numberOfLines={1}>
@@ -394,7 +397,7 @@ const styles = StyleSheet.create({
     backgroundColor: BACKDROP_COLOR,
   },
   sheet: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surfaceRaised,
     borderTopLeftRadius: RADIUS.lg,
     borderTopRightRadius: RADIUS.lg,
   },
@@ -453,12 +456,6 @@ const styles = StyleSheet.create({
   fadedContent: {
     opacity: 0.6,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.border,
-  },
   info: {
     flex: 1,
     gap: SPACING.xs,
@@ -485,9 +482,11 @@ const styles = StyleSheet.create({
   // Mirrors hostPill so "You" reads as a bordered chip, not loose text.
   youPill: {
     fontSize: FONT_SIZE.xs,
-    color: COLORS.textSecondary,
+    // "You" self-marker — Indigo text/outline on a soft-Highlight fill.
+    color: COLORS.brandPrimary,
+    backgroundColor: COLORS.brandHighlightSoft,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.brandPrimary,
     borderRadius: RADIUS.sm,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 2,

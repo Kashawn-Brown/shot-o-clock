@@ -30,8 +30,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
+import { ScreenHeader } from '@/components/layout/ScreenHeader';
+
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { endParty } from '@/features/party/api/endParty';
 import { hostRemovePlayer } from '@/features/party/api/hostRemovePlayer';
 import { leaveParty } from '@/features/party/api/leaveParty';
@@ -241,12 +244,7 @@ export default function LobbyScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Pressable onPress={confirmExit} accessibilityRole="button" hitSlop={8} disabled={leaving}>
-          <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
-        </Pressable>
-        <Text style={styles.title}>Lobby</Text>
-      </View>
+      <ScreenHeader title="Lobby" onBack={confirmExit} backDisabled={leaving} />
 
       {status === 'loading' ? (
         <View style={styles.centered}>
@@ -295,7 +293,7 @@ export default function LobbyScreen(): React.JSX.Element {
               const canRemove = isHost && !player.isHost && !player.isSelf;
               return (
                 <View key={player.id} style={styles.playerRow}>
-                  <View style={styles.avatar} />
+                  <PlayerAvatar id={player.id} name={player.displayName} size={36} />
                   <View style={styles.playerInfo}>
                     <Text style={styles.playerName}>
                       {player.displayName}
@@ -367,29 +365,12 @@ export default function LobbyScreen(): React.JSX.Element {
 // Floats the toast in the middle-lower area, clear of the footer / Start button.
 const TOAST_BOTTOM_OFFSET = 150;
 
-const HEADER_ICON_SIZE = 22; // header back-arrow + settings-gear icons
 const SHARE_ICON_SIZE = 16; // join-code "Share code" button icon
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  back: {
-    fontSize: FONT_SIZE.md,
-    color: COLORS.textPrimary,
-  },
-  title: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.bold,
-    color: COLORS.textPrimary,
   },
   centered: {
     flex: 1,
@@ -472,12 +453,6 @@ const styles = StyleSheet.create({
   },
   playerInfo: {
     flex: 1,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.border,
   },
   playerName: {
     fontSize: FONT_SIZE.md,

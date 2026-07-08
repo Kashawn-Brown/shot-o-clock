@@ -3,8 +3,9 @@
 // until all three are satisfied. Persistence is unchanged — the root layout wires
 // onComplete to useDisplayName.save + useConsent.confirm.
 
+import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
@@ -16,6 +17,11 @@ import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens
 // The sign-in entry point is hidden until then (kept in place, flag-gated, so it's
 // a one-line re-enable rather than a rebuild). plan.md Phase 13.
 const SHOW_SIGN_IN = false;
+
+// Hosted legal docs (GitHub Pages). Opened in an in-app browser sheet
+// (WebBrowser.openBrowserAsync) rather than switching to an external browser.
+const TERMS_URL = 'https://kashawn-brown.github.io/shot-o-clock/terms-of-service.html';
+const PRIVACY_URL = 'https://kashawn-brown.github.io/shot-o-clock/privacy-policy.html';
 
 type OnboardingGateProps = {
   onComplete: (name: string) => void;
@@ -31,6 +37,9 @@ export function OnboardingGate({ onComplete }: OnboardingGateProps): React.JSX.E
     if (canContinue) onComplete(name);
   };
 
+  const openTerms = (): void => void WebBrowser.openBrowserAsync(TERMS_URL);
+  const openPrivacy = (): void => void WebBrowser.openBrowserAsync(PRIVACY_URL);
+
   const handleSignIn = (): void => {
     // Placeholder — sign-in / full accounts are post-production (currently hidden
     // behind SHOW_SIGN_IN). Intentionally a no-op until accounts ship.
@@ -38,6 +47,19 @@ export function OnboardingGate({ onComplete }: OnboardingGateProps): React.JSX.E
 
   return (
     <SafeAreaView style={styles.screen}>
+      {/* Brand mark, no wordmark. Using the transparent-navy PNG so it sits on the
+          light canvas; swappable to the SVG master (logo/shot-oclock-mark-primary.svg)
+          if we want crisper scaling later. */}
+      <View style={styles.logoHeader}>
+        <Image
+          source={require('@/assets/brand/logo/shot-oclock-mark-primary-transparent-navy.png')}
+          style={styles.logo}
+          resizeMode="contain"
+          accessibilityRole="image"
+          accessibilityLabel="Shot O'Clock"
+        />
+      </View>
+
       <View style={styles.body}>
         <Text style={styles.title}>{"Welcome to Shot O'Clock"}</Text>
 
@@ -56,12 +78,6 @@ export function OnboardingGate({ onComplete }: OnboardingGateProps): React.JSX.E
           />
         </View>
 
-        <Text style={styles.disclaimer}>
-          {
-            "Shot O'Clock is a social drinking game for adults of legal drinking age. Play responsibly, know your limits, never pressure anyone to drink, and never drink and drive. You are responsible for your own choices while using this app."
-          }
-        </Text>
-
         <View style={styles.checks}>
           <Checkbox
             checked={ageChecked}
@@ -74,7 +90,25 @@ export function OnboardingGate({ onComplete }: OnboardingGateProps): React.JSX.E
             label="I accept the terms and agree to drink responsibly."
           />
         </View>
+
+        <Text style={styles.legal}>
+          By continuing, you agree to our{' '}
+          <Text style={styles.legalLink} onPress={openTerms}>
+            Terms of Service
+          </Text>{' '}
+          and{' '}
+          <Text style={styles.legalLink} onPress={openPrivacy}>
+            Privacy Policy
+          </Text>
+          .
+        </Text>
       </View>
+
+      <Text style={styles.disclaimer}>
+        {
+          "Shot O'Clock is a social drinking game for adults of legal drinking age. Play responsibly, know your limits, and never pressure anyone to drink."
+        }
+      </Text>
 
       <View style={styles.footer}>
         <Button label="Continue" onPress={submit} disabled={!canContinue} />
@@ -97,9 +131,27 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.lg,
     justifyContent: 'space-between',
   },
+  logoHeader: {
+    // Absolutely positioned so the mark floats above the layout: moving it (via
+    // `top`) doesn't push the centered welcome block down with it. Tune `top`
+    // freely to reposition the logo without affecting anything else.
+    position: 'absolute',
+    top: 128,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  logo: {
+    width: 164,
+    height: 164,
+  },
   body: {
     flex: 1,
-    justifyContent: 'center',
+    // Top-anchored (not centered) with its own paddingTop so it sits below the
+    // absolutely-positioned logo. Tune `paddingTop` to move the welcome block
+    // independently of the logo — the two no longer affect each other.
+    justifyContent: 'flex-start',
+    paddingTop: 280,
     gap: SPACING.lg,
   },
   title: {
@@ -133,7 +185,17 @@ const styles = StyleSheet.create({
   checks: {
     gap: SPACING.md,
   },
+  legal: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+  },
+  legalLink: {
+    color: COLORS.brandPrimary,
+    textDecorationLine: 'underline',
+  },
   footer: {
+    marginTop: SPACING.md,
     gap: SPACING.md,
     alignItems: 'center',
   },

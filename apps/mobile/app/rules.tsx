@@ -12,6 +12,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
+import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { Button } from '@/components/ui/Button';
 import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACING } from '@/styles/tokens';
 
@@ -73,12 +74,7 @@ function Faq({ q, a }: { q: string; a: string }): React.JSX.Element {
 export default function RulesScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>
-          <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
-        </Pressable>
-        <Text style={styles.title}>Rules / How to Play</Text>
-      </View>
+      <ScreenHeader title="Rules / How to Play" onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.content}>
         <CollapsibleSection title="How Shot O'Clock works" alwaysOpen>
@@ -207,25 +203,12 @@ export default function RulesScreen(): React.JSX.Element {
   );
 }
 
-const HEADER_ICON_SIZE = 22; // header back-arrow
 const CHEVRON_SIZE = 20; // collapsible section expand/collapse indicator
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  title: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.bold,
-    color: COLORS.textPrimary,
   },
   content: {
     padding: SPACING.lg,

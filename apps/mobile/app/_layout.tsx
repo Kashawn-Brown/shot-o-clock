@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Sentry from '@sentry/react-native';
 
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { ResetProvider } from '@/features/auth/ResetProvider';
@@ -13,7 +14,20 @@ import { NotificationPermissionGate } from '@/features/notifications/Notificatio
 import { configureNotifications } from '@/features/notifications/api/shotNotification';
 import { useNotificationPrompt } from '@/features/notifications/useNotificationPrompt';
 import { usePushTokenRegistration } from '@/features/notifications/usePushTokenRegistration';
+import { env } from '@/lib/env';
 import { COLORS, FONT_SIZE, SPACING } from '@/styles/tokens';
+
+// Crash + error reporting (Sentry). Initialized once at module load, only when a DSN is
+// present (env.ts — optional). Enabled in dev right now for end-to-end verification;
+// gate to !__DEV__ before the production build. Performance tracing is off to conserve
+// the free-tier quota — this is crash/error capture, not APM.
+if (env.sentryDsn) {
+  Sentry.init({
+    dsn: env.sentryDsn,
+    tracesSampleRate: 0,
+    sendDefaultPii: false,
+  });
+}
 
 // Gates the navigator: nothing renders until (1) an anonymous identity is resolved
 // — so no screen runs without an auth.uid for RLS / RPCs, (2) first-launch
@@ -81,7 +95,7 @@ function RootNavigator(): React.JSX.Element {
 // Root layout. Headers are hidden globally — each screen draws its own header to
 // match the wireframes. SafeAreaProvider backs the SafeAreaView used by the
 // screens (the non-deprecated one from react-native-safe-area-context).
-export default function RootLayout(): React.JSX.Element {
+function RootLayout(): React.JSX.Element {
   // Install the notification handler + Android channel once at startup, before any
   // scheduled Shot O'Clock notification can fire (Phase 14).
   useEffect(() => {
@@ -104,6 +118,9 @@ export default function RootLayout(): React.JSX.Element {
     </SafeAreaProvider>
   );
 }
+
+// Wrap the root so Sentry can capture render errors and attach navigation context.
+export default Sentry.wrap(RootLayout);
 
 const styles = StyleSheet.create({
   center: {

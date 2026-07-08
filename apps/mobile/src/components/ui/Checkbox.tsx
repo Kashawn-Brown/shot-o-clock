@@ -46,8 +46,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   boxChecked: {
-    backgroundColor: COLORS.buttonFilled,
-    borderColor: COLORS.buttonFilled,
+    // Checked (active) state — brand Indigo (reserved-moment).
+    backgroundColor: COLORS.brandPrimary,
+    borderColor: COLORS.brandPrimary,
   },
   label: {
     flex: 1,

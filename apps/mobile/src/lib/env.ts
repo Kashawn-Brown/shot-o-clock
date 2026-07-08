@@ -11,6 +11,9 @@
 type Env = {
   supabaseUrl: string;
   supabaseAnonKey: string;
+  // Optional: crash reporting is best-effort. A missing DSN just disables Sentry
+  // rather than failing startup like the required vars above.
+  sentryDsn: string | undefined;
 };
 
 function required(name: string, value: string | undefined): string {
@@ -29,4 +32,5 @@ export const env: Env = {
     'EXPO_PUBLIC_SUPABASE_ANON_KEY',
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
   ),
+  sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
 };

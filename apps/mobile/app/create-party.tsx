@@ -14,7 +14,6 @@ import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -23,10 +22,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
+import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { OptionPicker } from '@/components/ui/OptionPicker';
 import { Stepper } from '@/components/ui/Stepper';
 import { useDisplayName } from '@/features/auth/useDisplayName';
 import { createParty } from '@/features/party/api/createParty';
@@ -41,6 +41,7 @@ import {
   ELIMINATION_ON_HINT,
   formatDefaultPartyName,
   GRACE_MODE_OPTIONS,
+  GRACE_PICKER_OPTIONS,
   INTERVAL_INCREMENT_MAX_MINUTES,
   INTERVAL_INCREMENT_MIN_MINUTES,
   INTERVAL_INCREMENT_STEP_MINUTES,
@@ -183,12 +184,7 @@ function CreatePartyForm({
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>
-          <Ionicons name="arrow-back" size={HEADER_ICON_SIZE} color={COLORS.textPrimary} />
-        </Pressable>
-        <Text style={styles.title}>Create Party</Text>
-      </View>
+      <ScreenHeader title="Create Party" onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
@@ -265,7 +261,12 @@ function CreatePartyForm({
                 {eliminationEnabled ? ELIMINATION_ON_HINT : ELIMINATION_OFF_HINT}
               </Text>
             </View>
-            <Switch value={eliminationEnabled} onValueChange={setEliminationEnabled} />
+            <Switch
+              value={eliminationEnabled}
+              onValueChange={setEliminationEnabled}
+              trackColor={{ false: COLORS.border, true: COLORS.brandPrimary }}
+              thumbColor={COLORS.surfaceRaised}
+            />
           </View>
         )}
 
@@ -274,24 +275,11 @@ function CreatePartyForm({
         {!hostOnly && eliminationEnabled && (
           <View style={styles.field}>
             <Text style={styles.label}>Grace Mode</Text>
-            <View style={styles.segment}>
-              {GRACE_MODE_OPTIONS.map((option) => {
-                const active = graceMode === option.value;
-                return (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => setGraceMode(option.value)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    style={[styles.segmentItem, active && styles.segmentItemActive]}
-                  >
-                    <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <OptionPicker
+              options={GRACE_PICKER_OPTIONS}
+              value={graceMode}
+              onChange={setGraceMode}
+            />
             <Text style={styles.hint}>{graceHint}</Text>
           </View>
         )}
@@ -309,8 +297,6 @@ function CreatePartyForm({
   );
 }
 
-const HEADER_ICON_SIZE = 22; // header back-arrow + settings-gear icons
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -319,22 +305,6 @@ const styles = StyleSheet.create({
   loading: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  back: {
-    fontSize: FONT_SIZE.md,
-    color: COLORS.textPrimary,
-  },
-  title: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.bold,
-    color: COLORS.textPrimary,
   },
   content: {
     padding: SPACING.lg,
@@ -373,31 +343,6 @@ const styles = StyleSheet.create({
   toggleText: {
     gap: SPACING.xs,
     flexShrink: 1,
-  },
-  segment: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  segmentItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: SPACING.md,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
-  },
-  segmentItemActive: {
-    backgroundColor: COLORS.buttonFilled,
-    borderColor: COLORS.buttonFilled,
-  },
-  segmentLabel: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.textPrimary,
-  },
-  segmentLabelActive: {
-    color: COLORS.buttonFilledText,
-    fontWeight: FONT_WEIGHT.medium,
   },
   submit: {
     marginTop: SPACING.md,
