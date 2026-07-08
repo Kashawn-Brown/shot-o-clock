@@ -28,8 +28,6 @@
 >
 > Gather the group, set the timer, start the party and let Shot O'Clock run the night.
 
-## Keywords *(Apple: 100-char field, comma-separated, no repeats of the title)
-
 ## Keywords *(Apple: 100-char field, comma-separated, no repeats of the title)*
 
 `drinking,party,group,friends,social,pregame,nightout,shots,drinks,timer,adults,hangout,games,host` *(97 chars)* Note: Apple recombines terms, so `party` + `games` covers "party games," etc. Deliberately excludes every excess term.
@@ -49,3 +47,27 @@ Play has no keyword field (keywords live in the description) but **does** requir
 - `A synced party game for groups — one shared timer, everyone plays together.` (74)
 
 Play's full description can reuse the App Store description above as-is.
+
+---
+
+## Screenshots
+
+Order — both stores. App Store takes up to 10, Google Play 2–8; the first three are the search-facing heroes. "Official picture" is the source capture used for that slot.
+
+| # | Screen | Official picture | Headline (working) |
+|---|--------|------------------|--------------------|
+| 1 | Home | `store/screenshots/home.png` | — (cover, no headline) |
+| 2 | Lobby | `store/screenshots/lobby_1.png` | Get the party started |
+| 3 | Timer | `store/screenshots/timer.png` | One clock, every phone |
+| 4 | Shot O'Clock | `store/screenshots/shot_o_clock.png` | When it's Shot O'Clock… |
+| 5 | Round results | `store/screenshots/round_results.png` | See who's still standing |
+| 6 | Final summary | `store/screenshots/summary.png` | Crown the champion |
+
+The clean, status-bar-stripped captures are the source; the shipped store images are framed marketing versions (headline + subhead + device-framed screenshot on a soft light background).
+
+**Nothing here is locked yet:**
+- **Background** — soft lavender `#E7E3FA` is the current pick; alternates: cooler periwinkle `#E6E9F7`, or warm cream `#F4EEDF`.
+- **Copy** — each screen has two headline/subhead options (fuller vs. shorter); only the working headline is shown above.
+- **Framing** — the clean captures can ship bare as a fallback if the frames aren't built in time.
+
+Full build brief, both copy options, and the exact design spec (Poppins Bold/Medium, sizes, positions, shadow) live in the local `store/screenshot-frames-brief.md` (not committed).
