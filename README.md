@@ -37,7 +37,6 @@ The app gives that game a dedicated home: a clear interval timer, a loud Shot O'
 
 <p align="center">
   <img src="store/listing/home.png" width="180" alt="Home" />
-  <img src="store/listing/lobby.png" width="180" alt="Lobby" />
   <img src="store/listing/timer.png" width="180" alt="Synced countdown" />
   <img src="store/listing/shot_o_clock.png" width="180" alt="Shot O'Clock" />
   <img src="store/listing/summary.png" width="180" alt="Final summary" />
