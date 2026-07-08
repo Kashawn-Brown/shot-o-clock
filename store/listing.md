@@ -52,18 +52,19 @@ Play's full description can reuse the App Store description above as-is.
 
 ## Screenshots
 
-Order — both stores. App Store takes up to 10, Google Play 2–8; the first three are the search-facing heroes. "Official picture" is the source capture used for that slot.
+Order — both stores. App Store takes up to 10, Google Play 2–8; the first three are the search-facing heroes. "Official picture" is the curated source capture (in `store/listing/`) used for that slot.
 
 | # | Screen | Official picture | Headline (working) |
 |---|--------|------------------|--------------------|
-| 1 | Home | `store/screenshots/home.png` | — (cover, no headline) |
-| 2 | Lobby | `store/screenshots/lobby_1.png` | Get the party started |
-| 3 | Timer | `store/screenshots/timer.png` | One clock, every phone |
-| 4 | Shot O'Clock | `store/screenshots/shot_o_clock.png` | When it's Shot O'Clock… |
-| 5 | Round results | `store/screenshots/round_results.png` | See who's still standing |
-| 6 | Final summary | `store/screenshots/summary.png` | Crown the champion |
+| 1 | Home | `store/listing/home.png` | — (cover, no headline) |
+| 2 | Create Party | `store/listing/create_party.png` | Your party, your rules |
+| 3 | Lobby | `store/listing/lobby.png` | Get the party started |
+| 4 | Timer | `store/listing/timer.png` | One clock, every phone |
+| 5 | Shot O'Clock | `store/listing/shot_o_clock.png` | When it's Shot O'Clock… |
+| 6 | Round results | `store/listing/round_results.png` | See who's still standing |
+| 7 | Final summary | `store/listing/summary.png` | Crown the champion |
 
-The clean, status-bar-stripped captures are the source; the shipped store images are framed marketing versions (headline + subhead + device-framed screenshot on a soft light background).
+The clean, status-bar-stripped captures in `store/listing/` are the curated source set; the shipped store images are framed marketing versions (headline + subhead + device-framed screenshot on a soft light background).
 
 **Nothing here is locked yet:**
 - **Background** — soft lavender `#E7E3FA` is the current pick; alternates: cooler periwinkle `#E6E9F7`, or warm cream `#F4EEDF`.
